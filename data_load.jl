@@ -5,7 +5,7 @@ using Plots
 #df_track = CSV.File(file) |> DataFrame!
 
 track_csv = CSV.read("data_australia.csv")
-plot(track.distance, track.elevation)
+plot(track_csv.distance, track_csv.elevation)
 
 # constants
 panels_efficiency = 0.228 # 910/4000
@@ -67,7 +67,7 @@ track.diff_elevation = diff(track_csv.elevation)
 # calculate slope angle through arctan in degrees
 # since diff is used, there is n-1 elements, so we have to add heading zero
 # track.slope = [0 ; atand.(diff(track_csv.elevation)./diff(track_csv.distance))]
-track.slope = atand.(track.diff_elevation./track.diff_distance))
+track.slope = atand.(track.diff_elevation./track.diff_distance)
 
 
 
