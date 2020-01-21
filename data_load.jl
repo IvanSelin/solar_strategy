@@ -1,11 +1,15 @@
 using DataFrames
 using CSV
-using Plots
+# using Plots # default
+using Plotly # not as fast, but interactive
+# using PlotlyJS # a lot of dependencies, slow loading
+
+include("mechanical.jl")
 
 #df_track = CSV.File(file) |> DataFrame!
 
 track_csv = CSV.read("data_australia.csv")
-plot(track_csv.distance, track_csv.elevation)
+#plot(track_csv.distance, track_csv.elevation)
 
 # constants
 panels_efficiency = 0.228 # 910/4000
@@ -92,6 +96,10 @@ mechanical_power = (
 electrical_power = power_onboard * track.diff_distance / speed_ms
 
 power_use = mechanical_power .+ electrical_power
+power_use_accumulated = cumsum(power_use)
+power_use_accumulated_wt_h = power_use_accumulated / 3600 / 1000
+
+print(length(mechanical_work(speed_ms, track.slope, track.diff_distance)))
 
 
 
