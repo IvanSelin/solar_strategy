@@ -99,7 +99,10 @@ power_use = mechanical_power .+ electrical_power
 power_use_accumulated = cumsum(power_use)
 power_use_accumulated_wt_h = power_use_accumulated / 3600 / 1000
 
-print(length(mechanical_work(speed_ms, track.slope, track.diff_distance)))
+time_s = track.distance ./ speed_ms
+
+# plot(track.distance,power_use_accumulated_wt_h)
+# print(length(mechanical_work(speed_ms, track.slope, track.diff_distance)))
 
 
 
