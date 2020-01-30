@@ -1,4 +1,3 @@
-
 function mechanical_work(speed_ms, slope, diff_distance)
     drag = 0.18
     frontal_area = 1 # m^2
@@ -16,8 +15,8 @@ function mechanical_work(speed_ms, slope, diff_distance)
     # newtons
     mechanical_force = (
         drag * frontal_area * speed_ms^2 * ro / 2 .+
-        .+ mass * g * (friction_1 + friction_2 * 4 * speed_ms) * cosd.(slope) .+
-        .+ mass * g * sind.(slope)
+        mass * g * (friction_1 + friction_2 * 4 * speed_ms) * cosd.(slope) .+
+        mass * g * sind.(slope)
         )
 
     # mechanical power = mechanical force * distance delta / engine efficiency
