@@ -1,37 +1,39 @@
 using DataFrames
+# also consider using JuliaDB and Query
 using CSV
 # using Plots # default
 using Plotly # not as fast, but interactive
 # using PlotlyJS # a lot of dependencies, slow loading
 
 include("mechanical.jl")
+include("time.jl")
 
 #df_track = CSV.File(file) |> DataFrame!
 
 track_csv = CSV.read("data_australia.csv")
 #plot(track_csv.distance, track_csv.elevation)
 
-# constants
-panels_efficiency = 0.228 # 910/4000
-engine_efficiency = 0.87
-electrics_efficiency = 0.86
-battery_efficiency = 0.98
-power_onboard = 40 # Wt, 0.04kWt
-mass = 390 # kg
-
-friction_1 = 0.0023;
-friction_2 = 0.000041; # total friction = friction_1 + friction_2*speed
-
-
-ro = 1.18 # air density
-battery_capacity = 5.100 # kWt*h
-g = 9.8019 # at start: [41.2646201567207,-95.9244249307473,301.540649414063];
-# 9.80147 at finish: [43.9660024736000,-121.345052439700,1229.07763671875]
-
-panels_area = 4 # m^2
-panels_area_charge = 6 # m^2
-frontal_area = 1 # m^2
-drag = 0.18
+# # constants
+# panels_efficiency = 0.228 # 910/4000
+# engine_efficiency = 0.87
+# electrics_efficiency = 0.86
+# battery_efficiency = 0.98
+# power_onboard = 40 # Wt, 0.04kWt
+# mass = 390 # kg
+#
+# friction_1 = 0.0023;
+# friction_2 = 0.000041; # total friction = friction_1 + friction_2*speed
+#
+#
+# ro = 1.18 # air density
+# battery_capacity = 5.100 # kWt*h
+# g = 9.8019 # at start: [41.2646201567207,-95.9244249307473,301.540649414063];
+# # 9.80147 at finish: [43.9660024736000,-121.345052439700,1229.07763671875]
+#
+# panels_area = 4 # m^2
+# panels_area_charge = 6 # m^2
+# frontal_area = 1 # m^2
+# drag = 0.18
 
 speed_kmh = 50
 speed_ms = speed_kmh / 3.6
@@ -99,10 +101,15 @@ power_use = mechanical_power .+ electrical_power
 power_use_accumulated = cumsum(power_use)
 power_use_accumulated_wt_h = power_use_accumulated / 3600 / 1000
 
+# base time, seconds driven from start of the race
 time_s = track.distance ./ speed_ms
+# coverting the journey time to real time
+time_df = travel_time_to_real_time(time_s)
+# let's say we
 
 # plot(track.distance,power_use_accumulated_wt_h)
 # print(length(mechanical_work(speed_ms, track.slope, track.diff_distance)))
+# m_w = mechanical_work(speed_ms, track.slope, track.diff_distance)
 
 
 

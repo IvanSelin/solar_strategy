@@ -25,5 +25,7 @@ function mechanical_work(speed_ms, slope, diff_distance)
         mechanical_force .* diff_distance / (engine_efficiency)
         )
 
+    # TODO: get rid of return, or at least make it type-stable
+    # see https://docs.julialang.org/en/v1/manual/faq/#Types,-type-declarations,-and-constructors-1
     return mechanical_power
 end
