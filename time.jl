@@ -6,6 +6,8 @@ function travel_time_to_real_time(time_s)
     daily_start_time_s = daily_start_time * 60 * 60
     daily_finish_time_s = daily_finish_time * 60 * 60
 
+    day_seconds = 24 * 60 * 60
+
     # initializing the array for days
     day = fill(0, length(time_s))
 
@@ -24,5 +26,9 @@ function travel_time_to_real_time(time_s)
         day_length_s .* time_df.day
         )
 
+    # day in float
+    time_df.year_day_float = time_df.year_day .+ time_df.day_seconds ./ day_seconds
+
+    # TODO: get rid of return
     return time_df
 end
