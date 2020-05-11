@@ -17,7 +17,7 @@ track_csv = CSV.read("data_australia.csv")
 # panels_efficiency = 0.228 # 910/4000
 # electrics_efficiency = 0.86
 # battery_efficiency = 0.98
-# power_onboard = 40 # Wt, 0.04kWt
+power_onboard = 40 # Wt, 0.04kWt
 # battery_capacity = 5.100 # kWt*h
 # panels_area = 4 # m^2
 # panels_area_charge = 6 # m^2
@@ -54,31 +54,30 @@ track.diff_elevation = diff(track_csv.elevation)
 track.slope = atand.(track.diff_elevation./track.diff_distance)
 
 
-####### calculations
-# input
+####### input
 speed_kmh = 50
 speed_ms = speed_kmh / 3.6
 
-# mechanical calculations are now in separate file
-m_w = mechanical_work(speed_ms, track.slope, track.diff_distance)
-
-# converting mechanical work to elecctrical power and then power use
-electrical_power = power_onboard * track.diff_distance / speed_ms
-power_use = mechanical_power .+ electrical_power
-power_use_accumulated = cumsum(power_use)
-power_use_accumulated_wt_h = power_use_accumulated / 3600 / 1000
-
-
-###### time manipulation
-
+#### time manipulation
 # base time, seconds driven from start of the race
 time_s = track.distance ./ speed_ms
 # coverting the journey time to real time
 time_df = travel_time_to_real_time(time_s)
 
+#### calculcations
+# mechanical calculations are now in separate file
+mechanical_power = mechanical_power_calculation(speed_ms, track.slope, track.diff_distance)
+
+# electical losses
+electrical_power = power_onboard * track.diff_distance / speed_ms
+# converting mechanical work to elecctrical power and then power use
+power_use = mechanical_power .+ electrical_power
+power_use_accumulated = cumsum(power_use)
+power_use_accumulated_wt_h = power_use_accumulated / 3600
+
 
 #### plotting
-# plot(track.distance,power_use_accumulated_wt_h)
+plot(track.distance,power_use_accumulated_wt_h)
 
 
 

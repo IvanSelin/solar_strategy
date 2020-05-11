@@ -1,4 +1,4 @@
-function mechanical_work(speed_ms, slope, diff_distance)
+function mechanical_power_calculation(speed_ms, slope, diff_distance)
     drag = 0.18
     frontal_area = 1 # m^2
     ro = 1.18 # air density
