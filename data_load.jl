@@ -8,36 +8,21 @@ using Plotly # not as fast, but interactive
 include("mechanical.jl")
 include("time.jl")
 
-#df_track = CSV.File(file) |> DataFrame!
 
 track_csv = CSV.read("data_australia.csv")
 #plot(track_csv.distance, track_csv.elevation)
 
-# # constants
+
+#### constants
 # panels_efficiency = 0.228 # 910/4000
-# engine_efficiency = 0.87
 # electrics_efficiency = 0.86
 # battery_efficiency = 0.98
 # power_onboard = 40 # Wt, 0.04kWt
-# mass = 390 # kg
-#
-# friction_1 = 0.0023;
-# friction_2 = 0.000041; # total friction = friction_1 + friction_2*speed
-#
-#
-# ro = 1.18 # air density
 # battery_capacity = 5.100 # kWt*h
-# g = 9.8019 # at start: [41.2646201567207,-95.9244249307473,301.540649414063];
-# # 9.80147 at finish: [43.9660024736000,-121.345052439700,1229.07763671875]
-#
 # panels_area = 4 # m^2
 # panels_area_charge = 6 # m^2
-# frontal_area = 1 # m^2
-# drag = 0.18
 
-speed_kmh = 50
-speed_ms = speed_kmh / 3.6
-
+#### concept
 #=
 overall concept of modelling:
 
@@ -51,7 +36,7 @@ this also can now be done in vectorized way
 
 there are several possible models for energy income
 
-start with stub, developo proper models later
+start with stub, develop proper models later
 
 =#
 
@@ -60,70 +45,44 @@ start with stub, developo proper models later
 # meters from km
 track_csv.distance = track_csv.distance * 1000
 # create new dataframe with size of n-1 (and without spoiled sin column)
+# sin column is ignored, since it is incomplete
+# btw, it's better to store the slope angle
+# track is for storing diff data, there are n-1 elements
 track = select(track_csv[2:size(track_csv,1),:], Not(:sin))
-# # delete sin, since it is calculated incorrectly
-# # delete!(track,:sin) # deprecated
-# select!(track, Not(:sin))
-
-
-
 track.diff_distance = diff(track_csv.distance)
 track.diff_elevation = diff(track_csv.elevation)
-# calculate sin and cos from catets throug atand
-# calculate slope angle through arctan in degrees
-# since diff is used, there is n-1 elements, so we have to add heading zero
-# track.slope = [0 ; atand.(diff(track_csv.elevation)./diff(track_csv.distance))]
 track.slope = atand.(track.diff_elevation./track.diff_distance)
 
 
-
-
-
 ####### calculations
+# input
+speed_kmh = 50
+speed_ms = speed_kmh / 3.6
 
-# mechanical force = drag force + friction force + gravitational force
-# newtons
-mechanical_force = (
-    drag * frontal_area * speed_ms^2 * ro / 2 .+
-    .+ mass * g * (friction_1 + friction_2 * 4 * speed_ms) * cosd.(track.slope) .+
-    .+ mass * g * sind.(track.slope)
-    )
+# mechanical calculations are now in separate file
+m_w = mechanical_work(speed_ms, track.slope, track.diff_distance)
 
-# mechanical power = mechanical force * distance delta / engine efficiency
-# watts * s
-mechanical_power = (
-    mechanical_force .* track.diff_distance / (engine_efficiency)
-    )
-
+# converting mechanical work to elecctrical power and then power use
 electrical_power = power_onboard * track.diff_distance / speed_ms
-
 power_use = mechanical_power .+ electrical_power
 power_use_accumulated = cumsum(power_use)
 power_use_accumulated_wt_h = power_use_accumulated / 3600 / 1000
+
+
+###### time manipulation
 
 # base time, seconds driven from start of the race
 time_s = track.distance ./ speed_ms
 # coverting the journey time to real time
 time_df = travel_time_to_real_time(time_s)
-# let's say we
 
+
+#### plotting
 # plot(track.distance,power_use_accumulated_wt_h)
-# print(length(mechanical_work(speed_ms, track.slope, track.diff_distance)))
-# m_w = mechanical_work(speed_ms, track.slope, track.diff_distance)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+#### future use
 # for optimization (overall list: https://www.juliaopt.org/packages/ ):
 # https://github.com/robertfeldt/BlackBoxOptim.jl - looks like the case
 # https://github.com/JuliaNLSolvers/Optim.jl - not sure if it handles derivative-free optimi
