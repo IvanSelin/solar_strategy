@@ -9,7 +9,7 @@ include("mechanical.jl")
 include("time.jl")
 
 
-track_csv = CSV.read("data_australia.csv")
+track_csv = CSV.read("data_australia.csv", DataFrame)
 #plot(track_csv.distance, track_csv.elevation)
 
 
