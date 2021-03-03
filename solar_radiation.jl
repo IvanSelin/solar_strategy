@@ -34,12 +34,22 @@ function solar_power(latitude, time_df)
     # or should there be cos instead of cosd?
 
     # sun declination  angle
+    # why 285 and not 284 as it is stated in fourmula? days in year from zero?
+    # https://susdesign.com/popups/sunangle/declination.php
     sun_declination_angle = (sun_maximum_declination *
         sind.(360 * ( (285 .+ time_df.year_day) / 365.25) )
         )
 
+
+    # equation of time (уравнение времени)
+    # a sum of 2 sinusoids with periods of 1 year and 6 months
+    B = 360 * (d.-81)/365
+    # equation of time itself, E(t) ~ E(day)
+    E = 7.53 * cosd.(B) + 1.5 * sind.(B) - 9.87 * sind.(2B)
+    #plot(E)
+
     # sun hour angle (ω)
-    # sun_hour_angle = ( 15 *
+    # sun_hour_angle = ( 15 * (hour - hour_zenith) + E(t) + (phi - phi_zone)
 
     # sunrise/sunset angle
     sunrise_angle = acosd.(- tand.(latitude) .* tand.(sun_declination_angle) )
