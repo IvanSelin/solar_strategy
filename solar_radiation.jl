@@ -43,7 +43,7 @@ function solar_power(latitude, time_df)
 
     # equation of time (уравнение времени)
     # a sum of 2 sinusoids with periods of 1 year and 6 months
-    B = 360 * (d.-81)/365
+    B = 360 * (time_df.year_day.-81)/365
     # equation of time itself, E(t) ~ E(day)
     E = 7.53 * cosd.(B) + 1.5 * sind.(B) - 9.87 * sind.(2B)
     #plot(E)
