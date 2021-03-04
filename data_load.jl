@@ -9,6 +9,12 @@ include("mechanical.jl")
 include("time.jl")
 
 
+# some code to initialize time DataFrame
+# TODO: delete it when solar radiation is done
+time_df = DataFrame()
+time_df.year_day=0:364
+
+
 track_csv = CSV.read("data_australia.csv", DataFrame)
 #plot(track_csv.distance, track_csv.elevation)
 

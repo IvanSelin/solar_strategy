@@ -43,13 +43,14 @@ function solar_power(latitude, time_df)
 
     # equation of time (уравнение времени)
     # a sum of 2 sinusoids with periods of 1 year and 6 months
-    B = 360 * (time_df.year_day.-81)/365
+    B = 360 * (time_df.year_day_float.-81)/365
     # equation of time itself, E(t) ~ E(day)
     E = 7.53 * cosd.(B) + 1.5 * sind.(B) - 9.87 * sind.(2B)
     #plot(E)
 
     # sun hour angle (ω)
     # sun_hour_angle = ( 15 * (hour - hour_zenith) + E(t) + (phi - phi_zone)
+    sun_hour_angle = 15 * (time_df.day_seconds/60/60 .- 12) + E
 
     # sunrise/sunset angle
     sunrise_angle = acosd.(- tand.(latitude) .* tand.(sun_declination_angle) )
