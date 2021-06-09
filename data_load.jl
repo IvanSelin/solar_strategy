@@ -1,8 +1,11 @@
 using DataFrames
 # also consider using JuliaDB and Query
 using CSV
-# using Plots # default
-using Plotly # not as fast, but interactive
+using Plots # default
+# selecting a Plots backend
+plotly(ticks=:native)
+# consider using Gadfly http://gadflyjl.org/stable/
+# using Plotly # not as fast, but interactive
 # using PlotlyJS # a lot of dependencies, slow loading
 
 include("mechanical.jl")
@@ -94,3 +97,5 @@ plot(track.distance,power_use_accumulated_wt_h)
 # https://github.com/JuliaOpt/Pajarito.jl - integer linear programming
 # https://github.com/anriseth/MultiJuMP.jl - multicriterial optimiztion
 # also http://julia.cookbook.tips/doku.php?id=optim , Nelder-Mead Simplex	NM
+
+# https://juliahub.com/ui/Packages/LightGraphs/Xm08G/1.3.5?t=0 for graphs
