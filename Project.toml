@@ -1,0 +1,11 @@
+name = "SolarStrategy"
+uuid = "86292d75-94c7-4534-90d3-326cc7df4383"
+authors = ["Ivan Selin <ivanselin93@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Plotly = "58dd65bb-95f3-509e-9936-c39a10fdeae7"
+PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"

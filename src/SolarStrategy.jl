@@ -1,7 +1,10 @@
+module SolarStrategy
+
 using DataFrames
 # also consider using JuliaDB and Query
 using CSV
 using Plots # default
+using PlotlyBase
 # selecting a Plots backend
 plotly(ticks=:native)
 # consider using Gadfly http://gadflyjl.org/stable/
@@ -18,7 +21,7 @@ time_df = DataFrame()
 time_df.year_day=0:364
 
 
-track_csv = CSV.read("data_australia.csv", DataFrame)
+track_csv = CSV.read("data/data_australia.csv", DataFrame)
 #plot(track_csv.distance, track_csv.elevation)
 
 
@@ -99,3 +102,6 @@ plot(track.distance,power_use_accumulated_wt_h)
 # also http://julia.cookbook.tips/doku.php?id=optim , Nelder-Mead Simplex	NM
 
 # https://juliahub.com/ui/Packages/LightGraphs/Xm08G/1.3.5?t=0 for graphs
+
+
+end # module
