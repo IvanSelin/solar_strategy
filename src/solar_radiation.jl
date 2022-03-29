@@ -93,3 +93,44 @@ function solar_power(latitude, time_df)
     # plot(sind.(360*(284 .+[1:365;])/365))
 
 end
+
+
+function solar_radiation_matlab()
+    transmittance=0.75 # transmittance (unitless)
+    solar_constant=1367 # solar constant (w/m^2)
+    p=101325 # normal atmospheric pressure
+    latitude = -12.438056
+    day = 200
+
+    hours=[7,8,9,10,11,12,13,14,15,16,17]
+    hangle=(12.0.-hours)*15.0*pi/180.0 # radians
+    plot(hangle, title="Hour angle")
+
+    declangle=23.45*sin(2.0*pi*(284.0+day)/365.0)*pi/180.0 # in radians
+    cosz=sind(latitude)*sin(declangle).+cosd(latitude)*cos(declangle)*cos.(hangle)
+    plot(cosz, title="Cosz")
+
+    m=p./(101.3*cosz) # optical airmass
+    plot(m, title="Optical airmass")
+
+    Sb=cosz*solar_constant.*(transmittance.^m)
+    plot(Sb, title="Beam radiation")
+    # Sb too small, e-150
+
+    Sd=0.3*(1.0.-transmittance.^m)*solar_constant.*cosz
+    plot(Sd, title="Diffuse radiation")
+
+    St=Sb+Sd
+    plot(St, title="Total radiation")
+
+    x = zeros(24)
+    x[7:17] = St/1000.0
+    plot(x, title="Total radiation")
+
+    return x
+
+    # problems:
+    # 1: amount of solar hours is fixed, which is wrong. it should be calculated
+    # 2: beam radiation is too small
+    # 3: no ground-reflected radiation
+end
