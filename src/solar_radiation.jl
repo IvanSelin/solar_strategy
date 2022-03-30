@@ -143,13 +143,13 @@ function solar_radiation_matlab_download()
     sun_maximum_declination = 23.45 # degrees
     latitude = -12.438056
     # day = 200
-    day = 1:365
+    days = 1:365
 
-    s_0 = solar_constant * (1 .+ 0.033 * cosd.(360 / 365.25 * day))
+    s_0 = solar_constant * (1 .+ 0.033 * cosd.(360 / 365.25 * days))
     plot(s_0, title = "Solar radiation intensity")
 
     sun_declination_angle = (sun_maximum_declination *
-        sind.(360 * ( (285 .+ day) / 365.25) )
+        sind.(360 * ( (285 .+ days) / 365.25) )
         )
     plot(sun_declination_angle, title = "Sun declination angle degrees")
     plot(sun_declination_angle*pi/180.0, title = "Sun declination angle radians")
@@ -164,6 +164,13 @@ function solar_radiation_matlab_download()
     plot(sunrise_angle, title="Sunrise angle")
     plot(sunrise_angle*pi/180.0, title="Sunrise angle radians")
 
-    day_length = 12*(1 .+ sunrise_angle / 180.0) .- 12*(1 .- sunrise_angle / 180.0)
-    plot(day_length, title = "Day length (hours)")
+    days_length = 12*(1 .+ sunrise_angle / 180.0) .- 12*(1 .- sunrise_angle / 180.0)
+    plot(days_length, title = "Days length (hours)")
+
+
+    for day in days
+        day_length = days_length[day]
+        # loop over sunshine hours
+        hour_angle = sunrise_angle*pi/180.0 - (pi * hour/day_length)
+    end
 end
