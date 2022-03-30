@@ -163,4 +163,7 @@ function solar_radiation_matlab_download()
     sunrise_angle = acosd.(cos_sunrise_angle)
     plot(sunrise_angle, title="Sunrise angle")
     plot(sunrise_angle*pi/180.0, title="Sunrise angle radians")
+
+    day_length = 12*(1 .+ sunrise_angle / 180.0) .- 12*(1 .- sunrise_angle / 180.0)
+    plot(day_length, title = "Day length (hours)")
 end
