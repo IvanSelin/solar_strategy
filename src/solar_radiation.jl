@@ -134,3 +134,33 @@ function solar_radiation_matlab()
     # 2: beam radiation is too small
     # 3: no ground-reflected radiation
 end
+
+
+function solar_radiation_matlab_download()
+    transmittance=0.75 # transmittance (unitless)
+    solar_constant=1367 # solar constant (w/m^2)
+    p=101325 # normal atmospheric pressure
+    sun_maximum_declination = 23.45 # degrees
+    latitude = -12.438056
+    # day = 200
+    day = 1:365
+
+    s_0 = solar_constant * (1 .+ 0.033 * cosd.(360 / 365.25 * day))
+    plot(s_0, title = "Solar radiation intensity")
+
+    sun_declination_angle = (sun_maximum_declination *
+        sind.(360 * ( (285 .+ day) / 365.25) )
+        )
+    plot(sun_declination_angle, title = "Sun declination angle degrees")
+    plot(sun_declination_angle*pi/180.0, title = "Sun declination angle radians")
+
+
+    cos_sunrise_angle = - tand.(latitude) .* tand.(sun_declination_angle)
+    # fixes for polar circles. acos can't be calculated from values more than 1/-1
+    cos_sunrise_angle[cos_sunrise_angle .> 1] .= 1
+    cos_sunrise_angle[cos_sunrise_angle .< -1] .= -1
+    # sunrise_angle = acosd.(- tand.(latitude) .* tand.(sun_declination_angle) )
+    sunrise_angle = acosd.(cos_sunrise_angle)
+    plot(sunrise_angle, title="Sunrise angle")
+    plot(sunrise_angle*pi/180.0, title="Sunrise angle radians")
+end
