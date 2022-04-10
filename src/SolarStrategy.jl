@@ -5,6 +5,8 @@ using DataFrames
 using CSV
 using Plots # default
 using PlotlyBase
+using TimeZones
+using Dates
 # selecting a Plots backend
 plotly(ticks=:native)
 # consider using Gadfly http://gadflyjl.org/stable/

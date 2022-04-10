@@ -169,8 +169,111 @@ function solar_radiation_matlab_download()
 
 
     for day in days
-        day_length = days_length[day]
+        day = 200 # for debug purposes only
+        # day_length = days_length[day]
+        # sunrise_angle_day = sunrise_angle[day]
+        # sun_declination_angle_day = sun_declination_angle[day]
+
+        s_0 = solar_constant * (1 .+ 0.033 * cosd.(360 / 365.25 * day))
+        sun_declination_angle = (sun_maximum_declination *
+            sind(360 * ( (285 + day) / 365.25) )
+            )
+        cos_sunrise_angle = - tand(latitude) * tand(sun_declination_angle)
+        # fixes for polar circles. acos can't be calculated from values more than 1/-1
+        if cos_sunrise_angle > 1
+            cos_sunrise_angle = 1
+        end
+        if cos_sunrise_angle < -1
+            cos_sunrise_angle = -1
+        end
+        # sunrise_angle = acosd.(- tand.(latitude) .* tand.(sun_declination_angle) )
+        sunrise_angle = acosd(cos_sunrise_angle)
+        day_length = 12*(1 + sunrise_angle / 180.0) - 12*(1 - sunrise_angle / 180.0)
+
+        step = 0.05
         # loop over sunshine hours
-        hour_angle = sunrise_angle*pi/180.0 - (pi * hour/day_length)
+        for hour=0:step:day_length
+            hour_angle = sunrise_angle*pi/180.0 - (pi * hour/day_length)
+            # values are slightly off, check for +-1 errors
+            # solar angle and azimuth
+            sin_alpha = sind(latitude) * sind(sun_declination_angle) +
+            cosd(latitude) * cosd(sun_declination_angle) * cos(hour_angle)
+            # optical air mass - or air mass ratio
+            M = sqrt(1229 + (614*sin_alpha)^2)-614*sin_alpha
+            # atmoshperic transmitivity
+            tau_b = 0.56 * (exp(-0.65 * M) + exp(-0.095 * M))
+            # radiation diffusion coefficient for diffuse insolation
+            tau_d = 0.271 - 0.294 * tau_b
+            # reflectance transmitivity
+            tau_r = 0.271 + 0.706 * tau_b
+
+            cos_i = sind(sun_declination_angle) + cosd(sun_declination_angle) *
+            cos(hour_angle) + cosd(sun_declination_angle) * sin(hour_angle)
     end
+end
+
+function solar_radiation_pveducation()
+    # starts here: https://www.pveducation.org/pvcdrom/properties-of-sunlight/solar-radiation-outside-the-earths-atmosphere
+
+    # solar constant
+    H_constant = 1353 # W/m^2
+    AM0 = 1366 # air mass zero, W/m^2
+    # days of the year
+    days = 1:365
+    day = 200
+    latitude = -12.438056
+    longitude = 130.841111
+
+    # radiant power density otside the Erath's athmosphere in W/m^2
+    H = H_constant * (1 .+ 0.033*cosd.( (360 * (days .- 2)) / 365 ) )
+    plot(days, H, title = "Radial power density W/m^2")
+
+    # calculate air mass - how much air must pass through
+    air_mass = 1 / (cos(phi) + 0.50572 * (96.07995 - theta)^-1.6364 )
+
+    # direct intensity
+    intesnity_direct = 1.353 * 0.7 ^ air_mass ^ 0.678 # kW/m^2
+    # H_constant * 70% of radiation ^ air_mass ^ coefficient to fit the experimental data
+
+    # with sea level data included
+    indensity_direct_sea_level = 1.353 * ( (1 - 0.14 * height_km) * 0.7 ^ air_mass ^ 0.678 +
+        0.14 * height_km) # kW/m^2
+
+    # diffuse radiation
+    intensity_diffuse = intensity_direct * 0.1
+
+    # TIME
+    # local solar time - when sun is in zenith
+    # local time - time according to time zone
+    # local standard time meridian - offset to utc in hours (from local time)
+    # equation of time - offset for local solar time because of elliptical orbit
+    # so: all times should be in UTC
+    # then corrected  to local time, and then to local summer time
+
+
+    local_time = DateTime(2022,04,10,13,58)
+    UTC_time = DateTime(2022,04,10,10,58)
+    # time shift for current latitude, hours
+    local_standard_time_meridian = 15 * Dates.Hour(local_time - UTC_time).value
+    # local_standard_time_meridian = 15 * longitude
+
+    # equation of time
+    B = 360 / 365 * (days .- 81) # in degrees
+    equation_of_time = 9.87 * sind.(2B) - 7.53 * cosd.(B) - 1.5 * sind.(B) # minutes
+    plot(
+        equation_of_time,
+        title = "Equation of time",
+        label = "Equation of time",
+        xlabel = "Day of the Year",
+        ylabel = "Minutes"
+    )
+
+    # because local standard time meridian is not real sun time , minutes
+    time_correction_factor = 4 * (longitude - local_standard_time_meridian) + equation_of_time[day]
+
+    local_solar_time = local_time + Dates.Second(round(time_correction_factor * 60.0))
+    # LST = 4 longitude + 60 UTC_minutes +EoT
+    # so, we only need to know UTC time and longitude
+    local_solar_time = UTC_time + Dates.Second( round( (4*longitude + equation_of_time[day]) * 60) )
+
 end
