@@ -221,8 +221,10 @@ function solar_radiation_pveducation()
     # days of the year
     days = 1:365
     day = 200
-    latitude = -12.438056
+    latitude = -12.438056 # Darwin
     longitude = 130.841111
+    latitude = 59.9375 # Saint Petersburg
+    longitude = 30.308611
 
     # radiant power density otside the Erath's athmosphere in W/m^2
     H = H_constant * (1 .+ 0.033*cosd.( (360 * (days .- 2)) / 365 ) )
@@ -270,10 +272,55 @@ function solar_radiation_pveducation()
 
     # because local standard time meridian is not real sun time , minutes
     time_correction_factor = 4 * (longitude - local_standard_time_meridian) + equation_of_time[day]
+    time_correction_factor_days = 4 * (longitude - local_standard_time_meridian) .+ equation_of_time
 
     local_solar_time = local_time + Dates.Second(round(time_correction_factor * 60.0))
     # LST = 4 longitude + 60 UTC_minutes +EoT
     # so, we only need to know UTC time and longitude
-    local_solar_time = UTC_time + Dates.Second( round( (4*longitude + equation_of_time[day]) * 60) )
+    local_solar_time = UTC_time +
+        Dates.Second( round( (4*longitude + equation_of_time[day]) * 60) )
 
+    # hour angle, 0 at solar noon
+    hour_angle = 15 * (local_solar_time - 12)
+    minutes_day = 0:24*60
+    hour_angle_test = 15 * (minutes_day/60.0 .- 12)
+    plot(hour_angle_test, title = "Hour angle for local summer time")
+    # TODO: hor angle calculation for UTC time
+
+    sun_declination_angle = -23.45 * cosd.(360 / 365 * (days .+ 10))
+    plot(sun_declination_angle, title = "Sun declination angle")
+    # also consider using 23.45 * sind.(360/365 * (days .+ 284))
+
+    # elevation (altitude) angle
+    elevation_angle = 90 + latitude - sun_declination_angle
+
+    elevation = asin.(
+        sind.(sun_declination_angle) .* sind(latitude) +
+        cosd.(sun_declination_angle) .* cosd(latitude) .* cosd.(hour_angle_test)
+    )
+    # TODO: hourly data inputs
+
+    sunrise_hour = 12 .- 1 / 15.0 .*
+        acosd.(
+            (-sind(latitude) * sind.(sun_declination_angle) ) ./
+            (cosd(latitude) * cosd.(sun_declination_angle) )
+            )
+        .- time_correction_factor_days / 60
+    plot(sunrise_hour, title = "sunrise hour")
+
+    sunset_hour = 12 .+ 1 / 15.0 .*
+        acosd.(
+            (-sind(latitude) * sind.(sun_declination_angle) ) ./
+            (cosd(latitude) * cosd.(sun_declination_angle) )
+            )
+        .- time_correction_factor_days / 60
+    plot(sunset_hour, title = "sunset hour")
+
+    # azimuth?
+    azimuth = acosd.(
+        () / cosd()
+    )
+
+    # TODO: data inputs as lat, long, DateTime, which is later turned to day_hous and day_minutes
+    # simulate the whole year
 end
