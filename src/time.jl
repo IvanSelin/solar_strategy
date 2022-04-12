@@ -32,3 +32,17 @@ function travel_time_to_real_time(time_s)
     # TODO: get rid of return
     return time_df
 end
+
+function generate_year_time_dataframe()
+
+    start_datetime = DateTime(2022,1,1,0,0,0)
+    end_datetime = DateTime(2023,1,1,0,0,0)
+    # every 10 seconds (10000ms)
+    interval_datetime = convert.(
+        DateTime,
+        Millisecond.(
+            Dates.value(start_datetime):10000:Dates.value(end_datetime)
+        )
+    )
+    time_df = DataFrame(datetime=interval_datetime)
+end
