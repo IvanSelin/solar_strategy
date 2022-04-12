@@ -33,16 +33,17 @@ function travel_time_to_real_time(time_s)
     return time_df
 end
 
-function generate_year_time_dataframe()
+function generate_year_time_dataframe(time_step_millis::Int64)
 
     start_datetime = DateTime(2022,1,1,0,0,0)
-    end_datetime = DateTime(2023,1,1,0,0,0)
+    end_datetime = DateTime(2022,12,31,23,59,59)
     # every 10 seconds (10000ms)
     interval_datetime = convert.(
         DateTime,
         Millisecond.(
-            Dates.value(start_datetime):10000:Dates.value(end_datetime)
+            Dates.value(start_datetime):time_step_millis:Dates.value(end_datetime)
         )
     )
-    time_df = DataFrame(datetime=interval_datetime)
+    time_df = DataFrame(utc_time=interval_datetime)
+    return time_df
 end

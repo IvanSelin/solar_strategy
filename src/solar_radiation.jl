@@ -324,3 +324,56 @@ function solar_radiation_pveducation()
     # TODO: data inputs as lat, long, DateTime, which is later turned to day_hous and day_minutes
     # simulate the whole year
 end
+
+
+function solar_radiation_pvedication_time(time_dataframe)
+    # starts here: https://www.pveducation.org/pvcdrom/properties-of-sunlight/solar-radiation-outside-the-earths-atmosphere
+
+    data_df = copy(time_dataframe)
+    # -12.438056, 130.841111 for Darwin
+    # 59.9375, 30.308611 for SPb
+    data_df.latitude .= 59.9375
+    data_df.longitude .= 30.308611
+
+    # setting up needed values for calculcations
+    # data_df.day = Dates.day.(data_df.datetime)
+
+    # solar constant
+    H_constant = 1353 # W/m^2
+    AM0 = 1366 # air mass zero, W/m^2
+
+    # radiant power density otside the Erath's athmosphere in W/m^2
+    H = H_constant * (1 .+ 0.033*cosd.( (360 * (Dates.dayofyear.(data_df.utc_time) .- 2)) / 365 ) )
+    plot(Dates.dayofyear.(data_df.utc_time),H, title = "Radial power density W/m^2")
+
+    # TODO: air mass calculation with phi? and theta?
+
+    # time shift for current latitude, hours
+    # local_standard_time_meridian = 15 * Dates.Hour(local_time - UTC_time).value
+    # very rough estimation
+    # proper solution like https://stackoverflow.com/questions/5584602/determine-timezone-from-latitude-longitude-without-using-web-services-like-geona
+    data_df.lstm = 15 * ceil.(data_df.longitude * 24 / 360)
+
+    # equation of time
+    B = 360 / 365 * (Dates.dayofyear.(data_df.utc_time) .- 81) # in degrees
+    equation_of_time = 9.87 * sind.(2B) - 7.53 * cosd.(B) - 1.5 * sind.(B) # minutes
+    plot(
+        equation_of_time,
+        title = "Equation of time",
+        label = "Equation of time",
+        xlabel = "Day of the Year",
+        ylabel = "Minutes"
+    )
+
+    # TODO: resume from here
+    # because local standard time meridian is not real sun time , minutes
+    time_correction_factor = 4 * (longitude - local_standard_time_meridian) + equation_of_time[day]
+    time_correction_factor_days = 4 * (longitude - local_standard_time_meridian) .+ equation_of_time
+
+    local_solar_time = local_time + Dates.Second(round(time_correction_factor * 60.0))
+    # LST = 4 longitude + 60 UTC_minutes +EoT
+    # so, we only need to know UTC time and longitude
+    local_solar_time = UTC_time +
+        Dates.Second( round( (4*longitude + equation_of_time[day]) * 60) )
+
+end
