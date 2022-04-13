@@ -367,13 +367,16 @@ function solar_radiation_pvedication_time(time_dataframe)
 
     # TODO: resume from here
     # because local standard time meridian is not real sun time , minutes
-    time_correction_factor = 4 * (longitude - local_standard_time_meridian) + equation_of_time[day]
-    time_correction_factor_days = 4 * (longitude - local_standard_time_meridian) .+ equation_of_time
+    time_correction_factor = 4 * (data_df.longitude - data_df.lstm) + equation_of_time
+    plot(time_correction_factor, title="Time correction factor")
 
-    local_solar_time = local_time + Dates.Second(round(time_correction_factor * 60.0))
-    # LST = 4 longitude + 60 UTC_minutes +EoT
-    # so, we only need to know UTC time and longitude
-    local_solar_time = UTC_time +
-        Dates.Second( round( (4*longitude + equation_of_time[day]) * 60) )
+    # local_solar_time = local_time + Dates.Second(round(time_correction_factor * 60.0))
+    # # LST = 4 longitude + 60 UTC_minutes +EoT
+    # # so, we only need to know UTC time and longitude
+    # local_solar_time = UTC_time +
+    #     Dates.Second( round( (4*longitude + equation_of_time[day]) * 60) )
+
+    data_df.local_solar_time = data_df.utc_time +
+        Dates.Second.( round.(4 * data_df.longitude + equation_of_time) * 60)
 
 end
