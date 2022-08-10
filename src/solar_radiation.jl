@@ -209,6 +209,7 @@ function solar_radiation_matlab_download()
 
             cos_i = sind(sun_declination_angle) + cosd(sun_declination_angle) *
             cos(hour_angle) + cosd(sun_declination_angle) * sin(hour_angle)
+        end
     end
 end
 
@@ -231,6 +232,7 @@ function solar_radiation_pveducation()
     plot(days, H, title = "Radial power density W/m^2")
 
     # calculate air mass - how much air must pass through
+    # phi not defined
     air_mass = 1 / (cos(phi) + 0.50572 * (96.07995 - theta)^-1.6364 )
 
     # direct intensity
@@ -317,9 +319,9 @@ function solar_radiation_pveducation()
     plot(sunset_hour, title = "sunset hour")
 
     # azimuth?
-    azimuth = acosd.(
-        () / cosd()
-    )
+    # azimuth = acosd.(
+    #     () / cosd()
+    # )
 
     # TODO: data inputs as lat, long, DateTime, which is later turned to day_hous and day_minutes
     # simulate the whole year
@@ -329,6 +331,7 @@ end
 function solar_radiation_pvedication_time(time_dataframe)
     # starts here: https://www.pveducation.org/pvcdrom/properties-of-sunlight/solar-radiation-outside-the-earths-atmosphere
 
+    # copy generate_year_time_dataframe(100000)
     data_df = copy(time_dataframe)
     # -12.438056, 130.841111 for Darwin
     # 59.9375, 30.308611 for SPb
@@ -378,5 +381,12 @@ function solar_radiation_pvedication_time(time_dataframe)
 
     data_df.local_solar_time = data_df.utc_time +
         Dates.Second.( round.(4 * data_df.longitude + equation_of_time) * 60)
+    
+    # TODO: should hour angle be only in integer values? 
+    hour_angle = 15 * ((Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time)) ./60 .- 12)
+    plot(hour_angle, title = "Hour angle for local summer time year round")
+    # TODO: hor angle calculation for UTC time
+
+    # TODO: continue to sun declination angle
 
 end

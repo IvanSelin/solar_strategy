@@ -15,6 +15,7 @@ plotly(ticks=:native)
 
 include("mechanical.jl")
 include("time.jl")
+include("solar_radiation.jl")
 
 
 # some code to initialize time DataFrame
@@ -93,6 +94,9 @@ power_use_accumulated_wt_h = power_use_accumulated / 3600
 #### plotting
 plot(track.distance,power_use_accumulated_wt_h)
 
+# for development purposes, temporary code
+time_df = generate_year_time_dataframe(100000)
+solar_radiation_pvedication_time(time_df)
 
 
 #### future use
