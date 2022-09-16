@@ -383,10 +383,29 @@ function solar_radiation_pvedication_time(time_dataframe)
         Dates.Second.( round.(4 * data_df.longitude + equation_of_time) * 60)
     
     # TODO: should hour angle be only in integer values? 
+    minutes_from_start_of_the_day = Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time);
     hour_angle = 15 * ((Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time)) ./60 .- 12)
-    plot(hour_angle, title = "Hour angle for local summer time year round")
-    # TODO: hor angle calculation for UTC time
+    # TODO: hour angle calculation for UTC time
+    plot(data_df.utc_time, hour_angle, title="Hour angle vs UTC time")
+    # TODO: hour angle calculation for local solar time ??? check if needed
 
     # TODO: continue to sun declination angle
+    # TODO: continous sun declination angle calculation? (as for now quantified by days)
+    sun_declination_angle = -23.45 * cosd.(360 / 365 * (Dates.dayofyear.(data_df.utc_time) .+ 10))
+    plot(sun_declination_angle, title = "Sun declination angle")
 
+    # elevation (altitude) angle
+    elevation_angle = 90 .+ data_df.latitude .- sun_declination_angle
+    plot(data_df.utc_time, elevation_angle, title="Elevation angle (deg)")
+
+    # elevation?
+    elevation = asin.(
+        sind.(sun_declination_angle) .* sind.(data_df.latitude) +
+        cosd.(sun_declination_angle) .* cosd.(data_df.latitude) .* cosd.(hour_angle)
+    )
+    plot(elevation, title="Elevation of the sun in rad")
+
+    # TODO: sunrise and sunset hours
+
+    # TODO: next ?
 end

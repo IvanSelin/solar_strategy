@@ -95,8 +95,8 @@ power_use_accumulated_wt_h = power_use_accumulated / 3600
 plot(track.distance,power_use_accumulated_wt_h)
 
 # for development purposes, temporary code
-time_df = generate_year_time_dataframe(100000)
-solar_radiation_pvedication_time(time_df)
+data_df = generate_year_time_dataframe(100000)
+solar_radiation_pvedication_time(data_df)
 
 
 #### future use
