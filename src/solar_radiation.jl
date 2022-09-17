@@ -407,5 +407,21 @@ function solar_radiation_pvedication_time(time_dataframe)
 
     # TODO: sunrise and sunset hours
 
+    sunrise_hour = 12 .- 1 / 15.0 .*
+        acosd.(
+            (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+            (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+            )
+        .- time_correction_factor / 60
+    plot(data_df.utc_time, sunrise_hour, title = "sunrise hour")
+
+    sunset_hour = 12 .+ 1 / 15.0 .*
+        acosd.(
+            (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+            (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+            )
+        .- time_correction_factor / 60
+    plot(data_df.utc_time, sunset_hour, title = "sunset hour")
+
     # TODO: next ?
 end
