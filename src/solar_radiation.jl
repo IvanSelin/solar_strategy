@@ -404,6 +404,11 @@ function solar_radiation_pvedication_time(time_dataframe)
         cosd.(sun_declination_angle) .* cosd.(data_df.latitude) .* cosd.(hour_angle)
     )
     plot(elevation, title="Elevation of the sun in rad")
+    # when elevation angle is negative it means that sun is below horizon 
+    # so, we should nullify these elements
+    elevation_filtered = copy(elevation)
+    elevation_filtered[elevation_filtered .<=0] .= 0
+    plot(data_df.utc_time, elevation_filtered, title="elevation angle when sun above horizon")
 
     # TODO: sunrise and sunset hours
 
@@ -423,5 +428,21 @@ function solar_radiation_pvedication_time(time_dataframe)
         .- time_correction_factor / 60
     plot(data_df.utc_time, sunset_hour, title = "sunset hour")
 
-    # TODO: next ?
+    # optical air mass expressed through zenith angle
+    zenith_angle = pi/2 .- elevation_filtered
+    plot(data_df.utc_time, zenith_angle, title="Zenith angle of the sun in rad")
+    cos_zenith_angle = cos.(zenith_angle)
+    # cos_zenith_angle[cos_zenith_angle .<= 1e-3] .= 0
+    air_mass = 1 ./ cos_zenith_angle
+    plot(data_df.utc_time, air_mass, title="Optical air mass")
+    # direct component of solar radiation
+    i_direct = 1.387 .* 0.7 .^ (air_mass .^ 0.678)
+    plot(data_df.utc_time, i_direct, title="Direct compinent of solar radiation")
+    
+    
+    # TODO: calculate radiation on a tilted surface
+    # can be done through perpendecular (incident) or horizontal
+    s_horizontal = s_incident * sin.(elevation)
+    # s_module stand for solar module, tilted surface
+    s_module = s_incident * sin.(elevation .+ module_angle_rad)
 end
