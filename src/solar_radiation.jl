@@ -334,9 +334,10 @@ function solar_radiation_pvedication_time(time_dataframe)
     # copy generate_year_time_dataframe(100000)
     data_df = copy(time_dataframe)
     # -12.438056, 130.841111 for Darwin
-    # 59.9375, 30.308611 for SPb
+    # 59.9375, 30.308611 for SPb, elevation is 5 meters above sea level = 0.005 km
     data_df.latitude .= 59.9375
     data_df.longitude .= 30.308611
+    data_df.altitude .= 0.005 #km
 
     # setting up needed values for calculcations
     # data_df.day = Dates.day.(data_df.datetime)
@@ -428,16 +429,31 @@ function solar_radiation_pvedication_time(time_dataframe)
         .- time_correction_factor / 60
     plot(data_df.utc_time, sunset_hour, title = "sunset hour")
 
-    # optical air mass expressed through zenith angle
+    # calculating zenith angle, needed for optical air mass
     zenith_angle = pi/2 .- elevation_filtered
     plot(data_df.utc_time, zenith_angle, title="Zenith angle of the sun in rad")
     cos_zenith_angle = cos.(zenith_angle)
-    # cos_zenith_angle[cos_zenith_angle .<= 1e-3] .= 0
-    air_mass = 1 ./ cos_zenith_angle
-    plot(data_df.utc_time, air_mass, title="Optical air mass")
-    # direct component of solar radiation
-    i_direct = 1.387 .* 0.7 .^ (air_mass .^ 0.678)
-    plot(data_df.utc_time, i_direct, title="Direct compinent of solar radiation")
+
+    # solar radiation consists of direct and diffuse radiation
+    # https://www.pveducation.org/pvcdrom/properties-of-sunlight/air-mass 
+
+    # calculate air mass - how much air light must pass through
+    # phi not defined
+    air_mass_full = 1 ./ (cos_zenith_angle .+ 0.50572 .* (96.07995 .- deg2rad.(zenith_angle)).^-1.6364 )
+
+    # direct intensity, not actually used
+    intensity_direct = H_constant / 1000 .* 0.7 .^ (air_mass_full .^ 0.678) # kW/m^2
+    # H_constant * 70% of radiation ^ air_mass_full ^ coefficient to fit the experimental data
+    plot(data_df.utc_time, intensity_direct, title="Direct intensity at Earth ground")
+
+    # with sea level data included
+    intensity_direct_sea_level = H_constant / 1000 .* ( (1 .- 0.14 .* data_df.altitude) .* 0.7 .^ (air_mass_full .^ 0.678) .+ 0.14 .* data_df.altitude) # kW/m^2
+    plot(data_df.utc_time, intensity_direct_sea_level, title="Direct intensity at altitude")
+    # diffuse radiation
+    intensity_diffuse = intensity_direct_sea_level * 0.1
+    # global irradiance
+    intensity_global = intensity_direct_sea_level + intensity_diffuse
+
     
     
     # TODO: calculate radiation on a tilted surface
