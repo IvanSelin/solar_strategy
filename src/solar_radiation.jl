@@ -453,12 +453,34 @@ function solar_radiation_pvedication_time(time_dataframe)
     intensity_diffuse = intensity_direct_sea_level * 0.1
     # global irradiance
     intensity_global = intensity_direct_sea_level + intensity_diffuse
+    plot(data_df.utc_time, intensity_global, title = "Global irradiance at altitude")
+    # irradiance * cos(zenith_angle) is incident radiation ?
 
     
-    
+    s_incident = intensity_global
     # TODO: calculate radiation on a tilted surface
     # can be done through perpendecular (incident) or horizontal
     s_horizontal = s_incident * sin.(elevation)
+    # module_angle_rad - at what angle to surface panels are located
+    data_df.module_angle_rad .= 0.34 # just on the ground
+    data_df.azimuth_angle .= 0 # just something, since it is on the ground, will not be used
+    # TODO: calculate sun azimuth angle according to https://www.pveducation.org/pvcdrom/properties-of-sunlight/azimuth-angle 
+    azimuth_cos = ( sind.(sun_declination_angle) .* cos.(data_df.latitude) .- 
+    cosd.(sun_declination_angle) .* sin.(data_df.latitude) .* cos.(hour_angle) ) ./ cos.(elevation)
+    azimuth_cos[azimuth_cos .> 1] .= 1
+    azimuth_cos[azimuth_cos .< -1] .= -1
+    data_df.azimuth_angle .= acos.( azimuth_cos )
+    data_df.lst .= Dates.hour.(data_df.local_solar_time)
+    data_df.azimuth_angle[Dates.hour.(data_df.local_solar_time) .> 12 ] .= 2*pi .- data_df.azimuth_angle[Dates.hour.(data_df.local_solar_time) .> 12 ]
+    # module azimuth angle
+    module_azimuth_angle = data_df.azimuth_angle
     # s_module stand for solar module, tilted surface
-    s_module = s_incident * sin.(elevation .+ module_angle_rad)
+    s_module = s_incident .* sin.(elevation .+ data_df.module_angle_rad)
+    plot(data_df.utc_time, s_module, title="Solar intensity for no tilt")
+    # OR https://www.pveducation.org/pvcdrom/properties-of-sunlight/arbitrary-orientation-and-tilt 
+    s_module_tilt = s_incident .* (
+        cos.(elevation) .* sin.(data_df.module_angle_rad) .* cos.(data_df.azimuth_angle .- module_azimuth_angle) .+
+        sin.(elevation) .* cos.(data_df.module_angle_rad)
+        )
+    plot(data_df.utc_time, s_module_tilt, title="Solar intensity for with tilt")
 end
