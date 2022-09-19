@@ -1,4 +1,4 @@
-latitude;longitude;elevation;distance;sin
+latitude;longitude;altitude;distance;sin
 -12.46332;130.83807;37.7;0;-0.020833
 -12.46317;130.83791;37.2;0.024;-0.025
 -12.46312;130.83786;37;0.032;-0.043011

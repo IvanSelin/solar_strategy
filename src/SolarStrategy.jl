@@ -16,16 +16,13 @@ plotly(ticks=:native)
 include("mechanical.jl")
 include("time.jl")
 include("solar_radiation.jl")
+include("track.jl")
 
 
 # some code to initialize time DataFrame
 # TODO: delete it when solar radiation is done
 time_df = DataFrame()
 time_df.year_day=0:364
-
-
-track_csv = CSV.read("data/data_australia.csv", DataFrame)
-#plot(track_csv.distance, track_csv.elevation)
 
 
 #### constants
@@ -55,18 +52,13 @@ start with stub, develop proper models later
 
 =#
 
+# preparing the track data
+track = get_track_data("data/data_australia.csv")
 
-####### preprocessing of DataFrame
-# meters from km
-track_csv.distance = track_csv.distance * 1000
-# create new dataframe with size of n-1 (and without spoiled sin column)
-# sin column is ignored, since it is incomplete
-# btw, it's better to store the slope angle
-# track is for storing diff data, there are n-1 elements
-track = select(track_csv[2:size(track_csv,1),:], Not(:sin))
-track.diff_distance = diff(track_csv.distance)
-track.diff_elevation = diff(track_csv.elevation)
-track.slope = atand.(track.diff_elevation./track.diff_distance)
+# TODO: track preprocessing
+
+# calculating time needed to spend to travel across distance
+time_df = calculate_travel_time_single_speed(50, track)
 
 
 ####### input
@@ -96,7 +88,7 @@ plot(track.distance,power_use_accumulated_wt_h)
 
 # for development purposes, temporary code
 data_df = generate_year_time_dataframe(100000)
-solar_radiation_pvedication_time(data_df)
+data_df_with_solar = solar_radiation_pvedication_time(data_df)
 
 
 #### future use
