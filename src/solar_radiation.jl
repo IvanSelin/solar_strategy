@@ -438,7 +438,6 @@ function solar_radiation_pvedication_time(time_dataframe)
     # https://www.pveducation.org/pvcdrom/properties-of-sunlight/air-mass 
 
     # calculate air mass - how much air light must pass through
-    # phi not defined
     air_mass_full = 1 ./ (cos_zenith_angle .+ 0.50572 .* (96.07995 .- deg2rad.(zenith_angle)).^-1.6364 )
 
     # direct intensity, not actually used
@@ -460,10 +459,10 @@ function solar_radiation_pvedication_time(time_dataframe)
     s_incident = intensity_global
     # TODO: calculate radiation on a tilted surface
     # can be done through perpendecular (incident) or horizontal
-    s_horizontal = s_incident * sin.(elevation)
+    s_horizontal = s_incident .* sin.(elevation)
     # module_angle_rad - at what angle to surface panels are located
-    data_df.module_angle_rad .= 0.34 # just on the ground
-    data_df.azimuth_angle .= 0 # just something, since it is on the ground, will not be used
+    data_df.module_angle_rad .= 0.0 # just on the ground
+    data_df.azimuth_angle .= 0.0 # just something, since it is on the ground, will not be used
     # TODO: calculate sun azimuth angle according to https://www.pveducation.org/pvcdrom/properties-of-sunlight/azimuth-angle 
     azimuth_cos = ( sind.(sun_declination_angle) .* cos.(data_df.latitude) .- 
     cosd.(sun_declination_angle) .* sin.(data_df.latitude) .* cos.(hour_angle) ) ./ cos.(elevation)
@@ -476,11 +475,13 @@ function solar_radiation_pvedication_time(time_dataframe)
     module_azimuth_angle = data_df.azimuth_angle
     # s_module stand for solar module, tilted surface
     s_module = s_incident .* sin.(elevation .+ data_df.module_angle_rad)
-    plot(data_df.utc_time, s_module, title="Solar intensity for no tilt")
+    plot(data_df.utc_time, s_module, title="Solar intensity without module azimuth")
     # OR https://www.pveducation.org/pvcdrom/properties-of-sunlight/arbitrary-orientation-and-tilt 
     s_module_tilt = s_incident .* (
         cos.(elevation) .* sin.(data_df.module_angle_rad) .* cos.(data_df.azimuth_angle .- module_azimuth_angle) .+
         sin.(elevation) .* cos.(data_df.module_angle_rad)
         )
-    plot(data_df.utc_time, s_module_tilt, title="Solar intensity for with tilt")
+    plot(data_df.utc_time, s_module_tilt, title="Solar intensity with module azimuth")
+
+    # next - simulate the race
 end
