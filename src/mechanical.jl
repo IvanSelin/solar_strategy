@@ -1,5 +1,4 @@
-
-function mechanical_work(speed_ms, slope, diff_distance)
+function mechanical_power_calculation(speed_ms, slope, diff_distance)
     drag = 0.18
     frontal_area = 1 # m^2
     ro = 1.18 # air density
@@ -16,8 +15,8 @@ function mechanical_work(speed_ms, slope, diff_distance)
     # newtons
     mechanical_force = (
         drag * frontal_area * speed_ms^2 * ro / 2 .+
-        .+ mass * g * (friction_1 + friction_2 * 4 * speed_ms) * cosd.(slope) .+
-        .+ mass * g * sind.(slope)
+        mass * g * (friction_1 + friction_2 * 4 * speed_ms) * cosd.(slope) .+
+        mass * g * sind.(slope)
         )
 
     # mechanical power = mechanical force * distance delta / engine efficiency
@@ -26,5 +25,7 @@ function mechanical_work(speed_ms, slope, diff_distance)
         mechanical_force .* diff_distance / (engine_efficiency)
         )
 
+    # TODO: get rid of return, or at least make it type-stable
+    # see https://docs.julialang.org/en/v1/manual/faq/#Types,-type-declarations,-and-constructors-1
     return mechanical_power
 end
