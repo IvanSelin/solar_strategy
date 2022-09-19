@@ -477,11 +477,12 @@ function solar_radiation_pvedication_time(time_dataframe)
     s_module = s_incident .* sin.(elevation .+ data_df.module_angle_rad)
     plot(data_df.utc_time, s_module, title="Solar intensity without module azimuth")
     # OR https://www.pveducation.org/pvcdrom/properties-of-sunlight/arbitrary-orientation-and-tilt 
-    s_module_tilt = s_incident .* (
+    s_module_azimuth = s_incident .* (
         cos.(elevation) .* sin.(data_df.module_angle_rad) .* cos.(data_df.azimuth_angle .- module_azimuth_angle) .+
         sin.(elevation) .* cos.(data_df.module_angle_rad)
         )
-    plot(data_df.utc_time, s_module_tilt, title="Solar intensity with module azimuth")
+    plot(data_df.utc_time, s_module_azimuth, title="Solar intensity with module azimuth")
 
     # next - simulate the race
+    return s_module_azimuth
 end
