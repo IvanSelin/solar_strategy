@@ -34,13 +34,22 @@ function travel_time_to_real_time(time_s)
 end
 
 function travel_time_to_datetime(time_s)
-    start_datetime = DateTime(2022,7,1,8,0,0)
+    start_datetime = DateTime(2022,7,1,0,0,0)
     daily_start_hour_time = 8
     daily_finish_hour_time = 16
 
+    start_time_seconds = daily_start_hour_time * 60 * 60
+    finish_time_seconds = daily_finish_hour_time * 60 *60
+    seconds_in_a_day = 24 * 60 * 60
+
+    # adjust travel time so it happend only between daily start hour time and daily finish hour time
+    day = div.(time_s, finish_time_seconds .- start_time_seconds) .+ 1
+    time_s_adjusted = time_s .+ start_time_seconds .* day .+
+    ( seconds_in_a_day .- finish_time_seconds) .* (day .- 1)
+
     # create a DataFrame for time information
     # adds seconds for 
-    datetime_df = start_datetime + Dates.Millisecond.(round.(time_s .* 1000))
+    datetime_df = start_datetime + Dates.Millisecond.(round.(time_s_adjusted .* 1000))
 
     # TODO: make use of daily_start_hour_time and adjust millis for that
     return datetime_df
@@ -62,7 +71,7 @@ function generate_year_time_dataframe(time_step_millis::Int64)
 end
 
 function calculate_travel_time_single_speed(speed_kmh, track_df)
-    speed_vector = zeros(length(track_df.distanse))
+    speed_vector = zeros(length(track_df.distance))
     speed_vector .= speed_kmh / 3.6
     return calculate_travel_time(speed_vector, track_df)
 end
