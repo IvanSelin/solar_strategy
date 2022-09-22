@@ -13,23 +13,18 @@ plotly(ticks=:native)
 # using Plotly # not as fast, but interactive
 # using PlotlyJS # a lot of dependencies, slow loading
 
-include("mechanical.jl")
+include("energy_draw.jl")
 include("time.jl")
 include("solar_radiation.jl")
 include("track.jl")
-
-
-# some code to initialize time DataFrame
-# TODO: delete it when solar radiation is done
-time_df = DataFrame()
-time_df.year_day=0:364
+include("utils.jl")
 
 
 #### constants
 # panels_efficiency = 0.228 # 910/4000
 # electrics_efficiency = 0.86
 # battery_efficiency = 0.98
-power_onboard = 40 # Wt, 0.04kWt
+
 # battery_capacity = 5.100 # kWt*h
 # panels_area = 4 # m^2
 # panels_area_charge = 6 # m^2
@@ -57,30 +52,21 @@ track = get_track_data("data/data_australia.csv")
 
 # TODO: track preprocessing
 
+# input speeds are here
+# as of right now one speed for all track parts
+input_speed = convert_single_kmh_speed_to_ms_vector(50, length(track.distance)) # kmh
+# in the end it should be a vector
 # calculating time needed to spend to travel across distance
-time_df = calculate_travel_time_single_speed(50, track)
-
-
-####### input
-speed_kmh = 50
-speed_ms = speed_kmh / 3.6
-
-#### time manipulation
-# base time, seconds driven from start of the race
-time_s = track.distance ./ speed_ms
-# coverting the journey time to real time
-time_df = travel_time_to_real_time(time_s)
+time_df = calculate_travel_time(input_speed, track)
 
 #### calculcations
 # mechanical calculations are now in separate file
-mechanical_power = mechanical_power_calculation(speed_ms, track.slope, track.diff_distance)
+mechanical_power = mechanical_power_calculation(input_speed, track.slope, track.diff_distance)
 
 # electical losses
-electrical_power = power_onboard * track.diff_distance / speed_ms
+electrical_power = electrical_power_calculation(track.diff_distance, input_speed)
 # converting mechanical work to elecctrical power and then power use
-power_use = mechanical_power .+ electrical_power
-power_use_accumulated = cumsum(power_use)
-power_use_accumulated_wt_h = power_use_accumulated / 3600
+power_use_accumulated_wt_h = calculate_power_use_accumulated(mechanical_power, electrical_power)
 
 
 #### plotting
@@ -90,6 +76,7 @@ plot(track.distance,power_use_accumulated_wt_h)
 data_df = generate_year_time_dataframe(100000)
 data_df_with_solar = solar_radiation_pvedication_time(data_df)
 
+# TODO: calculate proper power income
 
 #### future use
 # for optimization (overall list: https://www.juliaopt.org/packages/ ):

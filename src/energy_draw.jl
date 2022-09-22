@@ -14,9 +14,9 @@ function mechanical_power_calculation(speed_ms, slope, diff_distance)
     # mechanical force = drag force + friction force + gravitational force
     # newtons
     mechanical_force = (
-        drag * frontal_area * speed_ms^2 * ro / 2 .+
-        mass * g * (friction_1 + friction_2 * 4 * speed_ms) * cosd.(slope) .+
-        mass * g * sind.(slope)
+        drag .* frontal_area .* speed_ms .^ 2 .* ro ./ 2 .+
+        mass .* g .* (friction_1 .+ friction_2 * 4 .* speed_ms) .* cosd.(slope) .+
+        mass .* g .* sind.(slope)
         )
 
     # mechanical power = mechanical force * distance delta / engine efficiency
@@ -28,4 +28,15 @@ function mechanical_power_calculation(speed_ms, slope, diff_distance)
     # TODO: get rid of return, or at least make it type-stable
     # see https://docs.julialang.org/en/v1/manual/faq/#Types,-type-declarations,-and-constructors-1
     return mechanical_power
+end
+
+function electrical_power_calculation(speed_ms, diff_distance)
+    power_onboard = 40; # Wt, 0.04kWt
+    return power_onboard .* diff_distance ./ speed_ms;
+end
+
+function calculate_power_use_accumulated(mechanical, electrical)
+    power_use = mechanical .+ electrical;
+    power_use_accumulated = cumsum(power_use);
+    return  power_use_accumulated / 3600;
 end

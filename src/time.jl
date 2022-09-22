@@ -70,17 +70,6 @@ function generate_year_time_dataframe(time_step_millis::Int64)
     return time_df
 end
 
-function calculate_travel_time_single_speed(speed_kmh, track_df)
-    speed_vector = zeros(length(track_df.distance))
-    speed_vector .= speed_kmh / 3.6
-    return calculate_travel_time(speed_vector, track_df)
-end
-
-function calculate_travel_time_kmh(speed_vector_kmh, track_df)
-    speed_vector .= speed_vector_kmh ./ 3.6
-    return calculate_travel_time(speed_vector, track_df)
-end
-
 function calculate_travel_time(speed_vector, track_df)
     #### time manipulation
     # time needed to spend on each part of the track
