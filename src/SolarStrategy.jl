@@ -54,7 +54,7 @@ track = get_track_data("data/data_australia.csv")
 
 # input speeds are here
 # as of right now one speed for all track parts
-input_speed = convert_single_kmh_speed_to_ms_vector(50, length(track.distance)) # kmh
+input_speed = convert_single_kmh_speed_to_ms_vector(43, length(track.distance)) # input in km/h, output in m/sec
 # in the end it should be a vector
 # calculating time needed to spend to travel across distance
 time_df = calculate_travel_time(input_speed, track)
@@ -66,17 +66,29 @@ mechanical_power = mechanical_power_calculation(input_speed, track.slope, track.
 # electical losses
 electrical_power = electrical_power_calculation(track.diff_distance, input_speed)
 # converting mechanical work to elecctrical power and then power use
+power_use = calculate_power_use(mechanical_power, electrical_power)
 power_use_accumulated_wt_h = calculate_power_use_accumulated(mechanical_power, electrical_power)
 
+# get solar energy income
+intensity = solar_radiation_pvedication_time(time_df, track)
+plot(track.distance, intensity, title="Solar intensity")
+solar_power = solar_power_income(time_df, track, input_speed)
+solar_power_accumulated = calculate_power_income_accumulated(solar_power)
+# TODO: night charging with additional solar panels
 
 #### plotting
-plot(track.distance,power_use_accumulated_wt_h)
+plot(track.distance, power_use, title="Power spent on toute")
+plot(track.distance, solar_power, title="Power gained on the route")
 
-# for development purposes, temporary code
-data_df = generate_year_time_dataframe(100000)
-data_df_with_solar = solar_radiation_pvedication_time(data_df)
+plot(track.distance, power_use_accumulated_wt_h, title="Power spent on the route, accumulated")
+plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
 
-# TODO: calculate proper power income
+plot(track.distance, solar_power_accumulated - power_use_accumulated_wt_h, title="Power balance w/o battery")
+battery_capacity = 5100 # wt
+plot(track.distance, battery_capacity .+ solar_power_accumulated .- power_use_accumulated_wt_h, title="Power balance with battery")
+
+# TODO: calculate night charging
+# TODO: block overcharging
 
 #### future use
 # for optimization (overall list: https://www.juliaopt.org/packages/ ):

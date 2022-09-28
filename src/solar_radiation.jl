@@ -5,7 +5,7 @@ function calculate_noon_time()
     return t
 end
 
-function solar_power(latitude, time_df)
+function solar_power_old(latitude, time_df)
     transmittance=0.75 # transmittance (unitless)
     solar_constant=1367 # solar constant (w/m^2)
     p=101325 # normal atmospheric pressure
@@ -328,16 +328,20 @@ function solar_radiation_pveducation()
 end
 
 
-function solar_radiation_pvedication_time(time_dataframe)
+function solar_radiation_pvedication_time(time_dataframe, track_dataframe)
     # starts here: https://www.pveducation.org/pvcdrom/properties-of-sunlight/solar-radiation-outside-the-earths-atmosphere
 
     # copy generate_year_time_dataframe(100000)
     data_df = copy(time_dataframe)
-    # -12.438056, 130.841111 for Darwin
-    # 59.9375, 30.308611 for SPb, elevation is 5 meters above sea level = 0.005 km
-    data_df.latitude .= 59.9375
-    data_df.longitude .= 30.308611
-    data_df.altitude .= 0.005 #km
+    data_df.latitude = track_dataframe.latitude
+    data_df.longitude = track_dataframe.longitude
+    data_df.altitude = track_dataframe.altitude
+
+    # for debug purposes
+    # data_df = copy(time_df)
+    # data_df.latitude = track.latitude
+    # data_df.longitude = track.longitude
+    # data_df.altitude = track.altitude
 
     # setting up needed values for calculcations
     # data_df.day = Dates.day.(data_df.datetime)
@@ -441,17 +445,17 @@ function solar_radiation_pvedication_time(time_dataframe)
     air_mass_full = 1 ./ (cos_zenith_angle .+ 0.50572 .* (96.07995 .- deg2rad.(zenith_angle)).^-1.6364 )
 
     # direct intensity, not actually used
-    intensity_direct = H_constant / 1000 .* 0.7 .^ (air_mass_full .^ 0.678) # kW/m^2
+    intensity_direct = H_constant .* 0.7 .^ (air_mass_full .^ 0.678) # W/m^2
     # H_constant * 70% of radiation ^ air_mass_full ^ coefficient to fit the experimental data
-    plot(data_df.utc_time, intensity_direct, title="Direct intensity at Earth ground")
+    plot(data_df.utc_time, intensity_direct, title="Direct intensity at Earth ground, W/m^2")
 
-    # with sea level data included
-    intensity_direct_sea_level = H_constant / 1000 .* ( (1 .- 0.14 .* data_df.altitude) .* 0.7 .^ (air_mass_full .^ 0.678) .+ 0.14 .* data_df.altitude) # kW/m^2
-    plot(data_df.utc_time, intensity_direct_sea_level, title="Direct intensity at altitude")
+    # with altitude (from sea level)
+    intensity_direct_altitude = H_constant .* ( (1 .- 0.14 .* data_df.altitude ./ 1000) .* 0.7 .^ (air_mass_full .^ 0.678) .+ 0.14 .* data_df.altitude ./ 1000) # W/m^2
+    plot(data_df.utc_time, intensity_direct_altitude, title="Direct intensity at altitude, W/m^2")
     # diffuse radiation
-    intensity_diffuse = intensity_direct_sea_level * 0.1
+    intensity_diffuse = intensity_direct_altitude * 0.1
     # global irradiance
-    intensity_global = intensity_direct_sea_level + intensity_diffuse
+    intensity_global = intensity_direct_altitude + intensity_diffuse
     plot(data_df.utc_time, intensity_global, title = "Global irradiance at altitude")
     # irradiance * cos(zenith_angle) is incident radiation ?
 
@@ -485,4 +489,20 @@ function solar_radiation_pvedication_time(time_dataframe)
 
     # next - simulate the race
     return s_module_azimuth
+end
+
+function solar_power_income(time_df, track_df, speed_vector)
+    electrics_efficiency = 0.86
+    solar_panels_efficiency = 0.228
+    panels_area = 4 # m^2
+    solar_intensity = solar_radiation_pvedication_time(time_df, track_df)
+    power_income = electrics_efficiency .* solar_panels_efficiency .* solar_intensity .* panels_area .* track_df.diff_distance ./ speed_vector # W*s
+    power_income_wt_h = power_income ./ 3600
+    # power_income(i) = electrics_efficiency * panels_efficiency * solar_rad_h * panels_area * ...
+    # ( dist_diff(i) * 3.6 / ( speed * 3600 ) ); % kWt*h
+    return power_income_wt_h 
+end
+
+function calculate_power_income_accumulated(power_income)
+    return cumsum(power_income)
 end

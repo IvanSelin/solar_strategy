@@ -77,6 +77,6 @@ function calculate_travel_time(speed_vector, track_df)
     # base time, seconds driven from start of the race
     time_s = cumsum(time_s_intervals)
     # coverting the journey time to real time
-    time_df = travel_time_to_datetime(time_s)
-    return time_df
+    time_utc = travel_time_to_datetime(time_s)
+    return DataFrame(utc_time=time_utc)
 end

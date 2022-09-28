@@ -40,3 +40,8 @@ function calculate_power_use_accumulated(mechanical, electrical)
     power_use_accumulated = cumsum(power_use);
     return  power_use_accumulated / 3600;
 end
+
+function calculate_power_use(mechanical, electrical)
+    power_use = mechanical .+ electrical;
+    return  power_use / 3600;
+end
