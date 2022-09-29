@@ -70,13 +70,17 @@ function generate_year_time_dataframe(time_step_millis::Int64)
     return time_df
 end
 
-function calculate_travel_time(speed_vector, track_df)
+function calculate_travel_time_datetime(speed_vector, track_df)
+    time_s = calculate_travel_time_seconds(speed_vector, track_df)
+    # coverting the journey time to real time
+    time_utc = travel_time_to_datetime(time_s)
+    return DataFrame(utc_time=time_utc)
+end
+
+function calculate_travel_time_seconds(speed_vector, track_df)
     #### time manipulation
     # time needed to spend on each part of the track
     time_s_intervals = track_df.diff_distance ./ speed_vector
     # base time, seconds driven from start of the race
-    time_s = cumsum(time_s_intervals)
-    # coverting the journey time to real time
-    time_utc = travel_time_to_datetime(time_s)
-    return DataFrame(utc_time=time_utc)
+    return cumsum(time_s_intervals)
 end
