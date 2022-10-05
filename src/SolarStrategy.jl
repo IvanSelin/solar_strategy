@@ -43,11 +43,9 @@ track = get_track_data("data/data_australia.csv")
 # TODO: track preprocessing
 
 
-function solar_trip(speed::Float64, track)
-    # input speeds are here
-    # as of right now one speed for all track parts
-    input_speed = convert_single_kmh_speed_to_ms_vector(first(speed), length(track.distance)) # input in km/h, output in m/sec
-    # in the end it should be a vector
+function solar_trip_calculation(input_speed::Vector{Float64}, track)
+    # input speed in m/s
+
     # calculating time needed to spend to travel across distance
     time_df = calculate_travel_time_datetime(input_speed, track)
 
@@ -91,10 +89,49 @@ function solar_trip(speed::Float64, track)
     return cost
 end
 
-f(x) = solar_trip(first(x), track)
-result = optimize(f, [30.0]; autodiff = :forward)
+# consider using Union for types for multiple dispatch
+# https://stackoverflow.com/questions/65094714/efficient-way-to-implement-multiple-dispatch-for-many-similar-functions 
+# also consider rewriting core functions so they will work in .func mode
+
+function solar_trip_wrapper(speed::Number, track)
+    # input speeds in km/h
+    # as of right now one speed for all track parts
+    input_speed = convert_single_kmh_speed_to_ms_vector(first(speed), length(track.distance))
+
+    return solar_trip(input_speed, track)
+end
+
+function solar_trip_wrapper(speed::Vector{Float64}, track)
+    # input in km/h
+    return solar_trip(convert_kmh_to_ms(speed), track)
+end
+
+# function to test optimization with several big chunks to optimize
+# everything under Number
+function solar_trip_test(speeds::Vector{<:Number}, track)
+# function solar_trip_test(speeds::Vector{Float64}, track)
+    speed_ms = convert_kmh_to_ms(speeds)
+    speed_vector = propagate_speeds(speed_ms, track)
+    return solar_trip(speed_vector, track)
+end
+
+
+# regular optimization, Nelder-Mead, 9 seconds 
+@time result = optimize(x -> solar_trip_wrapper(x, track), [30.0])
 minimized_inputs = Optim.minimizer(result)
 minimized_result = Optim.minimum(result)
+# get few big chunks with the same speed, Nelder-Mead, ~210 seconds
+@time result_chunks = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0])
+minimized_inputs_chunks = Optim.minimizer(result_chunks)
+minimized_result_chunks = Optim.minimum(result_chunks)
+# few big chunks, LBFGS
+@time result_chunks_lbfgs = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0], LBFGS())
+minimized_inputs_chunks_lbfgs = Optim.minimizer(result_chunks)
+minimized_result_chunks_lbfgs = Optim.minimum(result_chunks)
+# result = optimize(f, [30.0])
+# result = optimize(f, [30.0], LBFGS())
+# result = optimize(f, [30.0], GradientDescent())
+
 
 # TODO: refactor code, calculations in separate function, wrapper for optimization
 # make an optimization with full vector
