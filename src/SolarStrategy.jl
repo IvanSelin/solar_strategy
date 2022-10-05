@@ -84,7 +84,7 @@ function solar_trip_calculation(input_speed::Vector{Float64}, track)
     # will start with Optim
     # TODO: find an optimal single speed - make a loss function and start optimization process
     time_seconds = calculate_travel_time_seconds(input_speed, track)
-    cost = last(time_seconds) + 10 * abs(minimum(energy_in_system))
+    cost = last(time_seconds) + 10 * abs(minimum(energy_in_system)) + sum(input_speed[input_speed .< 0.0])
     # TODO: find an optimal speed vector
     return cost
 end
@@ -93,17 +93,17 @@ end
 # https://stackoverflow.com/questions/65094714/efficient-way-to-implement-multiple-dispatch-for-many-similar-functions 
 # also consider rewriting core functions so they will work in .func mode
 
-function solar_trip_wrapper(speed::Number, track)
+function solar_trip_wrapper(speed::Float64, track)
     # input speeds in km/h
     # as of right now one speed for all track parts
     input_speed = convert_single_kmh_speed_to_ms_vector(first(speed), length(track.distance))
 
-    return solar_trip(input_speed, track)
+    return solar_trip_calculation(input_speed, track)
 end
 
 function solar_trip_wrapper(speed::Vector{Float64}, track)
     # input in km/h
-    return solar_trip(convert_kmh_to_ms(speed), track)
+    return solar_trip_calculation(convert_kmh_to_ms(speed), track)
 end
 
 # function to test optimization with several big chunks to optimize
@@ -112,7 +112,7 @@ function solar_trip_test(speeds::Vector{<:Number}, track)
 # function solar_trip_test(speeds::Vector{Float64}, track)
     speed_ms = convert_kmh_to_ms(speeds)
     speed_vector = propagate_speeds(speed_ms, track)
-    return solar_trip(speed_vector, track)
+    return solar_trip_calculation(speed_vector, track)
 end
 
 
@@ -124,10 +124,10 @@ minimized_result = Optim.minimum(result)
 @time result_chunks = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0])
 minimized_inputs_chunks = Optim.minimizer(result_chunks)
 minimized_result_chunks = Optim.minimum(result_chunks)
-# few big chunks, LBFGS
+# few big chunks, LBFGS, 645 seconds, negative speeds, consider revising or constraints
 @time result_chunks_lbfgs = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0], LBFGS())
-minimized_inputs_chunks_lbfgs = Optim.minimizer(result_chunks)
-minimized_result_chunks_lbfgs = Optim.minimum(result_chunks)
+minimized_inputs_chunks_lbfgs = Optim.minimizer(result_chunks_lbfgs)
+minimized_result_chunks_lbfgs = Optim.minimum(result_chunks_lbfgs)
 # result = optimize(f, [30.0])
 # result = optimize(f, [30.0], LBFGS())
 # result = optimize(f, [30.0], GradientDescent())
