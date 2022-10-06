@@ -8,6 +8,7 @@ using PlotlyBase
 using TimeZones
 using Dates
 using Optim
+using Alert
 # selecting a Plots backend
 plotly(ticks=:native)
 # consider using Gadfly http://gadflyjl.org/stable/
@@ -84,8 +85,13 @@ function solar_trip_calculation(input_speed::Vector{Float64}, track)
     # will start with Optim
     # TODO: find an optimal single speed - make a loss function and start optimization process
     time_seconds = calculate_travel_time_seconds(input_speed, track)
-    cost = last(time_seconds) + 10 * abs(minimum(energy_in_system)) + sum(input_speed[input_speed .< 0.0])
+    cost = last(time_seconds) + 10 * abs(minimum(energy_in_system)) # + 100 * sum(input_speed[input_speed .< 0.0])
     # TODO: find an optimal speed vector
+    return cost, power_use_accumulated_wt_h, solar_power_accumulated, energy_in_system, time_df, time_seconds
+end
+
+function solar_trip_cost(input_speed::Vector{Float64}, track)
+    cost, power_use, solar_power, energy, time, time_s = solar_trip_calculation(input_speed, track)
     return cost
 end
 
@@ -98,12 +104,12 @@ function solar_trip_wrapper(speed::Float64, track)
     # as of right now one speed for all track parts
     input_speed = convert_single_kmh_speed_to_ms_vector(first(speed), length(track.distance))
 
-    return solar_trip_calculation(input_speed, track)
+    return solar_trip_cost(input_speed, track)
 end
 
 function solar_trip_wrapper(speed::Vector{Float64}, track)
     # input in km/h
-    return solar_trip_calculation(convert_kmh_to_ms(speed), track)
+    return solar_trip_cost(convert_kmh_to_ms(speed), track)
 end
 
 # function to test optimization with several big chunks to optimize
@@ -112,29 +118,38 @@ function solar_trip_test(speeds::Vector{<:Number}, track)
 # function solar_trip_test(speeds::Vector{Float64}, track)
     speed_ms = convert_kmh_to_ms(speeds)
     speed_vector = propagate_speeds(speed_ms, track)
-    return solar_trip_calculation(speed_vector, track)
+    return solar_trip_cost(speed_vector, track)
 end
 
 
 # regular optimization, Nelder-Mead, 9 seconds 
 @time result = optimize(x -> solar_trip_wrapper(x, track), [30.0])
+alert();
 minimized_inputs = Optim.minimizer(result)
 minimized_result = Optim.minimum(result)
 # get few big chunks with the same speed, Nelder-Mead, ~210 seconds
 @time result_chunks = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0])
+alert();
 minimized_inputs_chunks = Optim.minimizer(result_chunks)
 minimized_result_chunks = Optim.minimum(result_chunks)
-# few big chunks, LBFGS, 645 seconds, negative speeds, consider revising or constraints
+# few big chunks, LBFGS, 645 seconds, negative speeds, consider revising or constraints, 3886 seconds
 @time result_chunks_lbfgs = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0], LBFGS())
 minimized_inputs_chunks_lbfgs = Optim.minimizer(result_chunks_lbfgs)
 minimized_result_chunks_lbfgs = Optim.minimum(result_chunks_lbfgs)
+lower = [0.0]
+upper = [100.]
+initial_x = [43.0]
+@time result_chunks_lbfgs_2 = optimize(x -> solar_trip_test(x, track), lower, upper, initial_x, Fminbox(LBFGS()))
+alert();
+minimized_inputs_chunks_lbfgs_2 = Optim.minimizer(result_chunks_lbfgs_2)
+minimized_result_chunks_lbfgs_2 = Optim.minimum(result_chunks_lbfgs_2)
 # result = optimize(f, [30.0])
 # result = optimize(f, [30.0], LBFGS())
 # result = optimize(f, [30.0], GradientDescent())
 
-
 # TODO: refactor code, calculations in separate function, wrapper for optimization
 # make an optimization with full vector
+# make different wrappers for calculation: only cost and all data
 
 #### future use
 # for optimization (overall list: https://www.juliaopt.org/packages/ ):
