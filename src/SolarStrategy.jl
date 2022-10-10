@@ -8,7 +8,6 @@ using PlotlyBase
 using TimeZones
 using Dates
 using Optim
-using ProfileView
 # using Alert
 # selecting a Plots backend
 plotly(ticks=:native)
@@ -59,27 +58,25 @@ function solar_trip_calculation(input_speed::Vector{Float64}, track)
     # electical losses
     electrical_power = electrical_power_calculation(track.diff_distance, input_speed)
     # converting mechanical work to elecctrical power and then power use
-    power_use = calculate_power_use(mechanical_power, electrical_power)
+    # power_use = calculate_power_use(mechanical_power, electrical_power)
     power_use_accumulated_wt_h = calculate_power_use_accumulated(mechanical_power, electrical_power)
 
     # get solar energy income
-    intensity = solar_radiation_pvedication_time(time_df, track)
-    plot(track.distance, intensity, title="Solar intensity")
     solar_power = solar_power_income(time_df, track, input_speed)
     solar_power_accumulated = calculate_power_income_accumulated(solar_power)
     # TODO: night charging with additional solar panels
 
-    #### plotting
-    plot(track.distance, power_use, title="Power spent on toute")
-    plot(track.distance, solar_power, title="Power gained on the route")
+    # #### plotting
+    # plot(track.distance, power_use, title="Power spent on toute")
+    # plot(track.distance, solar_power, title="Power gained on the route")
 
-    plot(track.distance, power_use_accumulated_wt_h, title="Power spent on the route, accumulated")
-    plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
+    # plot(track.distance, power_use_accumulated_wt_h, title="Power spent on the route, accumulated")
+    # plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
 
-    plot(track.distance, solar_power_accumulated - power_use_accumulated_wt_h, title="Power balance w/o battery")
+    # plot(track.distance, solar_power_accumulated - power_use_accumulated_wt_h, title="Power balance w/o battery")
     battery_capacity = 5100 # wt
     energy_in_system = battery_capacity .+ solar_power_accumulated .- power_use_accumulated_wt_h
-    plot(track.distance, energy_in_system, title="Power balance with battery")
+    # plot(track.distance, energy_in_system, title="Power balance with battery")
 
     # TODO: calculate night charging - do it later since it is not critical as of right now
     # TODO: block overcharging - cost function?

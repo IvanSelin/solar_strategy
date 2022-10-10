@@ -328,11 +328,11 @@ function solar_radiation_pveducation()
 end
 
 
-function solar_radiation_pvedication_time(time_dataframe, track_dataframe)
+function solar_radiation_pvedication_time(data_df, track_dataframe)
     # starts here: https://www.pveducation.org/pvcdrom/properties-of-sunlight/solar-radiation-outside-the-earths-atmosphere
 
     # copy generate_year_time_dataframe(100000)
-    data_df = copy(time_dataframe)
+    # data_df = copy(time_dataframe)
     data_df.latitude = track_dataframe.latitude
     data_df.longitude = track_dataframe.longitude
     data_df.altitude = track_dataframe.altitude
@@ -348,11 +348,11 @@ function solar_radiation_pvedication_time(time_dataframe, track_dataframe)
 
     # solar constant
     H_constant = 1353 # W/m^2
-    AM0 = 1366 # air mass zero, W/m^2
+    # AM0 = 1366 # air mass zero, W/m^2
 
     # radiant power density otside the Erath's athmosphere in W/m^2
-    H = H_constant * (1 .+ 0.033*cosd.( (360 * (Dates.dayofyear.(data_df.utc_time) .- 2)) / 365 ) )
-    plot(Dates.dayofyear.(data_df.utc_time),H, title = "Radial power density W/m^2")
+    # H = H_constant * (1 .+ 0.033*cosd.( (360 * (Dates.dayofyear.(data_df.utc_time) .- 2)) / 365 ) )
+    # plot(Dates.dayofyear.(data_df.utc_time),H, title = "Radial power density W/m^2")
 
     # TODO: air mass calculation with phi? and theta?
 
@@ -365,18 +365,18 @@ function solar_radiation_pvedication_time(time_dataframe, track_dataframe)
     # equation of time
     B = 360 / 365 * (Dates.dayofyear.(data_df.utc_time) .- 81) # in degrees
     equation_of_time = 9.87 * sind.(2B) - 7.53 * cosd.(B) - 1.5 * sind.(B) # minutes
-    plot(
-        equation_of_time,
-        title = "Equation of time",
-        label = "Equation of time",
-        xlabel = "Day of the Year",
-        ylabel = "Minutes"
-    )
+    # plot(
+    #     equation_of_time,
+    #     title = "Equation of time",
+    #     label = "Equation of time",
+    #     xlabel = "Day of the Year",
+    #     ylabel = "Minutes"
+    # )
 
     # TODO: resume from here
     # because local standard time meridian is not real sun time , minutes
-    time_correction_factor = 4 * (data_df.longitude - data_df.lstm) + equation_of_time
-    plot(time_correction_factor, title="Time correction factor")
+    # time_correction_factor = 4 * (data_df.longitude - data_df.lstm) + equation_of_time
+    # plot(time_correction_factor, title="Time correction factor")
 
     # local_solar_time = local_time + Dates.Second(round(time_correction_factor * 60.0))
     # # LST = 4 longitude + 60 UTC_minutes +EoT
@@ -388,54 +388,55 @@ function solar_radiation_pvedication_time(time_dataframe, track_dataframe)
         Dates.Second.( round.(4 * data_df.longitude + equation_of_time) * 60)
     
     # TODO: should hour angle be only in integer values? 
-    minutes_from_start_of_the_day = Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time);
+    # minutes_from_start_of_the_day = Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time);
     hour_angle = 15 * ((Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time)) ./60 .- 12)
     # TODO: hour angle calculation for UTC time
-    plot(data_df.utc_time, hour_angle, title="Hour angle vs UTC time")
+    # plot(data_df.utc_time, hour_angle, title="Hour angle vs UTC time")
     # TODO: hour angle calculation for local solar time ??? check if needed
 
     # TODO: continue to sun declination angle
     # TODO: continous sun declination angle calculation? (as for now quantified by days)
     sun_declination_angle = -23.45 * cosd.(360 / 365 * (Dates.dayofyear.(data_df.utc_time) .+ 10))
-    plot(sun_declination_angle, title = "Sun declination angle")
+    # plot(sun_declination_angle, title = "Sun declination angle")
 
     # elevation (altitude) angle
-    elevation_angle = 90 .+ data_df.latitude .- sun_declination_angle
-    plot(data_df.utc_time, elevation_angle, title="Elevation angle (deg)")
+    # elevation_angle = 90 .+ data_df.latitude .- sun_declination_angle
+    # plot(data_df.utc_time, elevation_angle, title="Elevation angle (deg)")
 
     # elevation?
     elevation = asin.(
         sind.(sun_declination_angle) .* sind.(data_df.latitude) +
         cosd.(sun_declination_angle) .* cosd.(data_df.latitude) .* cosd.(hour_angle)
     )
-    plot(elevation, title="Elevation of the sun in rad")
+    # plot(elevation, title="Elevation of the sun in rad")
     # when elevation angle is negative it means that sun is below horizon 
     # so, we should nullify these elements
     elevation_filtered = copy(elevation)
     elevation_filtered[elevation_filtered .<=0] .= 0
-    plot(data_df.utc_time, elevation_filtered, title="elevation angle when sun above horizon")
+    # plot(data_df.utc_time, elevation_filtered, title="elevation angle when sun above horizon")
 
     # TODO: sunrise and sunset hours
 
-    sunrise_hour = 12 .- 1 / 15.0 .*
-        acosd.(
-            (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
-            (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
-            )
-        .- time_correction_factor / 60
-    plot(data_df.utc_time, sunrise_hour, title = "sunrise hour")
+    # sunrise_hour = 12 .- 1 / 15.0 .*
+    #     acosd.(
+    #         (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+    #         (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+    #         )
+    #     .- time_correction_factor / 60
+    # # plot(data_df.utc_time, sunrise_hour, title = "sunrise hour")
 
-    sunset_hour = 12 .+ 1 / 15.0 .*
-        acosd.(
-            (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
-            (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
-            )
-        .- time_correction_factor / 60
-    plot(data_df.utc_time, sunset_hour, title = "sunset hour")
+    # sunset_hour = 12 .+ 1 / 15.0 .*
+    #     acosd.(
+    #         (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+    #         (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+    #         )
+    #     .- time_correction_factor / 60
+
+    # plot(data_df.utc_time, sunset_hour, title = "sunset hour")
 
     # calculating zenith angle, needed for optical air mass
     zenith_angle = pi/2 .- elevation_filtered
-    plot(data_df.utc_time, zenith_angle, title="Zenith angle of the sun in rad")
+    # plot(data_df.utc_time, zenith_angle, title="Zenith angle of the sun in rad")
     cos_zenith_angle = cos.(zenith_angle)
 
     # solar radiation consists of direct and diffuse radiation
@@ -445,25 +446,25 @@ function solar_radiation_pvedication_time(time_dataframe, track_dataframe)
     air_mass_full = 1 ./ (cos_zenith_angle .+ 0.50572 .* (96.07995 .- deg2rad.(zenith_angle)).^-1.6364 )
 
     # direct intensity, not actually used
-    intensity_direct = H_constant .* 0.7 .^ (air_mass_full .^ 0.678) # W/m^2
+    # intensity_direct = H_constant .* 0.7 .^ (air_mass_full .^ 0.678) # W/m^2
     # H_constant * 70% of radiation ^ air_mass_full ^ coefficient to fit the experimental data
-    plot(data_df.utc_time, intensity_direct, title="Direct intensity at Earth ground, W/m^2")
+    # plot(data_df.utc_time, intensity_direct, title="Direct intensity at Earth ground, W/m^2")
 
     # with altitude (from sea level)
     intensity_direct_altitude = H_constant .* ( (1 .- 0.14 .* data_df.altitude ./ 1000) .* 0.7 .^ (air_mass_full .^ 0.678) .+ 0.14 .* data_df.altitude ./ 1000) # W/m^2
-    plot(data_df.utc_time, intensity_direct_altitude, title="Direct intensity at altitude, W/m^2")
+    # plot(data_df.utc_time, intensity_direct_altitude, title="Direct intensity at altitude, W/m^2")
     # diffuse radiation
     intensity_diffuse = intensity_direct_altitude * 0.1
     # global irradiance
     intensity_global = intensity_direct_altitude + intensity_diffuse
-    plot(data_df.utc_time, intensity_global, title = "Global irradiance at altitude")
+    # plot(data_df.utc_time, intensity_global, title = "Global irradiance at altitude")
     # irradiance * cos(zenith_angle) is incident radiation ?
 
     
     s_incident = intensity_global
     # TODO: calculate radiation on a tilted surface
     # can be done through perpendecular (incident) or horizontal
-    s_horizontal = s_incident .* sin.(elevation)
+    # s_horizontal = s_incident .* sin.(elevation)
     # module_angle_rad - at what angle to surface panels are located
     data_df.module_angle_rad .= 0.0 # just on the ground
     data_df.azimuth_angle .= 0.0 # just something, since it is on the ground, will not be used
@@ -478,14 +479,14 @@ function solar_radiation_pvedication_time(time_dataframe, track_dataframe)
     # module azimuth angle
     module_azimuth_angle = data_df.azimuth_angle
     # s_module stand for solar module, tilted surface
-    s_module = s_incident .* sin.(elevation .+ data_df.module_angle_rad)
-    plot(data_df.utc_time, s_module, title="Solar intensity without module azimuth")
+    # s_module = s_incident .* sin.(elevation .+ data_df.module_angle_rad)
+    # plot(data_df.utc_time, s_module, title="Solar intensity without module azimuth")
     # OR https://www.pveducation.org/pvcdrom/properties-of-sunlight/arbitrary-orientation-and-tilt 
     s_module_azimuth = s_incident .* (
         cos.(elevation) .* sin.(data_df.module_angle_rad) .* cos.(data_df.azimuth_angle .- module_azimuth_angle) .+
         sin.(elevation) .* cos.(data_df.module_angle_rad)
         )
-    plot(data_df.utc_time, s_module_azimuth, title="Solar intensity with module azimuth")
+    # plot(data_df.utc_time, s_module_azimuth, title="Solar intensity with module azimuth")
 
     # next - simulate the race
     return s_module_azimuth
