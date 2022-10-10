@@ -41,6 +41,7 @@ start with stub, develop proper models later
 
 # preparing the track data
 track = get_track_data("data/data_australia.csv")
+track_short = first(track, 5);
 
 # TODO: track preprocessing
 
@@ -92,7 +93,7 @@ end
 
 function solar_trip_cost(input_speed::Vector{Float64}, track)
     power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(input_speed, track)
-    cost = last(time_s) + 10 * abs(minimum(energy_in_system)) # + 100 * sum(input_speed[input_speed .< 0.0])
+    cost = last(time_s) + 10 * abs(minimum(energy_in_system)) + 100 * sum(input_speed[input_speed .< 0.0])
     return cost
 end
 
@@ -146,6 +147,12 @@ function show_result_graphs(inputs, track)
     # energy_in_system = battery_capacity .+ solar_power_accumulated .- power_use_accumulated_wt_h
     energy_plot = plot(track.distance, energy_in_system, title="Power balance with battery");
     display(energy_plot)
+
+    speed_distance_plot = plot(track.distance, inputs, title="Speed (m/s) vs distance")
+    display(speed_distance_plot)
+
+    speed_time_plot = plot(time.utc_time, inputs, title="Speed (m/s) vs time")
+    display(speed_time_plot)
 end
 
 
@@ -165,6 +172,12 @@ function minimize_5_chunks(track)
     minimized_inputs_chunks = Optim.minimizer(result_chunks)
     minimized_result_chunks = Optim.minimum(result_chunks)
     show_results_wrapper(minimized_inputs_chunks, track);
+end
+
+function minimize(speed::Vector{Float64}, track)
+    @time result = optimize(x -> solar_trip_wrapper(x, track), speed)
+    minimized_inputs = Optim.minimizer(result)
+    show_results_wrapper(minimized_inputs, track);
 end
 
 # # few big chunks, LBFGS, 645 seconds, negative speeds, consider revising or constraints, 3886 seconds
