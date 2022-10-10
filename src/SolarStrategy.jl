@@ -145,7 +145,8 @@ function show_result_graphs(inputs, track)
     energy_plot = plot(track.distance, energy_in_system, title="Power balance with battery");
     display(energy_plot)
 
-    speed_distance_plot = plot(track.distance, inputs, title="Speed (m/s) vs distance")
+    plot(track.distance, track.altitude, label="altitude", ylabel="altitude", title="Speed (m/s) vs distance")
+    speed_distance_plot = plot!(twinx(), inputs, color=:red, ylabel="speed", label="speed (m/s)", ymirror = true, title="Speed (m/s) vs distance")
     display(speed_distance_plot)
 
     speed_time_plot = plot(time.utc_time, inputs, title="Speed (m/s) vs time")
