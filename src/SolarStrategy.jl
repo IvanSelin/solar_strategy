@@ -8,7 +8,8 @@ using PlotlyBase
 using TimeZones
 using Dates
 using Optim
-using Alert
+using ProfileView
+# using Alert
 # selecting a Plots backend
 plotly(ticks=:native)
 # consider using Gadfly http://gadflyjl.org/stable/
@@ -103,7 +104,6 @@ function solar_trip_wrapper(speed::Float64, track)
     # input speeds in km/h
     # as of right now one speed for all track parts
     input_speed = convert_single_kmh_speed_to_ms_vector(first(speed), length(track.distance))
-
     return solar_trip_cost(input_speed, track)
 end
 
@@ -121,28 +121,62 @@ function solar_trip_test(speeds::Vector{<:Number}, track)
     return solar_trip_cost(speed_vector, track)
 end
 
+function show_results_wrapper(input::Number, track::DataFrame)
+    input_speed = convert_single_kmh_speed_to_ms_vector(first(input), length(track.distance))
+    return show_result_graphs(input_speed, track)
+end
 
-# regular optimization, Nelder-Mead, 9 seconds 
-@time result = optimize(x -> solar_trip_wrapper(x, track), [30.0])
-alert();
-minimized_inputs = Optim.minimizer(result)
-minimized_result = Optim.minimum(result)
-# get few big chunks with the same speed, Nelder-Mead, ~210 seconds
-@time result_chunks = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0])
-alert();
-minimized_inputs_chunks = Optim.minimizer(result_chunks)
-minimized_result_chunks = Optim.minimum(result_chunks)
-# few big chunks, LBFGS, 645 seconds, negative speeds, consider revising or constraints, 3886 seconds
-@time result_chunks_lbfgs = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0], LBFGS())
-minimized_inputs_chunks_lbfgs = Optim.minimizer(result_chunks_lbfgs)
-minimized_result_chunks_lbfgs = Optim.minimum(result_chunks_lbfgs)
-lower = [0.0]
-upper = [100.]
-initial_x = [43.0]
-@time result_chunks_lbfgs_2 = optimize(x -> solar_trip_test(x, track), lower, upper, initial_x, Fminbox(LBFGS()))
-alert();
-minimized_inputs_chunks_lbfgs_2 = Optim.minimizer(result_chunks_lbfgs_2)
-minimized_result_chunks_lbfgs_2 = Optim.minimum(result_chunks_lbfgs_2)
+function show_results_wrapper(inputs::Vector{Float64}, track::DataFrame)
+    inputs_ms = convert_kmh_to_ms(inputs);
+    speed_vector = propagate_speeds(inputs_ms, track);
+    return show_result_graphs(speed_vector, track)
+end
+
+function show_result_graphs(inputs, track)
+    power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(inputs, track);
+    power_use_plot = plot(track.distance, power_use, title="Power spent on route");
+    display(power_use_plot)
+    power_income_plot = plot(track.distance, solar_power, title="Power gained on the route");
+    display(power_income_plot)
+    # plot(track.distance, power_use_accumulated_wt_h, title="Power spent on the route, accumulated")
+    # plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
+
+    # plot(track.distance, solar_power - power_use, title="Power balance w/o battery")
+    # battery_capacity = 5100 # wt
+    # energy_in_system = battery_capacity .+ solar_power_accumulated .- power_use_accumulated_wt_h
+    energy_plot = plot(track.distance, energy_in_system, title="Power balance with battery");
+    display(energy_plot)
+end
+
+
+
+function minimize_single_speed(speed::Float64, track)
+    # regular optimization, Nelder-Mead, 9 seconds 
+    @time result = optimize(x -> solar_trip_wrapper(x, track), [speed])
+    # alert();
+    minimized_inputs = Optim.minimizer(result)
+    minimized_result = Optim.minimum(result)
+    show_results_wrapper(first(minimized_inputs), track);
+end
+
+function minimize_5_chunks(track)
+    # get few big chunks with the same speed, Nelder-Mead, ~210 seconds
+    @time result_chunks = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0])
+    minimized_inputs_chunks = Optim.minimizer(result_chunks)
+    minimized_result_chunks = Optim.minimum(result_chunks)
+    show_results_wrapper(minimized_inputs_chunks, track);
+end
+
+# # few big chunks, LBFGS, 645 seconds, negative speeds, consider revising or constraints, 3886 seconds
+# @time result_chunks_lbfgs = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0], LBFGS())
+# minimized_inputs_chunks_lbfgs = Optim.minimizer(result_chunks_lbfgs)
+# minimized_result_chunks_lbfgs = Optim.minimum(result_chunks_lbfgs)
+# lower = [0.0]
+# upper = [100.]
+# initial_x = [43.0]
+# @time result_chunks_lbfgs_2 = optimize(x -> solar_trip_test(x, track), lower, upper, initial_x, Fminbox(LBFGS()))
+# minimized_inputs_chunks_lbfgs_2 = Optim.minimizer(result_chunks_lbfgs_2)
+# minimized_result_chunks_lbfgs_2 = Optim.minimum(result_chunks_lbfgs_2)
 # result = optimize(f, [30.0])
 # result = optimize(f, [30.0], LBFGS())
 # result = optimize(f, [30.0], GradientDescent())
