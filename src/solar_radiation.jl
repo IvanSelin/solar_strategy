@@ -505,5 +505,5 @@ function solar_power_income(time_df, track_df, speed_vector)
 end
 
 function calculate_power_income_accumulated(power_income)
-    return cumsum(power_income)
+    return cumsum!(power_income, power_income)
 end

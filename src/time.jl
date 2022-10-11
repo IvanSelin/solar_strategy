@@ -33,7 +33,7 @@ function travel_time_to_real_time(time_s)
     return time_df
 end
 
-function travel_time_to_datetime(time_s)
+function travel_time_to_datetime(time_s::Vector{Float64})
     start_datetime = DateTime(2022,7,1,0,0,0)
     daily_start_hour_time = 8
     daily_finish_hour_time = 16
@@ -43,16 +43,17 @@ function travel_time_to_datetime(time_s)
     seconds_in_a_day = 24 * 60 * 60
 
     # adjust travel time so it happend only between daily start hour time and daily finish hour time
-    day = div.(time_s, finish_time_seconds .- start_time_seconds) .+ 1
-    time_s_adjusted = time_s .+ start_time_seconds .* day .+
+    # TODO: think of in-place operations to reduce memory consumption
+    day_length = finish_time_seconds - start_time_seconds
+    day = time_s .÷ day_length .+ 1
+    time_s .+= start_time_seconds .* day .+
     ( seconds_in_a_day .- finish_time_seconds) .* (day .- 1)
 
     # create a DataFrame for time information
     # adds seconds for 
-    datetime_df = start_datetime + Dates.Millisecond.(round.(time_s_adjusted .* 1000))
+    return start_datetime .+ Dates.Millisecond.(round.(time_s .* 1000))
 
     # TODO: make use of daily_start_hour_time and adjust millis for that
-    return datetime_df
 end
 
 function generate_year_time_dataframe(time_step_millis::Int64)
