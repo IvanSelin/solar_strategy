@@ -13,7 +13,7 @@ function propagate_speeds(speed_ms, track)
     speeds = fill(last(speed_ms), track_len)
     sector_size = div(track_len, speed_len)
     for i = 1:speed_len-1
-        speeds[(i-1)*sector_size + 1:i*sector_size + 1] .= speed_ms[i]
+        speeds[(i-1)*sector_size + 1:i*sector_size] .= speed_ms[i]
     end
     return speeds
 end

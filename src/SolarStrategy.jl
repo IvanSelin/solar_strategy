@@ -178,6 +178,53 @@ function minimize(speed::Vector{Float64}, track)
     show_results_wrapper(minimized_inputs, track);
 end
 
+function split_track(track, energy, chunks_amount)
+    track_len = length(track.distance)
+    sector_size = track_len ÷ chunks_amount
+    track_array = []
+    start_energy = zeros(chunks_amount)
+    finish_energy = zeros(chunks_amount)
+    for i = 1:chunks_amount
+        start_energy[i] = energy[(i-1)*sector_size + 1];
+        # start_energy = [start_energy, energy[(i-1)*sector_size + 1]]
+        # finish_energy = [finish_energy, energy[i * sector_size + 1]]
+        if i==chunks_amount
+            finish_energy[i] = last(energy);
+            push!(track_array, track[(i-1)*sector_size + 1 : track_len, : ]);
+        else
+            finish_energy[i] = energy[i*sector_size];
+            push!(track_array, track[(i-1)*sector_size + 1 : i * sector_size, : ]);
+        end
+    end
+    # push!(track_array, track[track_len - last_sector_size + 1 : track_len, : ]);
+    # start_energy[chunks_amount] = energy[track_len - last_sector_size + 1];
+    # finish_energy[chunks_amount] = last(energy);
+    return track_array, start_energy, finish_energy
+end
+
+
+
+function minimize_hierarchical(chunks_amount::Int64, initial_speed::Number, track)
+    # small number of chunks - 2 to 5
+
+    speed_chunks = fill(initial_speed, chunks_amount)
+    speed_chunks_ms = convert_kmh_to_ms(speed_chunks)
+    speed_vector = propagate_speeds(speed_chunks_ms, track)
+    @time result_chunks = optimize(x ->solar_trip_test(x, track), speed_vector)
+    minimized_input_chunks = Optim.minimizer(result_chunks)
+    minimized_result_chunks = Optim.minimum(result_chunks)
+    power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(minimized_input_chunks, track);
+
+    # split track in chunks_amount
+    # fix an energy amount at start and finish of chunk
+    # rewrite optimization function's cost to finish value - maybe even optimize for finish energy of 0?
+    # repeat optimization process for each chunk
+    # take initial speed as a speed that was used earlier
+
+    # TODO: continue
+    
+end
+
 # # few big chunks, LBFGS, 645 seconds, negative speeds, consider revising or constraints, 3886 seconds
 # @time result_chunks_lbfgs = optimize(x -> solar_trip_test(x, track), [41.0, 42.0, 43.0, 44.0, 45.0], LBFGS())
 # minimized_inputs_chunks_lbfgs = Optim.minimizer(result_chunks_lbfgs)
