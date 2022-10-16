@@ -45,7 +45,8 @@ track_short = first(track, 5);
 # TODO: track preprocessing
 
 
-function solar_trip_calculation(input_speed::Vector{Float64}, track)
+function solar_trip_calculation(input_speed::Vector{Float64}, track, 
+    start_energy::Float64=5100.)
     # input speed in m/s
 
     # calculating time needed to spend to travel across distance
@@ -74,8 +75,8 @@ function solar_trip_calculation(input_speed::Vector{Float64}, track)
     # plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
 
     # plot(track.distance, solar_power_accumulated - power_use_accumulated_wt_h, title="Power balance w/o battery")
-    battery_capacity = 5100 # wt
-    energy_in_system = battery_capacity .+ solar_power_accumulated .- power_use_accumulated_wt_h
+    battery_capacity = 5100 # wt, to be used later for physical constraints
+    energy_in_system = start_energy .+ solar_power_accumulated .- power_use_accumulated_wt_h
     # plot(track.distance, energy_in_system, title="Power balance with battery")
 
     # TODO: calculate night charging - do it later since it is not critical as of right now
@@ -91,6 +92,13 @@ end
 function solar_trip_cost(input_speed::Vector{Float64}, track)
     power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(input_speed, track)
     cost = last(time_s) + 10 * abs(minimum(energy_in_system)) + 100 * sum(input_speed[input_speed .< 0.0])
+    return cost
+end
+
+function solar_trip_target_cost(input_speed::Vector{Float64}, target_energy::Float64, track,
+    start_energy::Float64, finish_energy::Float64)
+    power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(input_speed, track)
+    cost = last(time_s) + 10 * abs(last(energy_in_system) - target) + 100 * sum(input_speed[input_speed .< 0.0])
     return cost
 end
 
@@ -178,7 +186,7 @@ function minimize(speed::Vector{Float64}, track)
     show_results_wrapper(minimized_inputs, track);
 end
 
-function split_track(track, energy, chunks_amount)
+function split_track(track, chunks_amount, energy)
     track_len = length(track.distance)
     sector_size = track_len ÷ chunks_amount
     track_array = []
@@ -202,9 +210,47 @@ function split_track(track, energy, chunks_amount)
     return track_array, start_energy, finish_energy
 end
 
+function split_track(track, chunks_amount)
+    show(track)
+    track_len = size(track, 1)
+    sector_size = track_len ÷ chunks_amount
+    # TODO: check how it works if size of track is smaller than chunks_amount
+    track_array = [];
+    for i = 1:chunks_amount
+        if i==chunks_amount
+            push!(track_array, track[(i-1)*sector_size + 1 : track_len, : ]);
+        else
+            push!(track_array, track[(i-1)*sector_size + 1 : i * sector_size, : ]);
+        end
+    end
+    return track_array;
+end
+
+function recursive_track_division(track_array, chunks_amount, total_chunks)
+    # if size(track, 1) <= chunks_amount
+    #     return [track]
+    # end
+    # track_parts = split_track(track, chunks_amount)
+    track_parts = []
+    for track in track_array
+        if size(track, 1) > 1
+            push!(track_parts, split_track(track, chunks_amount))
+        else
+            push!(track_parts, track)
+        end
+    end
+    # return recursive_track_division(track_parts, chunks_amount)
+    if size(track_parts, 1) == total_chunks
+        return track_parts;
+    else
+        return recursive_track_division(track_parts, chunks_amount, total_chunks);
+    end
+end
 
 
-function minimize_hierarchical(chunks_amount::Int64, initial_speed::Number, track)
+
+function minimize_hierarchical(chunks_amount::Int64, initial_speed::Number, track, 
+    start_enegry::Float64, finish_energy::Float64)
     # small number of chunks - 2 to 5
 
     speed_chunks = fill(initial_speed, chunks_amount)
@@ -217,6 +263,11 @@ function minimize_hierarchical(chunks_amount::Int64, initial_speed::Number, trac
 
     # split track in chunks_amount
     # fix an energy amount at start and finish of chunk
+    tracks, start_energies, finish_energies = split_track(track, energy_in_system, chunks_amount);
+    for i in 1:chunks_amount
+        minimize_hierarchical(chunks_amount, minimized_input_chunks[i], tracks[i])
+        # energies?
+    end
     # rewrite optimization function's cost to finish value - maybe even optimize for finish energy of 0?
     # repeat optimization process for each chunk
     # take initial speed as a speed that was used earlier
