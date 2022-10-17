@@ -212,10 +212,17 @@ end
 
 function split_track(track, chunks_amount)
     show(track)
+    println()
+    println("entered split track with")
     track_len = size(track, 1)
-    sector_size = track_len ÷ chunks_amount
-    # TODO: check how it works if size of track is smaller than chunks_amount
     track_array = [];
+    if track_len <= chunks_amount
+        for i = 1:track_len
+            push!(track_array, track[i,:])
+        end
+        return track_array
+    end
+    sector_size = track_len ÷ chunks_amount
     for i = 1:chunks_amount
         if i==chunks_amount
             push!(track_array, track[(i-1)*sector_size + 1 : track_len, : ]);
