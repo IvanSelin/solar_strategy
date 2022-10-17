@@ -211,14 +211,13 @@ function split_track(track, chunks_amount, energy)
 end
 
 function split_track(track, chunks_amount)
-    show(track)
-    println()
-    println("entered split track with")
+    # println("entered split_track with track array of size $(size(track, 1))")
+    # show(track)
     track_len = size(track, 1)
     track_array = [];
     if track_len <= chunks_amount
         for i = 1:track_len
-            push!(track_array, track[i,:])
+            push!(track_array, DataFrame(track[i,:]) )
         end
         return track_array
     end
@@ -234,6 +233,10 @@ function split_track(track, chunks_amount)
 end
 
 function recursive_track_division(track_array, chunks_amount, total_chunks)
+    # println("entering recursive_track_division with array of size $(size(track_array, 1))")
+    if size(track_array, 1) == total_chunks
+        return track_array;
+    end
     # if size(track, 1) <= chunks_amount
     #     return [track]
     # end
@@ -241,17 +244,13 @@ function recursive_track_division(track_array, chunks_amount, total_chunks)
     track_parts = []
     for track in track_array
         if size(track, 1) > 1
-            push!(track_parts, split_track(track, chunks_amount))
+            append!(track_parts, split_track(track, chunks_amount))
         else
             push!(track_parts, track)
         end
     end
     # return recursive_track_division(track_parts, chunks_amount)
-    if size(track_parts, 1) == total_chunks
-        return track_parts;
-    else
-        return recursive_track_division(track_parts, chunks_amount, total_chunks);
-    end
+    return recursive_track_division(track_parts, chunks_amount, total_chunks);
 end
 
 
