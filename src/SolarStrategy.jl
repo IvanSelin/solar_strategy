@@ -5,6 +5,8 @@ using DataFrames
 using CSV
 using Plots # default
 using PlotlyBase
+# using PlotlySave
+# import Pluto
 using TimeZones
 using Dates
 using Optim
@@ -150,7 +152,10 @@ function show_result_graphs(inputs, track)
     # plot(track.distance, solar_power - power_use, title="Power balance w/o battery")
     # battery_capacity = 5100 # wt
     # energy_in_system = battery_capacity .+ solar_power_accumulated .- power_use_accumulated_wt_h
-    energy_plot = plot(track.distance, energy_in_system, title="Power balance with battery");
+    energy_plot = plot(track.distance, [energy_in_system zeros(size(track,1))],
+    label=["Energy" "Failure threshold"], title="Energy in system", lw=3,
+    xlabel="Distance (m)", ylabel="Energy (W*h)", size=(1000, 500),
+    color=[:blue :red]);
     display(energy_plot)
 
     plot(track.distance, track.altitude, label="altitude", ylabel="altitude", title="Speed (m/s) vs distance")
@@ -159,6 +164,26 @@ function show_result_graphs(inputs, track)
 
     speed_time_plot = plot(time.utc_time, inputs, title="Speed (m/s) vs time")
     display(speed_time_plot)
+
+    power_both_plot = plot(track.distance, [power_use solar_power energy_in_system zeros(size(track,1))],
+    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph",
+    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
+    color=[:blue :green :cyan :red]
+    # ,ylims=[-10000, 40000]
+    )
+    # save("energy.png", power_both_plot)
+    display(power_both_plot)
+
+    power_in_time_plot = plot(time.utc_time, [power_use solar_power energy_in_system zeros(size(track,1))],
+    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph in time",
+    xlabel="Time", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
+    color=[:blue :green :cyan :red]
+    # ,ylims=[-10000, 40000]
+    )
+    # save("energy.png", power_both_plot)
+    display(power_in_time_plot)
+
+    println(last(time_s));
 end
 
 
