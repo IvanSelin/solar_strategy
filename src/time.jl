@@ -33,7 +33,7 @@ function travel_time_to_real_time(time_s)
     return time_df
 end
 
-function travel_time_to_datetime(time_s::Vector{Float64})
+function travel_time_to_datetime(time_s)
     start_datetime = DateTime(2022,7,1,0,0,0)
     daily_start_hour_time = 8
     daily_finish_hour_time = 16
