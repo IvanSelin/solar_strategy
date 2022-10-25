@@ -24,6 +24,7 @@ begin
 	using TimeZones
 	using Dates
 	using Optim
+	using LineSearches
 	using PlutoUI
 	# using Alert
 	# selecting a Plots backend
@@ -263,7 +264,14 @@ plot(time.utc_time, [power_use solar_power energy_in_system zeros(size(track,1))
 @bind speed_chunks NumberField(0.0:0.1:100.0, default=40.0)
 
 # ╔═╡ 8794ae20-fe98-47ab-bd80-681c09edb7d1
-@bind number_of_chunks NumberField(1:15, default=1)
+@bind number_of_chunks NumberField(1:50000, default=1)
+
+# ╔═╡ 7380a326-1e9e-437c-9cb7-3aa2b54b8ec5
+@bind lbfgs_m NumberField(1:50000, default=10)
+
+# ╔═╡ eeb85fd3-6721-4e0f-aed9-73731960ac35
+# ls = LineSearches.HagerZhang()
+ls = LineSearches.BackTracking()
 
 # ╔═╡ 09bd67a1-a0f9-45f3-9839-2e9e592f01de
 iterations_num = 10000
@@ -276,9 +284,22 @@ end
 # ╔═╡ e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
 d = OnceDifferentiable(f, fill(speed_chunks, number_of_chunks), autodiff = :forward)
 
+# ╔═╡ 5c9c006c-f814-4829-8c18-108546be870b
+td = TwiceDifferentiable(f, fill(speed_chunks, number_of_chunks), autodiff = :forward)
+
 # ╔═╡ 411e63ec-b83a-4e21-9535-5d0275381039
 #@time result_chunks = optimize(x -> solar_trip_chunks(x, track), fill(speed_chunks, number_of_chunks), iterations=iterations_num, LBFGS())
-@time result_chunks = optimize(d, fill(speed_chunks, number_of_chunks), LBFGS())
+
+# @time result_chunks = optimize(d, fill(speed_chunks, number_of_chunks), LBFGS(;m=lbfgs_m, linesearch = ls))
+
+@time result_chunks = optimize(td, fill(speed_chunks, number_of_chunks), Newton(; linesearch = ls),
+	Optim.Options(
+		x_tol = 1e-6,
+		f_tol = 1e-8,
+		g_tol = 1e-6
+	)
+)
+# change convergence criteria?
 
 # ╔═╡ 21634b70-7b3a-44b2-b629-01664ce81acf
 minimized_inputs_chunks = Optim.minimizer(result_chunks)
@@ -304,12 +325,35 @@ plot(track.distance, [power_use_chunks solar_power_chunks energy_in_system_chunk
 	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
 )
 
+# ╔═╡ 77d82639-dd61-46e0-b6a0-7c7400a10453
+begin
+	plot(time.utc_time, [power_use_chunks solar_power_chunks energy_in_system_chunks zeros(size(track,1))],
+		    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"],
+		    xlabel="Time", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
+		    color=[:blue :green :cyan :red]
+		    # ,ylims=[-10000, 40000]
+		, legend = :topleft 
+		, right_margin = 15Plots.mm
+		    )
+	plot!(twinx(), time.utc_time, speed_vector * 3.6, color=:red, ylabel="speed (km/h)", ylim=[0, 60], label="speed (km/h)", ymirror = true)
+end
+
+# ╔═╡ db08de54-3a00-4dc9-8d08-3b5ea19adca8
+@time trip_result = solar_trip_wrapper(60.0, track)
+
+# ╔═╡ ff7fa75e-b687-486c-9de6-58cf55948a59
+trip_result
+
+# ╔═╡ 55785afd-192d-4914-a6e2-e032423f4c9e
+# @time result_chunks_newton = optimize(td, fill(speed_chunks, 1), Newton())
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+LineSearches = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
@@ -319,6 +363,7 @@ TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 [compat]
 CSV = "~0.10.4"
 DataFrames = "~1.4.1"
+LineSearches = "~7.2.0"
 Optim = "~1.7.3"
 PlotlyBase = "~0.8.19"
 Plots = "~1.35.4"
@@ -332,7 +377,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "4042327db0e4d56bb88004877cf13cf83bce86b1"
+project_hash = "6d1487d257d137143d08905bc3a40275f7a26789"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1539,13 +1584,20 @@ version = "1.4.1+0"
 # ╠═bef6c840-8dc7-4839-b2ba-623c6c46c856
 # ╠═c7434aee-3089-4098-8c9d-2d13c9df5ee9
 # ╠═8794ae20-fe98-47ab-bd80-681c09edb7d1
+# ╠═7380a326-1e9e-437c-9cb7-3aa2b54b8ec5
+# ╠═eeb85fd3-6721-4e0f-aed9-73731960ac35
 # ╠═09bd67a1-a0f9-45f3-9839-2e9e592f01de
 # ╠═3ca6f786-8add-4c46-b82a-30a570828d39
 # ╠═e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
+# ╠═5c9c006c-f814-4829-8c18-108546be870b
 # ╠═411e63ec-b83a-4e21-9535-5d0275381039
 # ╠═21634b70-7b3a-44b2-b629-01664ce81acf
 # ╠═5f3a7fcf-e261-4f64-a94c-57a12093e353
 # ╠═de201868-7805-4f27-81b7-f4f8204eface
 # ╠═96a68dec-d781-4fd6-8146-649434f60919
+# ╠═77d82639-dd61-46e0-b6a0-7c7400a10453
+# ╠═db08de54-3a00-4dc9-8d08-3b5ea19adca8
+# ╠═ff7fa75e-b687-486c-9de6-58cf55948a59
+# ╠═55785afd-192d-4914-a6e2-e032423f4c9e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
