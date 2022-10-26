@@ -45,7 +45,13 @@ track = get_track_data("data/data_australia.csv")
 track_short = first(track, 5);
 
 # TODO: track preprocessing
+plot(track.distance, track.altitude, title="Track raw data")
+track_test = keep_extremum_only(track)
+plot(track_test.distance, track_test.altitude, title="track extremum only data")
+track_test_peaks = keep_extremum_only_peaks(track)
+plot(track_test_peaks.distance, track_test_peaks.altitude, title="track extremum only data peaks")
 
+# TODO: slope angle preprocessing
 
 function solar_trip_calculation(input_speed::Vector{Float64}, track, 
     start_energy::Float64=5100.)
