@@ -264,7 +264,7 @@ plot(time.utc_time, [power_use solar_power energy_in_system zeros(size(track,1))
 @bind speed_chunks NumberField(0.0:0.1:100.0, default=40.0)
 
 # ╔═╡ 8794ae20-fe98-47ab-bd80-681c09edb7d1
-@bind number_of_chunks NumberField(1:50000, default=1)
+@bind number_of_chunks confirm(NumberField(1:50000, default=1))
 
 # ╔═╡ 7380a326-1e9e-437c-9cb7-3aa2b54b8ec5
 @bind lbfgs_m NumberField(1:50000, default=10)
@@ -343,9 +343,6 @@ end
 
 # ╔═╡ ff7fa75e-b687-486c-9de6-58cf55948a59
 trip_result
-
-# ╔═╡ 55785afd-192d-4914-a6e2-e032423f4c9e
-# @time result_chunks_newton = optimize(td, fill(speed_chunks, 1), Newton())
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1598,6 +1595,5 @@ version = "1.4.1+0"
 # ╠═77d82639-dd61-46e0-b6a0-7c7400a10453
 # ╠═db08de54-3a00-4dc9-8d08-3b5ea19adca8
 # ╠═ff7fa75e-b687-486c-9de6-58cf55948a59
-# ╠═55785afd-192d-4914-a6e2-e032423f4c9e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
