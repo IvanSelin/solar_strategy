@@ -7,6 +7,9 @@ function convert_kmh_to_ms(speed_kmh)
 end
 
 function propagate_speeds(speed_ms, track)
+    if length(speed_ms) == size(track, 1)
+        return speed_ms
+    end
     # speed_ms size is a lot less than track size
     track_len = length(track.distance)
     speed_len = length(speed_ms)
