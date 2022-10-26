@@ -40,6 +40,11 @@ begin
 	include("utils.jl")
 end
 
+# ╔═╡ a7781b82-48db-4954-8e79-ab8e7864ed69
+md"""
+# Loading the track data
+"""
+
 # ╔═╡ 44f352a0-0c5b-41f6-a21d-56f10edae4c9
 track = get_track_data("../data/data_australia.csv")
 
@@ -48,6 +53,9 @@ track = get_track_data("../data/data_australia.csv")
 
 # ╔═╡ 92e47c4c-2e70-4850-af86-a997fcce5587
 plot(track.distance, track.altitude, title="Altitude (m)")
+
+# ╔═╡ 9f2624cc-398b-42d2-bf7f-527285af6dc3
+md""" # Defining the functions """
 
 # ╔═╡ 704c9c6a-8b13-4e82-92fd-edda72397320
 
@@ -233,6 +241,12 @@ function minimize(speed::Vector{Float64}, track)
     show_results_wrapper(minimized_inputs, track);
 end
 
+# ╔═╡ c3d41246-37cb-45f6-ac98-f64d9158087a
+md""" # Playground """
+
+# ╔═╡ 4c91701c-f90e-48cf-bb9d-d925baa85667
+md""" ## Single speed graphs """
+
 # ╔═╡ 9977c5d5-4872-41d4-8e99-1e4034493e4d
 # speed in kmh
 @bind speed NumberField(0.0:0.1:100.0, default=40.0)
@@ -260,6 +274,9 @@ plot(time.utc_time, [power_use solar_power energy_in_system zeros(size(track,1))
 	    # ,ylims=[-10000, 40000]
 	    )
 
+# ╔═╡ 54a5bf51-1723-4ce1-8f6b-1fd199c991b5
+md""" ## Optimization with different methods"""
+
 # ╔═╡ c7434aee-3089-4098-8c9d-2d13c9df5ee9
 @bind speed_chunks NumberField(0.0:0.1:100.0, default=40.0)
 
@@ -269,9 +286,12 @@ plot(time.utc_time, [power_use solar_power energy_in_system zeros(size(track,1))
 # ╔═╡ 7380a326-1e9e-437c-9cb7-3aa2b54b8ec5
 @bind lbfgs_m NumberField(1:50000, default=10)
 
+# ╔═╡ 596e51be-969e-4fe6-8170-22c1aac89aca
+md""" Selecting the line search and other parameters """
+
 # ╔═╡ eeb85fd3-6721-4e0f-aed9-73731960ac35
 # ls = LineSearches.HagerZhang()
-ls = LineSearches.BackTracking()
+ls = LineSearches.BackTracking();
 
 # ╔═╡ 09bd67a1-a0f9-45f3-9839-2e9e592f01de
 iterations_num = 10000
@@ -320,7 +340,7 @@ end
 
 # ╔═╡ 96a68dec-d781-4fd6-8146-649434f60919
 plot(track.distance, [power_use_chunks solar_power_chunks energy_in_system_chunks zeros(size(track,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph",
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
 	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
 	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
 )
@@ -334,15 +354,11 @@ begin
 		    # ,ylims=[-10000, 40000]
 		, legend = :topleft 
 		, right_margin = 15Plots.mm
+		, title = "Energy graph (time)"
 		    )
-	plot!(twinx(), time.utc_time, speed_vector * 3.6, color=:red, ylabel="speed (km/h)", ylim=[0, 60], label="speed (km/h)", ymirror = true)
+	plot!(twinx(), time.utc_time, speed_vector * 3.6, color=:red, ylabel="speed (km/h)", ylim=[0, 60], label="speed (km/h)", ymirror = true,
+	title = "Energy graph (time)")
 end
-
-# ╔═╡ db08de54-3a00-4dc9-8d08-3b5ea19adca8
-@time trip_result = solar_trip_wrapper(60.0, track)
-
-# ╔═╡ ff7fa75e-b687-486c-9de6-58cf55948a59
-trip_result
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1560,40 +1576,44 @@ version = "1.4.1+0"
 # ╔═╡ Cell order:
 # ╠═fb9bd7c0-4f3c-11ed-094a-35559b7aedad
 # ╠═7cc7b885-f841-4bcc-a82c-2f947c74de22
+# ╠═a7781b82-48db-4954-8e79-ab8e7864ed69
 # ╠═44f352a0-0c5b-41f6-a21d-56f10edae4c9
 # ╠═9d915c29-314b-47f9-9e4c-898ebd28f88a
 # ╠═92e47c4c-2e70-4850-af86-a997fcce5587
-# ╠═704c9c6a-8b13-4e82-92fd-edda72397320
-# ╠═afe9cc57-f93c-4780-a592-b3d2609162f2
-# ╠═4e4c4794-aa95-49e9-961b-ed7c4bb81442
-# ╠═e80aee02-b99e-44c9-b503-9443c431b0e6
-# ╠═ae4d73ea-bd18-472b-babb-7980598a4ce9
-# ╠═b9bdb969-2f65-47d8-b1f2-a9b7e411f1c1
-# ╠═36e15048-b615-4ba6-a32a-093922a49243
-# ╠═1536f51f-0776-4d87-832d-e9b2b9cc36d6
-# ╠═ca2f1ec3-4ed3-4b5d-bfcd-ab43de0d2abc
-# ╠═4f286021-da6e-4037-80e3-a526e880b686
-# ╠═1ba728ba-b6aa-40c9-b5a2-906297bd4921
-# ╠═5674f163-5847-4e2b-ba3f-c95348e8d1d5
-# ╠═9977c5d5-4872-41d4-8e99-1e4034493e4d
-# ╠═422a0d48-40fe-41eb-b214-e21d009c00b2
-# ╠═6a5416d0-39c0-431b-8add-5dbf13a1bda0
-# ╠═bef6c840-8dc7-4839-b2ba-623c6c46c856
+# ╟─9f2624cc-398b-42d2-bf7f-527285af6dc3
+# ╟─704c9c6a-8b13-4e82-92fd-edda72397320
+# ╟─afe9cc57-f93c-4780-a592-b3d2609162f2
+# ╟─4e4c4794-aa95-49e9-961b-ed7c4bb81442
+# ╟─e80aee02-b99e-44c9-b503-9443c431b0e6
+# ╟─ae4d73ea-bd18-472b-babb-7980598a4ce9
+# ╟─b9bdb969-2f65-47d8-b1f2-a9b7e411f1c1
+# ╟─36e15048-b615-4ba6-a32a-093922a49243
+# ╟─1536f51f-0776-4d87-832d-e9b2b9cc36d6
+# ╟─ca2f1ec3-4ed3-4b5d-bfcd-ab43de0d2abc
+# ╟─4f286021-da6e-4037-80e3-a526e880b686
+# ╟─1ba728ba-b6aa-40c9-b5a2-906297bd4921
+# ╟─5674f163-5847-4e2b-ba3f-c95348e8d1d5
+# ╟─c3d41246-37cb-45f6-ac98-f64d9158087a
+# ╟─4c91701c-f90e-48cf-bb9d-d925baa85667
+# ╟─9977c5d5-4872-41d4-8e99-1e4034493e4d
+# ╟─422a0d48-40fe-41eb-b214-e21d009c00b2
+# ╟─6a5416d0-39c0-431b-8add-5dbf13a1bda0
+# ╟─bef6c840-8dc7-4839-b2ba-623c6c46c856
+# ╟─54a5bf51-1723-4ce1-8f6b-1fd199c991b5
 # ╠═c7434aee-3089-4098-8c9d-2d13c9df5ee9
 # ╠═8794ae20-fe98-47ab-bd80-681c09edb7d1
 # ╠═7380a326-1e9e-437c-9cb7-3aa2b54b8ec5
+# ╟─596e51be-969e-4fe6-8170-22c1aac89aca
 # ╠═eeb85fd3-6721-4e0f-aed9-73731960ac35
-# ╠═09bd67a1-a0f9-45f3-9839-2e9e592f01de
+# ╟─09bd67a1-a0f9-45f3-9839-2e9e592f01de
 # ╠═3ca6f786-8add-4c46-b82a-30a570828d39
-# ╠═e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
+# ╟─e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
 # ╠═5c9c006c-f814-4829-8c18-108546be870b
 # ╠═411e63ec-b83a-4e21-9535-5d0275381039
-# ╠═21634b70-7b3a-44b2-b629-01664ce81acf
-# ╠═5f3a7fcf-e261-4f64-a94c-57a12093e353
-# ╠═de201868-7805-4f27-81b7-f4f8204eface
-# ╠═96a68dec-d781-4fd6-8146-649434f60919
-# ╠═77d82639-dd61-46e0-b6a0-7c7400a10453
-# ╠═db08de54-3a00-4dc9-8d08-3b5ea19adca8
-# ╠═ff7fa75e-b687-486c-9de6-58cf55948a59
+# ╟─21634b70-7b3a-44b2-b629-01664ce81acf
+# ╟─5f3a7fcf-e261-4f64-a94c-57a12093e353
+# ╟─de201868-7805-4f27-81b7-f4f8204eface
+# ╟─96a68dec-d781-4fd6-8146-649434f60919
+# ╟─77d82639-dd61-46e0-b6a0-7c7400a10453
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
