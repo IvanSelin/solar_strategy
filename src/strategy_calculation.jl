@@ -1,6 +1,8 @@
 using DataFrames
 
-function solar_trip_calculation(input_speed::Vector{Float64}, track, 
+include("utils.jl")
+
+function solar_trip_calculation(input_speed, track, 
     start_energy::Float64=5100.)
     # input speed in m/s
 
@@ -44,7 +46,7 @@ function solar_trip_calculation(input_speed::Vector{Float64}, track,
     return power_use_accumulated_wt_h, solar_power_accumulated, energy_in_system, time_df, time_seconds
 end
 
-function solar_trip_cost(input_speed::Vector{Float64}, track)
+function solar_trip_cost(input_speed, track)
     power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(input_speed, track)
     cost = last(time_s) + 10 * abs(minimum(energy_in_system)) + 100 * sum(input_speed[input_speed .< 0.0])
     return cost
@@ -75,7 +77,7 @@ end
 
 # function to test optimization with several big chunks to optimize
 # everything under Number
-function solar_trip_chunks(speeds::Vector{<:Number}, track)
+function solar_trip_chunks(speeds, track)
 # function solar_trip_chunks(speeds::Vector{Float64}, track)
     speed_ms = convert_kmh_to_ms(speeds)
     speed_vector = propagate_speeds(speed_ms, track)

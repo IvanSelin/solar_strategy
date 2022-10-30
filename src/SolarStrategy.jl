@@ -10,6 +10,7 @@ import Pluto
 using TimeZones
 using Dates
 using Optim
+using LineSearches
 # using Alert
 # selecting a Plots backend
 plotly(ticks=:native)
@@ -43,7 +44,6 @@ start with stub, develop proper models later
 
 # preparing the track data
 track = get_track_data("data/data_australia.csv")
-track_short = first(track, 5);
 
 # TODO: track preprocessing
 plot(track.distance, track.altitude, title="Track raw data")
@@ -67,6 +67,66 @@ plot(track_test_peaks.distance, track_test_peaks.altitude, title="Track extremum
 # result = optimize(f, [30.0])
 # result = optimize(f, [30.0], LBFGS())
 # result = optimize(f, [30.0], GradientDescent())
+
+line_search = LineSearches.BackTracking();
+iterations_num = 10000
+number_of_chunks = 3
+start_speed = 40.
+
+
+function f(x)
+	return solar_trip_chunks(abs.(x), track)
+end
+
+td = TwiceDifferentiable(f, fill(start_speed, number_of_chunks), autodiff = :forward)
+
+@time result_chunks = optimize(td, fill(start_speed, number_of_chunks),
+    Newton(; linesearch = line_search),
+    Optim.Options(
+        x_tol = 1e-6,
+        f_tol = 1e-8,
+        g_tol = 1e-6
+    )
+)
+
+minimized_inputs_chunks = Optim.minimizer(result_chunks)
+
+inputs_ms = convert_kmh_to_ms(minimized_inputs_chunks)
+speed_vector = propagate_speeds(inputs_ms, track)
+power_use_chunks, solar_power_chunks, energy_in_system_chunks, time_chunks, time_s_chunks = solar_trip_calculation(speed_vector, track);
+last(time_s_chunks)
+
+plot(track.distance, track.altitude, label="altitude", ylabel="altitude", 
+    title="Speed (km/h) vs distance", right_margin = 15Plots.mm
+)
+plot!(twinx(), track.distance, speed_vector * 3.6, color=:red, ylabel="speed (km/h)",
+    ylim=[0, 60], label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance"
+)
+
+
+plot(track.distance,
+    [power_use_chunks solar_power_chunks energy_in_system_chunks zeros(size(track,1))],
+	label=["Energy use" "Energy income" "Energy in system" "Failure threshold"],
+    title="Energy graph (distance)",
+	xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
+	color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+
+
+plot(time_chunks.utc_time,
+    [power_use_chunks solar_power_chunks energy_in_system_chunks zeros(size(track,1))],
+	label=["Energy use" "Energy income" "Energy in system" "Failure threshold"],
+	xlabel="Time", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
+	color=[:blue :green :cyan :red]
+	# ,ylims=[-10000, 40000]
+	, legend = :topleft 
+	, right_margin = 15Plots.mm
+	, title = "Energy graph (time)"
+)
+plot!(twinx(), time_chunks.utc_time, speed_vector * 3.6, color=:red, ylabel="speed (km/h)",
+    ylim=[0, 60], label="speed (km/h)", ymirror = true,
+    title = "Energy graph (time)"
+)
 
 # TODO: refactor code, calculations in separate function, wrapper for optimization
 # make an optimization with full vector

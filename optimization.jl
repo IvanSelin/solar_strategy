@@ -26,6 +26,7 @@ begin
 	using Optim
 	using LineSearches
 	using PlutoUI
+	using Peaks
 	# using Alert
 	# selecting a Plots backend
 	# plotly(ticks=:native)
@@ -368,6 +369,7 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 LineSearches = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+Peaks = "18e31ff7-3703-566c-8e60-38913d67486b"
 PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
@@ -378,6 +380,7 @@ CSV = "~0.10.4"
 DataFrames = "~1.4.1"
 LineSearches = "~7.2.0"
 Optim = "~1.7.3"
+Peaks = "~0.4.1"
 PlotlyBase = "~0.8.19"
 Plots = "~1.35.4"
 PlutoUI = "~0.7.48"
@@ -390,7 +393,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "6d1487d257d137143d08905bc3a40275f7a26789"
+project_hash = "30f2190f3240c27a9a6774d947b68ee58d848e29"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1046,6 +1049,12 @@ git-tree-sha1 = "6c01a9b494f6d2a9fc180a08b182fcb06f0958a0"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.4.2"
 
+[[deps.Peaks]]
+deps = ["Compat"]
+git-tree-sha1 = "5f1390b0a0ef6d6411f9a9a37c4444d6a7e44780"
+uuid = "18e31ff7-3703-566c-8e60-38913d67486b"
+version = "0.4.1"
+
 [[deps.Pipe]]
 git-tree-sha1 = "6842804e7867b115ca9de748a0cf6b364523c16d"
 uuid = "b98c9c47-44ae-5843-9183-064241ee97a0"
@@ -1605,15 +1614,15 @@ version = "1.4.1+0"
 # ╠═7380a326-1e9e-437c-9cb7-3aa2b54b8ec5
 # ╟─596e51be-969e-4fe6-8170-22c1aac89aca
 # ╠═eeb85fd3-6721-4e0f-aed9-73731960ac35
-# ╟─09bd67a1-a0f9-45f3-9839-2e9e592f01de
+# ╠═09bd67a1-a0f9-45f3-9839-2e9e592f01de
 # ╠═3ca6f786-8add-4c46-b82a-30a570828d39
-# ╟─e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
+# ╠═e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
 # ╠═5c9c006c-f814-4829-8c18-108546be870b
 # ╠═411e63ec-b83a-4e21-9535-5d0275381039
 # ╠═21634b70-7b3a-44b2-b629-01664ce81acf
 # ╠═5f3a7fcf-e261-4f64-a94c-57a12093e353
 # ╠═de201868-7805-4f27-81b7-f4f8204eface
 # ╠═96a68dec-d781-4fd6-8146-649434f60919
-# ╟─77d82639-dd61-46e0-b6a0-7c7400a10453
+# ╠═77d82639-dd61-46e0-b6a0-7c7400a10453
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
