@@ -14,351 +14,521 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ fb9bd7c0-4f3c-11ed-094a-35559b7aedad
+# ╔═╡ e8a9ead5-161e-4f6f-8f9c-3f61e979ef00
 begin
 	using DataFrames
+	# also consider using JuliaDB and Query
 	using CSV
 	using Plots # default
 	using PlotlyBase
 	# using PlotlySave
+	using PlutoUI
 	using TimeZones
 	using Dates
 	using Optim
-	using LineSearches
-	using PlutoUI
-	# using Alert
-	# selecting a Plots backend
-	# plotly(ticks=:native)
+	using Peaks
+	using Metrics
 end
 
-# ╔═╡ 7cc7b885-f841-4bcc-a82c-2f947c74de22
+# ╔═╡ dd8724db-31dd-497f-a8b2-7e8656c3aa59
 begin
-	include("energy_draw.jl")
-	include("time.jl")
-	include("solar_radiation.jl")
-	include("track.jl")
-	include("utils.jl")
+	include("src//energy_draw.jl")
+	include("src//time.jl")
+	include("src//solar_radiation.jl")
+	include("src//track.jl")
+	include("src//utils.jl")
+	include("src//strategy_calculation.jl")
 end
 
-# ╔═╡ a7781b82-48db-4954-8e79-ab8e7864ed69
-md"""
-# Loading the track data
-"""
+# ╔═╡ a7ee0e00-55f8-11ed-195c-73103633e4f3
+md""" # Track preprocessing """
 
-# ╔═╡ 44f352a0-0c5b-41f6-a21d-56f10edae4c9
-track = get_track_data("../data/data_australia.csv")
+# ╔═╡ f97311ee-5f9b-4bed-a125-6c28a0aba50d
+track_raw = get_track_data("data//data_australia.csv")
 
-# ╔═╡ 9d915c29-314b-47f9-9e4c-898ebd28f88a
-# plotly(ticks=:native)
+# ╔═╡ 5e80012e-6d22-4191-b03b-4c977e726eb5
+plot(track_raw.distance, track_raw.altitude, title="Raw track data")
 
-# ╔═╡ 92e47c4c-2e70-4850-af86-a997fcce5587
-plot(track.distance, track.altitude, title="Altitude (m)")
+# ╔═╡ 84cb2782-1b35-482a-9355-0f2cf5d22483
+track_peaks = keep_extremum_only_peaks(track_raw)
 
-# ╔═╡ 9f2624cc-398b-42d2-bf7f-527285af6dc3
-md""" # Defining the functions """
+# ╔═╡ 3b685aeb-1f99-428d-8311-7c86be4577db
+plot(track_peaks.distance, track_peaks.altitude, title="Track data only at extremum points")
 
-# ╔═╡ 704c9c6a-8b13-4e82-92fd-edda72397320
+# ╔═╡ 9da21138-5f0f-4e72-ab6c-9859d4db08ca
+md""" ## Let's take a closer look"""
 
-function solar_trip_calculation(input_speed, track, 
-    start_energy::Float64=5100.)
-    # input speed in m/s
+# ╔═╡ 5554c1aa-0264-40e9-a603-eee94eecf2d2
+plot(track_raw[ (track_raw.distance .> 1000) .& (track_raw.distance .< 5000) , :distance], track_raw[ (track_raw.distance .> 1000) .& (track_raw.distance .< 5000), :altitude], title="Raw track data 1000 to 5000m", xlim= [1000, 5000])
 
-    # calculating time needed to spend to travel across distance
-    time_df = calculate_travel_time_datetime(input_speed, track)
+# ╔═╡ b87b55b2-3ed6-4cbd-9727-c565663dfe1e
+plot(track_peaks[ (track_peaks.distance .> 1000) .& (track_peaks.distance .< 5000), :distance], track_peaks[(track_peaks.distance .> 1000) .& (track_peaks.distance .< 5000), :altitude], title="Track data only at extremum points 1000 to 5000m", xlim=[1000, 5000])
 
-    #### calculcations
-    # mechanical calculations are now in separate file
-    mechanical_power = mechanical_power_calculation(input_speed, track.slope, track.diff_distance)
+# ╔═╡ 738a95cd-8e5f-4476-82c1-53952fb4168c
+md""" Track in indeed simplified
 
-    # electical losses
-    electrical_power = electrical_power_calculation(track.diff_distance, input_speed)
-    # converting mechanical work to elecctrical power and then power use
-    # power_use = calculate_power_use(mechanical_power, electrical_power)
-    power_use_accumulated_wt_h = calculate_power_use_accumulated(mechanical_power, electrical_power)
+But does it affect the simulation that much?"""
 
-    # get solar energy income
-    solar_power = solar_power_income(time_df, track, input_speed)
-    solar_power_accumulated = calculate_power_income_accumulated(solar_power)
-    # TODO: night charging with additional solar panels
+# ╔═╡ 9f216093-ad1e-42a8-afea-4d9482956603
+md""" ### Optimizing raw track """
 
-    # #### plotting
-    # plot(track.distance, power_use, title="Power spent on toute")
-    # plot(track.distance, solar_power, title="Power gained on the route")
+# ╔═╡ 6fb1fb1f-1127-4585-bf93-3cd3810a2769
+@time result_raw = optimize(x -> solar_trip_wrapper(x, track_raw), [40.] )
 
-    # plot(track.distance, power_use_accumulated_wt_h, title="Power spent on the route, accumulated")
-    # plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
+# ╔═╡ 45819c7d-be27-4abf-a663-2837f68c4d92
+minimized_inputs_raw = Optim.minimizer(result_raw)
 
-    # plot(track.distance, solar_power_accumulated - power_use_accumulated_wt_h, title="Power balance w/o battery")
-    battery_capacity = 5100 # wt, to be used later for physical constraints
-    energy_in_system = start_energy .+ solar_power_accumulated .- power_use_accumulated_wt_h
-    # plot(track.distance, energy_in_system, title="Power balance with battery")
-
-    # TODO: calculate night charging - do it later since it is not critical as of right now
-    # TODO: block overcharging - cost function?
-    # at first do the black-box optimization, then gradient one
-    # will start with Optim
-    # TODO: find an optimal single speed - make a loss function and start optimization process
-    time_seconds = calculate_travel_time_seconds(input_speed, track)
-    # TODO: find an optimal speed vector
-    return power_use_accumulated_wt_h, solar_power_accumulated, energy_in_system, time_df, time_seconds
-end
-
-
-# ╔═╡ afe9cc57-f93c-4780-a592-b3d2609162f2
-
-function solar_trip_cost(input_speed, track)
-    power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(input_speed, track)
-    cost = last(time_s) + 10 * abs(minimum(energy_in_system)) + 100 * sum(input_speed[input_speed .< 0.0])
-    return cost
-end
-
-# ╔═╡ 4e4c4794-aa95-49e9-961b-ed7c4bb81442
-
-function solar_trip_target_cost(input_speed::Vector{Float64}, target_energy::Float64, track,
-    start_energy::Float64, finish_energy::Float64)
-    power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(input_speed, track)
-    cost = last(time_s) + 10 * abs(last(energy_in_system) - target) + 100 * sum(input_speed[input_speed .< 0.0])
-    return cost
-end
-
-# ╔═╡ e80aee02-b99e-44c9-b503-9443c431b0e6
-
-# consider using Union for types for multiple dispatch
-# https://stackoverflow.com/questions/65094714/efficient-way-to-implement-multiple-dispatch-for-many-similar-functions 
-# also consider rewriting core functions so they will work in .func mode
-
-function solar_trip_wrapper(speed::Float64, track)
-    # input speeds in km/h
-    # as of right now one speed for all track parts
-    input_speed = convert_single_kmh_speed_to_ms_vector(first(speed), length(track.distance))
-    return solar_trip_cost(input_speed, track)
-end
-
-# ╔═╡ ae4d73ea-bd18-472b-babb-7980598a4ce9
-function solar_trip_wrapper(speed::Vector{Float64}, track)
-    # input in km/h
-    return solar_trip_cost(convert_kmh_to_ms(speed), track)
-end
-
-# ╔═╡ b9bdb969-2f65-47d8-b1f2-a9b7e411f1c1
-# function to test optimization with several big chunks to optimize
-# everything under Number
-function solar_trip_chunks(speeds::Vector{<:Number}, track)
-# function solar_trip_chunks(speeds::Vector{Float64}, track)
-    speed_ms = convert_kmh_to_ms(speeds)
-    speed_vector = propagate_speeds(speed_ms, track)
-    return solar_trip_cost(speed_vector, track)
-end
-
-# ╔═╡ ca2f1ec3-4ed3-4b5d-bfcd-ab43de0d2abc
-function show_result_graphs(inputs, track)
-    power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(inputs, track);
-    power_use_plot = plot(track.distance, power_use, title="Power spent on route");
-    display(power_use_plot)
-    power_income_plot = plot(track.distance, solar_power, title="Power gained on the route");
-    display(power_income_plot)
-    # plot(track.distance, power_use_accumulated_wt_h, title="Power spent on the route, accumulated")
-    # plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
-
-    # plot(track.distance, solar_power - power_use, title="Power balance w/o battery")
-    # battery_capacity = 5100 # wt
-    # energy_in_system = battery_capacity .+ solar_power_accumulated .- power_use_accumulated_wt_h
-    energy_plot = plot(track.distance, [energy_in_system zeros(size(track,1))],
-    label=["Energy" "Failure threshold"], title="Energy in system", lw=3,
-    xlabel="Distance (m)", ylabel="Energy (W*h)", size=(1000, 500),
-    color=[:blue :red]);
-    display(energy_plot)
-
-    plot(track.distance, track.altitude, label="altitude", ylabel="altitude", title="Speed (m/s) vs distance")
-    speed_distance_plot = plot!(twinx(), inputs, color=:red, ylabel="speed", label="speed (m/s)", ymirror = true, title="Speed (m/s) vs distance")
-    display(speed_distance_plot)
-
-    speed_time_plot = plot(time.utc_time, inputs, title="Speed (m/s) vs time")
-    display(speed_time_plot)
-
-    power_both_plot = plot(track.distance, [power_use solar_power energy_in_system zeros(size(track,1))],
-    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph",
-    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
-    color=[:blue :green :cyan :red]
-    # ,ylims=[-10000, 40000]
-    )
-    # save("energy.png", power_both_plot)
-    display(power_both_plot)
-
-    power_in_time_plot = plot(time.utc_time, [power_use solar_power energy_in_system zeros(size(track,1))],
-    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph in time",
-    xlabel="Time", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
-    color=[:blue :green :cyan :red]
-    # ,ylims=[-10000, 40000]
-    )
-    # save("energy.png", power_both_plot)
-    display(power_in_time_plot)
-
-    println(last(time_s));
-end
-
-
-# ╔═╡ 36e15048-b615-4ba6-a32a-093922a49243
-
-function show_results_wrapper(input::Number, track::DataFrame)
-    input_speed = convert_single_kmh_speed_to_ms_vector(first(input), length(track.distance))
-    return show_result_graphs(input_speed, track)
-end
-
-# ╔═╡ 1536f51f-0776-4d87-832d-e9b2b9cc36d6
-
-function show_results_wrapper(inputs::Vector{Float64}, track::DataFrame)
-    inputs_ms = convert_kmh_to_ms(inputs);
-    speed_vector = propagate_speeds(inputs_ms, track);
-    return show_result_graphs(speed_vector, track)
-end
-
-# ╔═╡ 4f286021-da6e-4037-80e3-a526e880b686
-
-function minimize_single_speed(speed::Float64, track)
-    # regular optimization, Nelder-Mead, 9 seconds 
-    @time result = optimize(x -> solar_trip_wrapper(x, track), [speed])
-    # alert();
-    minimized_inputs = Optim.minimizer(result)
-    minimized_result = Optim.minimum(result)
-    show_results_wrapper(first(minimized_inputs), track);
-end
-
-# ╔═╡ 1ba728ba-b6aa-40c9-b5a2-906297bd4921
-function minimize_5_chunks(track)
-    # get few big chunks with the same speed, Nelder-Mead, ~210 seconds
-    @time result_chunks = optimize(x -> solar_trip_chunks(x, track), [41.0, 42.0, 43.0, 44.0, 45.0])
-    minimized_inputs_chunks = Optim.minimizer(result_chunks)
-    minimized_result_chunks = Optim.minimum(result_chunks)
-    show_results_wrapper(minimized_inputs_chunks, track);
-end
-
-# ╔═╡ 5674f163-5847-4e2b-ba3f-c95348e8d1d5
-
-function minimize(speed::Vector{Float64}, track)
-    @time result = optimize(x -> solar_trip_wrapper(x, track), speed)
-    minimized_inputs = Optim.minimizer(result)
-    show_results_wrapper(minimized_inputs, track);
-end
-
-# ╔═╡ c3d41246-37cb-45f6-ac98-f64d9158087a
-md""" # Playground """
-
-# ╔═╡ 4c91701c-f90e-48cf-bb9d-d925baa85667
-md""" ## Single speed graphs """
-
-# ╔═╡ 9977c5d5-4872-41d4-8e99-1e4034493e4d
-# speed in kmh
-@bind speed NumberField(0.0:0.1:100.0, default=40.0)
-#speed = 43.0;
-
-# ╔═╡ 422a0d48-40fe-41eb-b214-e21d009c00b2
+# ╔═╡ 23811c64-fadc-42f5-a8d5-2ec7fb780e27
 begin
-	input_speeds = convert_single_kmh_speed_to_ms_vector(speed, length(track.distance))
-	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(input_speeds, track);
-	print()
+	inputs_ms = convert_kmh_to_ms(minimized_inputs_raw)
+	speed_vector_raw = propagate_speeds(inputs_ms, track_raw)
+	power_use_raw, solar_power_raw, energy_in_system_raw, time_raw, time_s_raw = solar_trip_calculation(speed_vector_raw, track_raw)
+	last(time_s_raw)
 end
 
-# ╔═╡ 6a5416d0-39c0-431b-8add-5dbf13a1bda0
-plot(track.distance, [power_use solar_power energy_in_system zeros(size(track,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph",
-	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
-	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
-)
-
-# ╔═╡ bef6c840-8dc7-4839-b2ba-623c6c46c856
-plot(time.utc_time, [power_use solar_power energy_in_system zeros(size(track,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph in time",
-	    xlabel="Time", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
-	    color=[:blue :green :cyan :red]
-	    # ,ylims=[-10000, 40000]
-	    )
-
-# ╔═╡ 54a5bf51-1723-4ce1-8f6b-1fd199c991b5
-md""" ## Optimization with different methods"""
-
-# ╔═╡ c7434aee-3089-4098-8c9d-2d13c9df5ee9
-@bind speed_chunks NumberField(0.0:0.1:100.0, default=40.0)
-
-# ╔═╡ 8794ae20-fe98-47ab-bd80-681c09edb7d1
-@bind number_of_chunks confirm(NumberField(1:50000, default=1))
-
-# ╔═╡ 7380a326-1e9e-437c-9cb7-3aa2b54b8ec5
-@bind lbfgs_m NumberField(1:50000, default=10)
-
-# ╔═╡ 596e51be-969e-4fe6-8170-22c1aac89aca
-md""" Selecting the line search and other parameters """
-
-# ╔═╡ eeb85fd3-6721-4e0f-aed9-73731960ac35
-# ls = LineSearches.HagerZhang()
-ls = LineSearches.BackTracking();
-
-# ╔═╡ 09bd67a1-a0f9-45f3-9839-2e9e592f01de
-iterations_num = 10000
-
-# ╔═╡ 3ca6f786-8add-4c46-b82a-30a570828d39
-function f(x)
-	return solar_trip_chunks(abs.(x), track)
-end
-
-# ╔═╡ e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
-d = OnceDifferentiable(f, fill(speed_chunks, number_of_chunks), autodiff = :forward)
-
-# ╔═╡ 5c9c006c-f814-4829-8c18-108546be870b
-td = TwiceDifferentiable(f, fill(speed_chunks, number_of_chunks), autodiff = :forward)
-
-# ╔═╡ 411e63ec-b83a-4e21-9535-5d0275381039
-#@time result_chunks = optimize(x -> solar_trip_chunks(x, track), fill(speed_chunks, number_of_chunks), iterations=iterations_num, LBFGS())
-
-# @time result_chunks = optimize(d, fill(speed_chunks, number_of_chunks), LBFGS(;m=lbfgs_m, linesearch = ls))
-
-@time result_chunks = optimize(td, fill(speed_chunks, number_of_chunks), Newton(; linesearch = ls),
-	Optim.Options(
-		x_tol = 1e-6,
-		f_tol = 1e-8,
-		g_tol = 1e-6
-	)
-)
-# change convergence criteria?
-
-# ╔═╡ 21634b70-7b3a-44b2-b629-01664ce81acf
-minimized_inputs_chunks = Optim.minimizer(result_chunks)
-
-# ╔═╡ 5f3a7fcf-e261-4f64-a94c-57a12093e353
+# ╔═╡ b2f67788-351c-48c3-89e3-a14ba837da7b
 begin
-	inputs_ms = convert_kmh_to_ms(minimized_inputs_chunks)
-	speed_vector = propagate_speeds(inputs_ms, track)
-	power_use_chunks, solar_power_chunks, energy_in_system_chunks, time_chunks, time_s_chunks = solar_trip_calculation(speed_vector, track)
-	last(time_s_chunks)
+	plot(track_raw.distance, track_raw.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
+	plot!(twinx(), track_raw.distance, speed_vector_raw * 3.6, color=:red, ylabel="speed (km/h)", ylim=[0, 60], label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
 end
 
-# ╔═╡ de201868-7805-4f27-81b7-f4f8204eface
-begin
-	plot(track.distance, track.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
-	plot!(twinx(), track.distance, speed_vector * 3.6, color=:red, ylabel="speed (km/h)", ylim=[0, 60], label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
-end
-
-# ╔═╡ 96a68dec-d781-4fd6-8146-649434f60919
-plot(track.distance, [power_use_chunks solar_power_chunks energy_in_system_chunks zeros(size(track,1))],
+# ╔═╡ 9fc932d8-6c41-4af2-9024-c313a010e323
+plot(track_raw.distance, [power_use_raw solar_power_raw energy_in_system_raw zeros(size(track_raw,1))],
 	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
 	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
 	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
 )
 
-# ╔═╡ 77d82639-dd61-46e0-b6a0-7c7400a10453
+# ╔═╡ bba5f2b1-f73b-4b2f-9c8d-6736a20860dd
+md""" ### Optimizing track consisting only from peaks """
+
+# ╔═╡ 483c7caa-e919-4863-9c73-2209184cf47a
+@time result_peaks = optimize(x -> solar_trip_wrapper(x, track_peaks), [40.] )
+
+# ╔═╡ 954c00a9-055a-4831-b8d1-0009ca35f19e
+Optim.minimum(result_raw)
+
+# ╔═╡ 740d0e37-8538-4e7e-9933-d686fc34f3ed
+Optim.minimum(result_peaks)
+
+# ╔═╡ 1516a095-8d66-402a-8bbb-ef793939a4fd
+md""" cost difference is $(Optim.minimum(result_peaks) - Optim.minimum(result_raw))"""
+
+# ╔═╡ 6964deca-f0f0-40c7-b21e-4389a973a226
+md""" ### Simulating on peaks track with speed from optimizing on raw track"""
+
+# ╔═╡ fa33e044-ff8c-4535-84f1-8f5e4e25ccc2
+minimized_inputs_peaks = Optim.minimizer(result_peaks)
+# minimized_inputs_peaks = minimized_inputs_raw
+
+# ╔═╡ f205e0d8-2564-4bf2-87c4-345a75935b9d
 begin
-	plot(time.utc_time, [power_use_chunks solar_power_chunks energy_in_system_chunks zeros(size(track,1))],
-		    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"],
-		    xlabel="Time", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
-		    color=[:blue :green :cyan :red]
-		    # ,ylims=[-10000, 40000]
-		, legend = :topleft 
-		, right_margin = 15Plots.mm
-		, title = "Energy graph (time)"
-		    )
-	plot!(twinx(), time.utc_time, speed_vector * 3.6, color=:red, ylabel="speed (km/h)", ylim=[0, 60], label="speed (km/h)", ymirror = true,
-	title = "Energy graph (time)")
+	inputs_ms_raw = convert_kmh_to_ms(minimized_inputs_raw)
+	speed_vector_peaks = propagate_speeds(inputs_ms_raw, track_peaks)
+	power_use_peaks, solar_power_peaks, energy_in_system_peaks, time_peaks, time_s_peaks = solar_trip_calculation(speed_vector_peaks, track_peaks)
+	last(time_s_peaks)
 end
+
+# ╔═╡ 3bbd23fa-8421-4e79-b786-58a0a34dd761
+begin
+	plot(track_peaks.distance, track_peaks.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
+	plot!(twinx(), track_peaks.distance, speed_vector_peaks * 3.6, color=:red, ylabel="speed (km/h)", ylim=[0, 60], label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
+end
+
+# ╔═╡ bc1fcad1-6f06-4f93-b616-9023d0a382a4
+plot(track_peaks.distance, [power_use_peaks solar_power_peaks energy_in_system_peaks zeros(size(track_peaks,1))],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+
+# ╔═╡ 30bee5a3-dd36-46d1-9b47-aa5e38a093d8
+minimum(energy_in_system_raw)
+
+# ╔═╡ 67e632e4-2975-42a6-98c7-48a8d51a914a
+minimum(energy_in_system_peaks)
+
+# ╔═╡ cc155214-dc25-4e08-a055-1fc977a58396
+md""" # TODO:
+
+Calculate how much different are results
+1. compare energies at peak points
+2. make an interpolation
+3. compare only final values
+"""
+
+# ╔═╡ 8ed7ac6f-f4cd-42d3-ac47-f1cee701a4f6
+md""" Getting peaks indexes"""
+
+# ╔═╡ 50eb4d80-790d-45a3-9c71-6553336d8eb4
+begin
+	md""" Getting peaks indexes"""
+	max_altitude_peaks_indexes, max_altitude_peaks = findmaxima(track_raw.altitude)
+    min_altitude_peaks_indexes, min_altitude_peaks = findminima(track_raw.altitude)
+    peaks_indexes = []
+    append!(peaks_indexes, max_altitude_peaks_indexes)
+    append!(peaks_indexes, min_altitude_peaks_indexes)
+    sort!(peaks_indexes)
+end
+
+# ╔═╡ 9247695e-d46b-461f-9091-44f2b5e89d92
+power_use_raw_at_peaks = power_use_raw[peaks_indexes]
+
+# ╔═╡ 0e4eb22f-0319-4070-8497-af0b7c2dfb70
+mse(power_use_peaks, power_use_raw_at_peaks)
+
+# ╔═╡ c0592665-2891-4057-8883-5802ab886e9e
+r2_score(power_use_peaks, power_use_raw_at_peaks)
+
+# ╔═╡ 64d2ea28-82e6-42f4-a50b-61ff7b651744
+adjusted_r2_score(power_use_peaks, power_use_raw_at_peaks, 1)
+
+# ╔═╡ d61aab46-78aa-45b9-94ba-9902355044f8
+plot(track_peaks.distance, power_use_peaks-power_use_raw_at_peaks)
+
+# ╔═╡ c4c6e3ea-1389-4a33-8c69-07c86a446764
+md""" ## Power use is kinda OK
+
+But peaks model wastes a little bit less energy through the distance"""
+
+# ╔═╡ 6ce8d5de-f6f7-4e4c-877c-053fd604e7cb
+solar_power_raw_at_peaks = solar_power_raw[peaks_indexes]
+
+# ╔═╡ c676ea74-7e39-47dd-8e62-b740eb7f176d
+mse(solar_power_peaks, solar_power_raw_at_peaks)
+
+# ╔═╡ dcd260c8-0024-4582-af1f-cef95944a709
+r2_score(solar_power_peaks, solar_power_raw_at_peaks)
+
+# ╔═╡ 54a2a471-37a6-4344-9591-f3ca0aadafc0
+plot(track_peaks.distance, solar_power_peaks-solar_power_raw_at_peaks)
+
+# ╔═╡ cf21aa5a-bedc-43b1-9bf2-0db9c0990d1f
+md""" ## Power gain is OK """
+
+# ╔═╡ 4a9daa07-e1d0-4221-82ae-cf3aee70f77f
+energy_in_system_raw_at_peaks = energy_in_system_raw[peaks_indexes]
+
+# ╔═╡ dced5964-da29-44e4-a17b-96435de9fe5a
+mse(energy_in_system_peaks, energy_in_system_raw_at_peaks)
+
+# ╔═╡ eb6e439b-1d2c-4ee9-bed2-f743b59436d4
+r2_score(energy_in_system_peaks, energy_in_system_raw_at_peaks)
+
+# ╔═╡ 8e4dd08d-b0b9-4488-bc43-c8cd84fa3144
+plot(track_peaks.distance, energy_in_system_peaks-energy_in_system_raw_at_peaks)
+
+# ╔═╡ 678ced14-6bfc-47bd-be48-2c987a20d020
+md""" ## Energy in system is OK """
+
+# ╔═╡ 4b39d507-0cff-47a4-aab4-d828edae167f
+time_s_raw_at_peaks = time_s_raw[peaks_indexes]
+
+# ╔═╡ 65aafdc2-44cf-49bf-8d59-7a4c5a620344
+mse(time_s_peaks, time_s_raw_at_peaks)
+
+# ╔═╡ 7773ab00-a68a-4e7b-97c7-7a98374181ae
+r2_score(time_s_peaks, time_s_raw_at_peaks)
+
+# ╔═╡ 52b3d3f1-7bb8-48d2-9c3a-129bb0ff72d8
+md""" ## Time difference is $(last(time_s_peaks) - last(time_s_raw))"""
+
+# ╔═╡ 50ec284d-4484-4e6f-8bef-8a0ee4cf0a10
+md""" # But what if we try to use peaks model for optimization and use its result on raw track?
+
+And compare it to simulation on raw track """
+
+# ╔═╡ 87c84923-398d-41fb-8f26-785c4503333c
+md"""simulation time of optimization on peaks track, and using this single speed on raw track"""
+
+# ╔═╡ 602794dc-8a03-499d-aa1c-c1b6ba7a432e
+begin
+	inputs_ms_peaks = convert_kmh_to_ms(minimized_inputs_peaks)
+	speed_vector_peaks_at_raw = propagate_speeds(inputs_ms_peaks, track_raw)
+	power_use_peaks_at_raw, solar_power_peaks_at_raw, energy_in_system_peaks_at_raw, time_peaks_at_raw, time_s_peaks_at_raw = solar_trip_calculation(speed_vector_peaks_at_raw, track_raw)
+	last(time_s_peaks_at_raw)
+end
+
+# ╔═╡ 921d508e-2efe-42a0-8043-abf365d59ff8
+md""" using raw(optim) on raw(simul) is $(last(time_s_raw))
+
+using peaks(optim) on raw(simul) is $(last(time_s_peaks_at_raw))"""
+
+# ╔═╡ 1c2f866f-92c2-46e7-a8b0-b622ea220401
+md""" ## Time difference is $(last(time_s_peaks_at_raw) - last(time_s_raw))
+
+Using peaks track leads to overly-optimistic results"""
+
+# ╔═╡ 4fcf509e-9d69-4e54-806b-4d9251b76b3a
+md""" What about power constraints?"""
+
+# ╔═╡ a66eef8c-2cbd-467d-a5a9-13df9748fc03
+plot(track_raw.distance, [power_use_peaks_at_raw solar_power_peaks_at_raw energy_in_system_peaks_at_raw zeros(size(track_raw,1))],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+
+# ╔═╡ b0986021-e5cf-409a-ae73-04a028ee5098
+minimum(energy_in_system_peaks_at_raw)
+
+# ╔═╡ 43193df9-4065-40ed-91a8-ffc5f600e4d5
+md""" looks like energy drops below minimum level
+
+overly-optimistic model"""
+
+# ╔═╡ e6fd5c95-7006-4450-869b-4b79b8df7016
+solar_trip_wrapper(speed_vector_peaks_at_raw, track_raw)
+
+# ╔═╡ d2e18269-07d8-4769-8806-4c6a07cb72e2
+md""" ### Stats comparison  """
+
+# ╔═╡ 38fc024c-6978-4ead-a4af-fd0d714d4f48
+mse(power_use_peaks_at_raw, power_use_raw)
+
+# ╔═╡ 1f68f942-2e0e-486a-889e-a3f81257c1f8
+r2_score(power_use_peaks_at_raw, power_use_raw)
+
+# ╔═╡ 2c2a0224-4213-4421-87e1-b89641c92339
+plot(track_raw.distance, power_use_peaks_at_raw-power_use_raw, )
+
+# ╔═╡ b9e6ecba-b7fb-4a35-9d80-05aa65862141
+md"""looks almost straight, maybe it is not that straight?"""
+
+# ╔═╡ 357be2e9-ed10-41f0-ab0a-96a83af6c4ff
+plot(track_raw.distance[1:100], power_use_peaks_at_raw[1:100] .- power_use_raw[1:100])
+
+# ╔═╡ ce2b73a6-2053-4337-b28d-909623ad3236
+indexes_to_show = (track_raw.distance .> 500) .& (track_raw.distance .< 1000)
+
+# ╔═╡ 8951bb1b-f878-4b32-b900-6a38b93c9008
+plot(
+	track_raw.distance[indexes_to_show], power_use_peaks_at_raw[indexes_to_show] .- power_use_raw[indexes_to_show], title="Power use difference")
+
+# ╔═╡ 0b3783cf-8af7-42a9-9ad0-618aff3302ba
+plot(track_raw.distance[indexes_to_show], track_raw.altitude[indexes_to_show], title="raw track")
+
+# ╔═╡ d437b7ee-a62e-4270-a7b1-193aaf560869
+inexes_to_show_peaks = (track_peaks.distance .> 500) .& (track_peaks.distance .< 1000)
+
+# ╔═╡ b2681cbd-64e7-40df-87ad-24be0adbe042
+plot(track_peaks.distance[ inexes_to_show_peaks], track_peaks.altitude[inexes_to_show_peaks], title="peaks track")
+
+# ╔═╡ e8f82bc4-a269-43b2-a40a-12c7304b2d02
+md""" done with tracks, solar power income"""
+
+# ╔═╡ 6249f8ce-dc83-4662-821c-7470639bb8e8
+plot(track_raw.distance, solar_power_peaks_at_raw-solar_power_raw, title="solar power income difference")
+
+# ╔═╡ a6dcb927-e35b-44af-ae70-0241a8c6a0e8
+plot(track_raw.distance, energy_in_system_peaks_at_raw-energy_in_system_raw, title="energy in system difference")
+
+# ╔═╡ 6cd37256-5781-46e7-b67e-8724ab64edcf
+plot(track_raw.distance, time_s_peaks_at_raw - time_s_raw)
+
+# ╔═╡ f69c1192-7bd3-4d17-b9dd-ec634ef1ea29
+last(time_s_peaks_at_raw)-last(time_s_raw)
+
+# ╔═╡ 4350e7f7-824d-4eba-9a0c-0fdcf80d5431
+mse(solar_power_peaks_at_raw, solar_power_raw)
+
+# ╔═╡ 8464be7f-b0a8-403c-af1d-8009617c56a8
+md""" # Trying out flat track"""
+
+# ╔═╡ eed29dd7-feb4-4233-b118-234ed0c704f8
+track_flat = copy(track_raw)
+
+# ╔═╡ 80270ef2-e711-4756-a639-0fd352f034e5
+begin
+	track_flat.altitude .= 0.
+	track_flat.diff_altitude .= 0.
+	track_flat.slope .= 0
+end
+
+# ╔═╡ 293b01e2-82c5-4bb7-a3bd-9c126e7d3b30
+plot(track_flat.distance, track_flat.altitude, title="flat track")
+
+# ╔═╡ 1b4a755f-f6e5-4097-8bc2-05dd4a2d7642
+@time result_flat = optimize(x -> solar_trip_wrapper(x, track_flat), [40.] )
+
+# ╔═╡ 26342aab-9798-45fa-9700-603f66c7449a
+minimized_inputs_flat = Optim.minimizer(result_flat)
+
+# ╔═╡ af339667-3f7e-4e72-8a8a-bf87787db0e9
+begin
+	inputs_ms_flat = convert_kmh_to_ms(minimized_inputs_flat)
+	speed_vector_flat = propagate_speeds(inputs_ms_flat, track_flat)
+	power_use_flat, solar_power_flat, energy_in_system_flat, time_flat, time_s_flat = solar_trip_calculation(speed_vector_flat, track_raw)
+	last(time_s_flat)
+end
+
+# ╔═╡ 36aad8d4-e241-4294-a362-22f11947bed7
+plot(track_raw.distance, [power_use_flat solar_power_flat energy_in_system_flat zeros(size(track_raw,1))],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+
+# ╔═╡ d1a19c6f-2b8b-4600-9fd5-fdff94d8530b
+md""" # Trying out Alla's version of optimization"""
+
+# ╔═╡ 5e65228b-01ae-44a9-919f-fe4bf1dac4a2
+function set_speeds(speeds, track, divide_at)
+	# if size(speeds, 1) == 1
+	# 	return fill(first(speeds), size(track.distance, 1))
+	# end
+	# output_speeds = zeros(size(track.distance, 1))
+	output_speeds = fill(last(speeds), size(track.distance, 1))
+	for i=1:size(divide_at,1)-1
+		if i==1
+			output_speeds[1:divide_at[1]] .= speeds[1]
+		else
+			output_speeds[divide_at[i]:divide_at[i+1]] .= speeds[i]
+		end
+	end
+	return output_speeds
+end
+
+# ╔═╡ de0f00f3-09f9-49ee-bfca-4ffc65cd4956
+function solar_trip_division(speed, track, divide_at)
+	# input_speed = set_speeds(speed, track, divide_at)
+	# return solar_trip_cost(convert_kmh_to_ms(input_speed), track)
+	return solar_trip_cost(convert_kmh_to_ms(speed), track)
+end
+
+# ╔═╡ c5c7105a-36e5-47c8-a94f-ab10a8a7a040
+function flatten_track(track_raw, divide_indexes)
+	if size(divide_indexes,1) == 0
+		return track_raw
+	end
+	track = track_raw[divide_indexes,:]
+	distance = copy(track.distance)
+	altitude = copy(track.altitude)
+	pushfirst!(distance,track_raw[1,:distance])
+	pushfirst!(altitude,track_raw[1,:altitude])
+	track.diff_distance = diff(distance)
+	track.diff_altitude = diff(altitude)
+	track.slope = atand.(track.diff_altitude ./ track.diff_distance)
+	return track
+end
+
+# ╔═╡ 5225be03-34ac-4e5f-b1e8-fb91ff20f690
+track_1_piece = flatten_track(track_raw, [ size(track_raw.distance,1) ])
+
+# ╔═╡ 039bd76e-37c5-4f90-a7dd-01f3f95d6ab9
+@time result_flat_1_piece = optimize(x -> solar_trip_wrapper(x, track_1_piece), [40.] )
+
+# ╔═╡ c91c7f93-78e9-463b-9d15-419c564d6983
+minimized_inputs_flat_1 = Optim.minimizer(result_flat_1_piece)
+
+# ╔═╡ 12bc33af-eba4-4eae-87e3-e95bace47c3d
+begin
+	inputs_ms_flat_1 = convert_kmh_to_ms(minimized_inputs_flat_1)
+	speed_vector_flat_1 = propagate_speeds(inputs_ms_flat_1, track_1_piece)
+	power_use_flat_1, solar_power_flat_1, energy_in_system_flat_1, time_flat_1, time_s_flat_1 = solar_trip_calculation(speed_vector_flat_1, track_raw)
+	last(time_s_flat_1)
+end
+
+# ╔═╡ a2fecfe2-4d42-47f6-b6ff-a185a0601945
+power_use_flat_1
+
+# ╔═╡ 6d8c0302-f26d-40fc-a858-c5093b82ca10
+plot(track_raw.distance, [power_use_flat_1 solar_power_flat_1 energy_in_system_flat_1 zeros(size(track_raw,1))],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+
+# ╔═╡ c13d78d6-d78a-4cc8-89cf-dd8cc1dc5779
+zero_energy_1 = minimum(abs.(energy_in_system_flat_1))
+
+# ╔═╡ db5753e5-a105-4d49-a6ab-7e94a5e097b3
+zero_index_1 = argmin(abs.(energy_in_system_flat_1))
+
+# ╔═╡ af4f6c48-d7e3-445e-a3d1-25634cf75e92
+track_raw[zero_index_1,:]
+
+# ╔═╡ a41cf01b-14ff-48c4-8927-9020d9a90cf9
+energy_in_system_flat_1[zero_index_1]
+
+# ╔═╡ 4ca481f3-767e-4c20-9bda-51defd812a7e
+function recursive_optimization(speed, track, track_raw, divide_at, iteration, run_until)
+	# println(speed)
+ #    show(track)
+ #    show(track_raw)
+ #    println(divide_at)
+ #    println(iteration)
+	
+    track = flatten_track(track_raw, divide_at);
+    # println("flat track")
+    # show(track)
+	@time result = optimize(x -> solar_trip_division(x, track, divide_at), speed)
+
+	minimized = Optim.minimizer(result)
+	println(minimized)
+	inputs = convert_kmh_to_ms(minimized)
+	speed_vec = set_speeds(inputs, track_raw, divide_at)
+	power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div = solar_trip_calculation(speed_vec, track_raw)
+
+	println(last(time_s_div))
+
+	zero_index_div = argmin(abs.(energy_in_system_div))
+
+	new_divide = copy(divide_at)
+	push!(new_divide, zero_index_div)
+	sort!(new_divide)
+	new_divide_index = findfirst(x -> x==zero_index_div, new_divide)
+	println(new_divide)
+
+	new_track = flatten_track(track_raw, new_divide)
+
+	if iteration == run_until
+		return power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div;
+	end
+	
+	new_speed = copy(minimized)
+	insert!(new_speed, new_divide_index, 40.)
+	recursive_optimization(new_speed, new_track, track_raw, new_divide, iteration + 1, run_until)
+	
+	return power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div;
+	
+end
+
+# ╔═╡ 18e668df-3434-44b5-897d-40de1792dc46
+size(track_raw,1)
+
+# ╔═╡ 8d5a843b-7afa-4dc5-87f4-a0ee32a79838
+flatten_track(track_raw, [size(track_raw,1)])
+
+# ╔═╡ c9678e4d-b355-494b-9105-4e115cf997d4
+flatten_track(track_raw, [zero_index_1, size(track_raw,1)])
+
+# ╔═╡ 40010f9a-7075-412b-b25b-4d40a6490253
+set_speeds([20.], track_raw, [size(track_raw,1)])
+
+# ╔═╡ e3ad1ef7-0e5b-40f2-8c16-4eb6908207d7
+set_speeds([20., 30.], track_raw, [zero_index_1, size(track_raw,1)])
+
+# ╔═╡ 572c3c0f-46c0-4156-9e8c-5c487721fe76
+plot(set_speeds([20., 30.], track_raw, [zero_index_1, size(track_raw,1)]))
+
+# ╔═╡ 72f9f8c9-8c5b-4127-829e-a1496500f27f
+@bind exit_iteration confirm(NumberField(1:100, default=1))
+
+# ╔═╡ e305544f-5bf5-4cb6-b694-2f502c0ba3d1
+power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div = recursive_optimization([40.], track_raw, track_raw, [size(track_raw, 1)], 1, exit_iteration);
+
+# ╔═╡ 1dbba344-5e08-4c44-b153-398101334e65
+plot(track_raw.distance, [power_use_div solar_power_div energy_in_system_div zeros(size(track_raw,1))],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+
+# ╔═╡ d3ac9b97-27b7-4de2-9139-fa80105a1951
+md""" #### Not really optimizing
+
+process stops when energy runs out at the same part of the track"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -366,20 +536,22 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-LineSearches = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
+Metrics = "cb9f3049-315b-4f05-b90c-a8adaec4da78"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+Peaks = "18e31ff7-3703-566c-8e60-38913d67486b"
 PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 
 [compat]
-CSV = "~0.10.4"
-DataFrames = "~1.4.1"
-LineSearches = "~7.2.0"
+CSV = "~0.10.7"
+DataFrames = "~1.4.2"
+Metrics = "~0.1.2"
 Optim = "~1.7.3"
+Peaks = "~0.4.1"
 PlotlyBase = "~0.8.19"
-Plots = "~1.35.4"
+Plots = "~1.35.5"
 PlutoUI = "~0.7.48"
 TimeZones = "~1.9.0"
 """
@@ -390,7 +562,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "6d1487d257d137143d08905bc3a40275f7a26789"
+project_hash = "ada87576b567076133e89f17cb80edd688850ba8"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -404,9 +576,9 @@ version = "1.1.1"
 
 [[deps.ArrayInterfaceCore]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
-git-tree-sha1 = "e9f7992287edfc27b3cbe0046c544bace004ca5b"
+git-tree-sha1 = "e6cba4aadba7e8a7574ab2ba2fcfb307b4c4b02a"
 uuid = "30b0a656-2188-435a-8636-2ec0e6a096e2"
-version = "0.1.22"
+version = "0.1.23"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -427,9 +599,9 @@ version = "1.0.8+0"
 
 [[deps.CSV]]
 deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings"]
-git-tree-sha1 = "873fb188a4b9d76549b81465b1f75c82aaf59238"
+git-tree-sha1 = "c5fd7cd27ac4aed0acf4b73948f0110ff2a854b2"
 uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
-version = "0.10.4"
+version = "0.10.7"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -519,9 +691,9 @@ version = "1.12.0"
 
 [[deps.DataFrames]]
 deps = ["Compat", "DataAPI", "Future", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SnoopPrecompile", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
-git-tree-sha1 = "558078b0b78278683a7445c626ee78c86b9bb000"
+git-tree-sha1 = "5b93f1b47eec9b7194814e40542752418546679f"
 uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-version = "1.4.1"
+version = "1.4.2"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -560,9 +732,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
-git-tree-sha1 = "5158c2b41018c5f7eb1470d558127ac274eca0c9"
+git-tree-sha1 = "c36550cb29cbe373e95b3f40486b9a4148f89ffd"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
-version = "0.9.1"
+version = "0.9.2"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
@@ -696,9 +868,9 @@ version = "1.0.2"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "Dates", "IniFile", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "3cdd8948c55d8b53b5323f23c9581555dc2e30e1"
+git-tree-sha1 = "a97d47758e933cd5fe5ea181d178936a9fc60427"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.5.0"
+version = "1.5.1"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -929,9 +1101,9 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[deps.MbedTLS]]
 deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "Random", "Sockets"]
-git-tree-sha1 = "6872f9594ff273da6d13c7c1a1545d5a8c7d0c1c"
+git-tree-sha1 = "03a9b9718f5682ecb107ac9f7308991db4ce395b"
 uuid = "739be429-bea8-5141-9913-cc70e7f3736d"
-version = "1.1.6"
+version = "1.1.7"
 
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -942,6 +1114,12 @@ version = "2.28.0+0"
 git-tree-sha1 = "e498ddeee6f9fdb4551ce855a46f54dbd900245f"
 uuid = "442fdcdd-2543-5da2-b0f3-8c86c306513e"
 version = "0.3.1"
+
+[[deps.Metrics]]
+deps = ["DataFrames", "DataStructures", "Random", "StatsBase"]
+git-tree-sha1 = "6e9e77751dd230b360c29e23a10f6e6d2f4fafaf"
+uuid = "cb9f3049-315b-4f05-b90c-a8adaec4da78"
+version = "0.1.2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -1046,6 +1224,12 @@ git-tree-sha1 = "6c01a9b494f6d2a9fc180a08b182fcb06f0958a0"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.4.2"
 
+[[deps.Peaks]]
+deps = ["Compat"]
+git-tree-sha1 = "5f1390b0a0ef6d6411f9a9a37c4444d6a7e44780"
+uuid = "18e31ff7-3703-566c-8e60-38913d67486b"
+version = "0.4.1"
+
 [[deps.Pipe]]
 git-tree-sha1 = "6842804e7867b115ca9de748a0cf6b364523c16d"
 uuid = "b98c9c47-44ae-5843-9183-064241ee97a0"
@@ -1082,9 +1266,9 @@ version = "0.8.19"
 
 [[deps.Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SnoopPrecompile", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
-git-tree-sha1 = "041704a5182f25cdcbb1369f13d9d9f94a86b5fd"
+git-tree-sha1 = "0a56829d264eb1bc910cf7c39ac008b5bcb5a0d9"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.35.4"
+version = "1.35.5"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
@@ -1153,9 +1337,9 @@ version = "1.2.2"
 
 [[deps.RelocatableFolders]]
 deps = ["SHA", "Scratch"]
-git-tree-sha1 = "22c5201127d7b243b9ee1de3b43c408879dff60f"
+git-tree-sha1 = "90bc7a7c96410424509e4263e277e43250c05691"
 uuid = "05181044-ff0b-4ac5-8273-598c1e38db00"
-version = "0.3.0"
+version = "1.0.0"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
@@ -1574,46 +1758,117 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═fb9bd7c0-4f3c-11ed-094a-35559b7aedad
-# ╠═7cc7b885-f841-4bcc-a82c-2f947c74de22
-# ╠═a7781b82-48db-4954-8e79-ab8e7864ed69
-# ╠═44f352a0-0c5b-41f6-a21d-56f10edae4c9
-# ╠═9d915c29-314b-47f9-9e4c-898ebd28f88a
-# ╠═92e47c4c-2e70-4850-af86-a997fcce5587
-# ╟─9f2624cc-398b-42d2-bf7f-527285af6dc3
-# ╟─704c9c6a-8b13-4e82-92fd-edda72397320
-# ╟─afe9cc57-f93c-4780-a592-b3d2609162f2
-# ╟─4e4c4794-aa95-49e9-961b-ed7c4bb81442
-# ╟─e80aee02-b99e-44c9-b503-9443c431b0e6
-# ╟─ae4d73ea-bd18-472b-babb-7980598a4ce9
-# ╟─b9bdb969-2f65-47d8-b1f2-a9b7e411f1c1
-# ╟─36e15048-b615-4ba6-a32a-093922a49243
-# ╟─1536f51f-0776-4d87-832d-e9b2b9cc36d6
-# ╟─ca2f1ec3-4ed3-4b5d-bfcd-ab43de0d2abc
-# ╟─4f286021-da6e-4037-80e3-a526e880b686
-# ╟─1ba728ba-b6aa-40c9-b5a2-906297bd4921
-# ╟─5674f163-5847-4e2b-ba3f-c95348e8d1d5
-# ╟─c3d41246-37cb-45f6-ac98-f64d9158087a
-# ╟─4c91701c-f90e-48cf-bb9d-d925baa85667
-# ╟─9977c5d5-4872-41d4-8e99-1e4034493e4d
-# ╟─422a0d48-40fe-41eb-b214-e21d009c00b2
-# ╟─6a5416d0-39c0-431b-8add-5dbf13a1bda0
-# ╟─bef6c840-8dc7-4839-b2ba-623c6c46c856
-# ╟─54a5bf51-1723-4ce1-8f6b-1fd199c991b5
-# ╠═c7434aee-3089-4098-8c9d-2d13c9df5ee9
-# ╠═8794ae20-fe98-47ab-bd80-681c09edb7d1
-# ╠═7380a326-1e9e-437c-9cb7-3aa2b54b8ec5
-# ╟─596e51be-969e-4fe6-8170-22c1aac89aca
-# ╠═eeb85fd3-6721-4e0f-aed9-73731960ac35
-# ╟─09bd67a1-a0f9-45f3-9839-2e9e592f01de
-# ╠═3ca6f786-8add-4c46-b82a-30a570828d39
-# ╟─e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
-# ╠═5c9c006c-f814-4829-8c18-108546be870b
-# ╠═411e63ec-b83a-4e21-9535-5d0275381039
-# ╠═21634b70-7b3a-44b2-b629-01664ce81acf
-# ╠═5f3a7fcf-e261-4f64-a94c-57a12093e353
-# ╠═de201868-7805-4f27-81b7-f4f8204eface
-# ╠═96a68dec-d781-4fd6-8146-649434f60919
-# ╟─77d82639-dd61-46e0-b6a0-7c7400a10453
+# ╟─a7ee0e00-55f8-11ed-195c-73103633e4f3
+# ╠═e8a9ead5-161e-4f6f-8f9c-3f61e979ef00
+# ╠═dd8724db-31dd-497f-a8b2-7e8656c3aa59
+# ╠═f97311ee-5f9b-4bed-a125-6c28a0aba50d
+# ╠═5e80012e-6d22-4191-b03b-4c977e726eb5
+# ╠═84cb2782-1b35-482a-9355-0f2cf5d22483
+# ╠═3b685aeb-1f99-428d-8311-7c86be4577db
+# ╠═9da21138-5f0f-4e72-ab6c-9859d4db08ca
+# ╠═5554c1aa-0264-40e9-a603-eee94eecf2d2
+# ╠═b87b55b2-3ed6-4cbd-9727-c565663dfe1e
+# ╠═738a95cd-8e5f-4476-82c1-53952fb4168c
+# ╠═9f216093-ad1e-42a8-afea-4d9482956603
+# ╠═6fb1fb1f-1127-4585-bf93-3cd3810a2769
+# ╠═45819c7d-be27-4abf-a663-2837f68c4d92
+# ╠═23811c64-fadc-42f5-a8d5-2ec7fb780e27
+# ╠═b2f67788-351c-48c3-89e3-a14ba837da7b
+# ╠═9fc932d8-6c41-4af2-9024-c313a010e323
+# ╠═bba5f2b1-f73b-4b2f-9c8d-6736a20860dd
+# ╠═483c7caa-e919-4863-9c73-2209184cf47a
+# ╠═954c00a9-055a-4831-b8d1-0009ca35f19e
+# ╠═740d0e37-8538-4e7e-9933-d686fc34f3ed
+# ╠═1516a095-8d66-402a-8bbb-ef793939a4fd
+# ╠═6964deca-f0f0-40c7-b21e-4389a973a226
+# ╠═fa33e044-ff8c-4535-84f1-8f5e4e25ccc2
+# ╠═f205e0d8-2564-4bf2-87c4-345a75935b9d
+# ╠═3bbd23fa-8421-4e79-b786-58a0a34dd761
+# ╠═bc1fcad1-6f06-4f93-b616-9023d0a382a4
+# ╠═30bee5a3-dd36-46d1-9b47-aa5e38a093d8
+# ╠═67e632e4-2975-42a6-98c7-48a8d51a914a
+# ╟─cc155214-dc25-4e08-a055-1fc977a58396
+# ╠═8ed7ac6f-f4cd-42d3-ac47-f1cee701a4f6
+# ╠═50eb4d80-790d-45a3-9c71-6553336d8eb4
+# ╠═9247695e-d46b-461f-9091-44f2b5e89d92
+# ╠═0e4eb22f-0319-4070-8497-af0b7c2dfb70
+# ╠═c0592665-2891-4057-8883-5802ab886e9e
+# ╠═64d2ea28-82e6-42f4-a50b-61ff7b651744
+# ╠═d61aab46-78aa-45b9-94ba-9902355044f8
+# ╠═c4c6e3ea-1389-4a33-8c69-07c86a446764
+# ╠═6ce8d5de-f6f7-4e4c-877c-053fd604e7cb
+# ╠═c676ea74-7e39-47dd-8e62-b740eb7f176d
+# ╠═dcd260c8-0024-4582-af1f-cef95944a709
+# ╠═54a2a471-37a6-4344-9591-f3ca0aadafc0
+# ╠═cf21aa5a-bedc-43b1-9bf2-0db9c0990d1f
+# ╠═4a9daa07-e1d0-4221-82ae-cf3aee70f77f
+# ╠═dced5964-da29-44e4-a17b-96435de9fe5a
+# ╠═eb6e439b-1d2c-4ee9-bed2-f743b59436d4
+# ╠═8e4dd08d-b0b9-4488-bc43-c8cd84fa3144
+# ╠═678ced14-6bfc-47bd-be48-2c987a20d020
+# ╠═4b39d507-0cff-47a4-aab4-d828edae167f
+# ╠═65aafdc2-44cf-49bf-8d59-7a4c5a620344
+# ╠═7773ab00-a68a-4e7b-97c7-7a98374181ae
+# ╠═52b3d3f1-7bb8-48d2-9c3a-129bb0ff72d8
+# ╠═50ec284d-4484-4e6f-8bef-8a0ee4cf0a10
+# ╠═87c84923-398d-41fb-8f26-785c4503333c
+# ╠═602794dc-8a03-499d-aa1c-c1b6ba7a432e
+# ╠═921d508e-2efe-42a0-8043-abf365d59ff8
+# ╠═1c2f866f-92c2-46e7-a8b0-b622ea220401
+# ╠═4fcf509e-9d69-4e54-806b-4d9251b76b3a
+# ╠═a66eef8c-2cbd-467d-a5a9-13df9748fc03
+# ╠═b0986021-e5cf-409a-ae73-04a028ee5098
+# ╠═43193df9-4065-40ed-91a8-ffc5f600e4d5
+# ╠═e6fd5c95-7006-4450-869b-4b79b8df7016
+# ╠═d2e18269-07d8-4769-8806-4c6a07cb72e2
+# ╠═38fc024c-6978-4ead-a4af-fd0d714d4f48
+# ╠═1f68f942-2e0e-486a-889e-a3f81257c1f8
+# ╠═2c2a0224-4213-4421-87e1-b89641c92339
+# ╠═b9e6ecba-b7fb-4a35-9d80-05aa65862141
+# ╠═357be2e9-ed10-41f0-ab0a-96a83af6c4ff
+# ╠═ce2b73a6-2053-4337-b28d-909623ad3236
+# ╠═8951bb1b-f878-4b32-b900-6a38b93c9008
+# ╠═0b3783cf-8af7-42a9-9ad0-618aff3302ba
+# ╠═d437b7ee-a62e-4270-a7b1-193aaf560869
+# ╠═b2681cbd-64e7-40df-87ad-24be0adbe042
+# ╠═e8f82bc4-a269-43b2-a40a-12c7304b2d02
+# ╠═6249f8ce-dc83-4662-821c-7470639bb8e8
+# ╠═a6dcb927-e35b-44af-ae70-0241a8c6a0e8
+# ╠═6cd37256-5781-46e7-b67e-8724ab64edcf
+# ╠═f69c1192-7bd3-4d17-b9dd-ec634ef1ea29
+# ╠═4350e7f7-824d-4eba-9a0c-0fdcf80d5431
+# ╠═8464be7f-b0a8-403c-af1d-8009617c56a8
+# ╠═eed29dd7-feb4-4233-b118-234ed0c704f8
+# ╠═80270ef2-e711-4756-a639-0fd352f034e5
+# ╠═293b01e2-82c5-4bb7-a3bd-9c126e7d3b30
+# ╠═1b4a755f-f6e5-4097-8bc2-05dd4a2d7642
+# ╠═26342aab-9798-45fa-9700-603f66c7449a
+# ╠═af339667-3f7e-4e72-8a8a-bf87787db0e9
+# ╠═36aad8d4-e241-4294-a362-22f11947bed7
+# ╠═d1a19c6f-2b8b-4600-9fd5-fdff94d8530b
+# ╠═5225be03-34ac-4e5f-b1e8-fb91ff20f690
+# ╠═039bd76e-37c5-4f90-a7dd-01f3f95d6ab9
+# ╠═c91c7f93-78e9-463b-9d15-419c564d6983
+# ╠═12bc33af-eba4-4eae-87e3-e95bace47c3d
+# ╠═a2fecfe2-4d42-47f6-b6ff-a185a0601945
+# ╠═6d8c0302-f26d-40fc-a858-c5093b82ca10
+# ╠═c13d78d6-d78a-4cc8-89cf-dd8cc1dc5779
+# ╠═db5753e5-a105-4d49-a6ab-7e94a5e097b3
+# ╠═a41cf01b-14ff-48c4-8927-9020d9a90cf9
+# ╠═af4f6c48-d7e3-445e-a3d1-25634cf75e92
+# ╠═5e65228b-01ae-44a9-919f-fe4bf1dac4a2
+# ╠═de0f00f3-09f9-49ee-bfca-4ffc65cd4956
+# ╠═4ca481f3-767e-4c20-9bda-51defd812a7e
+# ╠═c5c7105a-36e5-47c8-a94f-ab10a8a7a040
+# ╠═18e668df-3434-44b5-897d-40de1792dc46
+# ╠═8d5a843b-7afa-4dc5-87f4-a0ee32a79838
+# ╠═c9678e4d-b355-494b-9105-4e115cf997d4
+# ╠═40010f9a-7075-412b-b25b-4d40a6490253
+# ╠═e3ad1ef7-0e5b-40f2-8c16-4eb6908207d7
+# ╠═572c3c0f-46c0-4156-9e8c-5c487721fe76
+# ╠═72f9f8c9-8c5b-4127-829e-a1496500f27f
+# ╠═e305544f-5bf5-4cb6-b694-2f502c0ba3d1
+# ╠═1dbba344-5e08-4c44-b153-398101334e65
+# ╠═d3ac9b97-27b7-4de2-9139-fa80105a1951
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

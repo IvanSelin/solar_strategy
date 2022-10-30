@@ -281,3 +281,69 @@ function minimize_hierarchical(chunks_amount::Int64, initial_speed::Number, trac
     # TODO: continue
     
 end
+
+function solar_trip_division(speed, track, divide_at)
+	# input_speed = set_speeds(speed, track, divide_at)
+	# return solar_trip_cost(convert_kmh_to_ms(input_speed), track)
+    return solar_trip_cost(convert_kmh_to_ms(speed), track)
+end
+
+function set_speeds(speeds, track, divide_at)
+	output_speeds = fill(last(speeds), size(track.distance, 1))
+	for i=1:size(divide_at,1)-1
+		if i==1
+			output_speeds[1:divide_at[1]] .= speeds[1]
+		else
+			output_speeds[divide_at[i]:divide_at[i+1]] .= speeds[i]
+		end
+	end
+	return output_speeds
+end
+
+function recursive_optimization(speed, track, track_raw, divide_at, iteration)
+    track = flatten_track(track_raw, divide_at);
+	@time result = optimize(x -> solar_trip_division(x, track, divide_at), speed)
+
+	minimized = Optim.minimizer(result)
+	println(minimized)
+	inputs = convert_kmh_to_ms(minimized)
+	speed_vec = set_speeds(inputs, track_raw, divide_at)
+	power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div = solar_trip_calculation(speed_vec, track_raw)
+
+	println(last(time_s_div))
+
+	zero_index_div = argmin(abs.(energy_in_system_div))
+
+	new_divide = copy(divide_at)
+	push!(new_divide, zero_index_div)
+	sort!(new_divide)
+	new_divide_index = findfirst(x -> x==zero_index_div, new_divide)
+	println(new_divide)
+
+	new_track = flatten_track(track_raw, new_divide)
+
+	if iteration == run_until
+		return power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div;
+	end
+	
+	new_speed = copy(minimized)
+	insert!(new_speed, new_divide_index, 40.)
+	recursive_optimization(new_speed, new_track, track_raw, new_divide, iteration + 1, run_until)
+	
+	return power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div;
+end
+
+function flatten_track(track_raw, divide_indexes)
+	if size(divide_indexes,1) == 0
+		return track_raw
+	end
+	track = track_raw[divide_indexes,:]
+	distance = copy(track.distance)
+	altitude = copy(track.altitude)
+	pushfirst!(distance,track_raw[1,:distance])
+	pushfirst!(altitude,track_raw[1,:altitude])
+	track.diff_distance = diff(distance)
+	track.diff_altitude = diff(altitude)
+	track.slope = atand.(track.diff_altitude ./ track.diff_distance)
+	return track
+end
