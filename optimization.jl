@@ -364,6 +364,76 @@ end
 # ╔═╡ 655ff7ad-d7fc-47d4-bd22-0bb2c4b63cd5
 @md_str " # Towards the recursive optimization! "
 
+# ╔═╡ 09b71f55-2e31-4a7f-a6ff-f4a3ff38e4b9
+function calculate_split_indexes(size_to_distribute, chunks_amount)
+	# TODO: split more evenly, if size%chunks < size/chunks/2 then use floor, otherwise - ceiling
+	chunks_indexes = zeros(Int, chunks_amount)
+	if size_to_distribute % chunks_amount < size_to_distribute / chunks_amount / 2
+		step_size = floor(Int, size_to_distribute / chunks_amount)
+	else
+		step_size = ceil(Int, size_to_distribute / chunks_amount)
+	end
+	#div_ceiling = ceil(Int, size_to_distribute / chunks_amount)
+	accumulator = 0
+	for i=1:chunks_amount - 1
+		accumulator += step_size
+		chunks_indexes[i] = accumulator
+	end
+	chunks_indexes[chunks_amount] = size_to_distribute
+	return chunks_indexes
+end
+
+# ╔═╡ a5551c27-3f5c-4ea3-8c4e-9d4873c88751
+function split_track_by_indexes(track, indexes)
+	current_index = 1
+	results = []
+	for index in indexes
+		# println("from $(current_index) to $(index)")
+		push!(results, track[current_index:index, :])
+		current_index = index + 1
+	end
+	return results
+end
+
+# ╔═╡ 141378f3-9b42-4b83-a87c-44b3ba3928aa
+function hierarchical_optimization(speed, track, track_raw, chunks_amount, energy_start, energy_finish, iteration)
+	# 0. if track is non-divisible on chunks_amount, then return (array of speeds)
+	# 1. split the whole track in chunks (chunks division and speed propagation with same logic - divide at the same idexes)
+	# 2. optimize it on chunks (initial speed = speed, use it for all chunks)
+	# 3. save chunks_amount input speeds
+	# 4. simulate it again to get energy levels at start and finish of each chunk
+	# 5. go through resulting speeds and track chunks to optimize them (entering recursion)
+
+	# 0 - exit condition, stub for now
+	# if iteration == 5
+	# 	return speed
+	# end
+
+	# track is non-divisible, if its size is <= 1, return speed
+	if size(track.distance, 1) <= 1
+		return speed
+	end
+
+	# 1 - splitting the track
+	# determine split indexes
+	track_size = size(track.distance, 1)
+	split_indexes = calculate_split_indexes(track_size, chunks_amount)
+	# actually split the track
+	tracks = split_track_by_indexes(track, split_indexes)
+
+	# 2 - set up optimization itself
+	
+end
+
+# ╔═╡ 9a6f42a2-7a9f-41ef-8ff2-b325a5971e42
+size(track.distance, 1)
+
+# ╔═╡ 9384af58-d6ad-4abd-8df0-f4e0d5649e68
+ind = calculate_split_indexes(size(track.distance, 1), 9)
+
+# ╔═╡ 7ed6b68e-2cb3-4bd0-8c98-55ee42349d93
+tracks = split_track_by_indexes(track, ind)
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -1628,5 +1698,11 @@ version = "1.4.1+0"
 # ╠═96a68dec-d781-4fd6-8146-649434f60919
 # ╠═77d82639-dd61-46e0-b6a0-7c7400a10453
 # ╠═655ff7ad-d7fc-47d4-bd22-0bb2c4b63cd5
+# ╠═09b71f55-2e31-4a7f-a6ff-f4a3ff38e4b9
+# ╠═a5551c27-3f5c-4ea3-8c4e-9d4873c88751
+# ╠═141378f3-9b42-4b83-a87c-44b3ba3928aa
+# ╠═9a6f42a2-7a9f-41ef-8ff2-b325a5971e42
+# ╠═9384af58-d6ad-4abd-8df0-f4e0d5649e68
+# ╠═7ed6b68e-2cb3-4bd0-8c98-55ee42349d93
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
