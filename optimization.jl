@@ -34,11 +34,11 @@ end
 
 # ╔═╡ 7cc7b885-f841-4bcc-a82c-2f947c74de22
 begin
-	include("energy_draw.jl")
-	include("time.jl")
-	include("solar_radiation.jl")
-	include("track.jl")
-	include("utils.jl")
+	include("src//energy_draw.jl")
+	include("src//time.jl")
+	include("src//solar_radiation.jl")
+	include("src//track.jl")
+	include("src//utils.jl")
 end
 
 # ╔═╡ a7781b82-48db-4954-8e79-ab8e7864ed69
@@ -47,7 +47,7 @@ md"""
 """
 
 # ╔═╡ 44f352a0-0c5b-41f6-a21d-56f10edae4c9
-track = get_track_data("../data/data_australia.csv")
+track = get_track_data("data/data_australia.csv")
 
 # ╔═╡ 9d915c29-314b-47f9-9e4c-898ebd28f88a
 # plotly(ticks=:native)
@@ -360,6 +360,9 @@ begin
 	plot!(twinx(), time.utc_time, speed_vector * 3.6, color=:red, ylabel="speed (km/h)", ylim=[0, 60], label="speed (km/h)", ymirror = true,
 	title = "Energy graph (time)")
 end
+
+# ╔═╡ 655ff7ad-d7fc-47d4-bd22-0bb2c4b63cd5
+@md_str " # Towards the recursive optimization! "
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1624,5 +1627,6 @@ version = "1.4.1+0"
 # ╠═de201868-7805-4f27-81b7-f4f8204eface
 # ╠═96a68dec-d781-4fd6-8146-649434f60919
 # ╠═77d82639-dd61-46e0-b6a0-7c7400a10453
+# ╠═655ff7ad-d7fc-47d4-bd22-0bb2c4b63cd5
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
