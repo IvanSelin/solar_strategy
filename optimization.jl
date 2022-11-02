@@ -58,6 +58,103 @@ plot(track.distance, track.altitude, title="Altitude (m)")
 # ╔═╡ 9f2624cc-398b-42d2-bf7f-527285af6dc3
 md""" # Defining the functions """
 
+# ╔═╡ c3d41246-37cb-45f6-ac98-f64d9158087a
+md""" # Playground """
+
+# ╔═╡ 4c91701c-f90e-48cf-bb9d-d925baa85667
+md""" ## Single speed graphs """
+
+# ╔═╡ 9977c5d5-4872-41d4-8e99-1e4034493e4d
+# speed in kmh
+@bind speed NumberField(0.0:0.1:100.0, default=40.0)
+#speed = 43.0;
+
+# ╔═╡ 54a5bf51-1723-4ce1-8f6b-1fd199c991b5
+md""" ## Optimization with different methods"""
+
+# ╔═╡ c7434aee-3089-4098-8c9d-2d13c9df5ee9
+@bind speed_chunks NumberField(0.0:0.1:100.0, default=40.0)
+
+# ╔═╡ 8794ae20-fe98-47ab-bd80-681c09edb7d1
+@bind number_of_chunks confirm(NumberField(1:50000, default=1))
+
+# ╔═╡ 7380a326-1e9e-437c-9cb7-3aa2b54b8ec5
+@bind lbfgs_m NumberField(1:50000, default=10)
+
+# ╔═╡ 596e51be-969e-4fe6-8170-22c1aac89aca
+md""" Selecting the line search and other parameters """
+
+# ╔═╡ eeb85fd3-6721-4e0f-aed9-73731960ac35
+# ls = LineSearches.HagerZhang()
+ls = LineSearches.BackTracking();
+
+# ╔═╡ 09bd67a1-a0f9-45f3-9839-2e9e592f01de
+iterations_num = 10000
+
+# ╔═╡ 655ff7ad-d7fc-47d4-bd22-0bb2c4b63cd5
+@md_str " # Towards the recursive optimization! "
+
+# ╔═╡ 09b71f55-2e31-4a7f-a6ff-f4a3ff38e4b9
+function calculate_split_indexes(size_to_distribute, chunks_amount)
+	if size_to_distribute <= chunks_amount
+		return collect(1:size_to_distribute)
+	end
+	# TODO: split more evenly, if size%chunks < size/chunks/2 then use floor, otherwise - ceiling
+	chunks_indexes = zeros(Int, chunks_amount)
+	# if size_to_distribute % chunks_amount < size_to_distribute / chunks_amount / 2
+		step_size = floor(Int, size_to_distribute / chunks_amount)
+	# else
+	# 	step_size = ceil(Int, size_to_distribute / chunks_amount)
+	# end
+	#div_ceiling = ceil(Int, size_to_distribute / chunks_amount)
+	accumulator = 0
+	for i=1:chunks_amount - 1
+		accumulator += step_size
+		chunks_indexes[i] = accumulator
+	end
+	chunks_indexes[chunks_amount] = size_to_distribute
+	return chunks_indexes
+end
+
+# ╔═╡ a5551c27-3f5c-4ea3-8c4e-9d4873c88751
+function split_track_by_indexes(track, indexes)
+	current_index = 1
+	results = []
+	for index in indexes
+		# println("from $(current_index) to $(index)")
+		push!(results, track[current_index:index, :])
+		current_index = index + 1
+	end
+	return results
+end
+
+# ╔═╡ b6a95a4d-6f5d-4fbc-87ed-622768e8d47a
+function travel_time_to_datetime(time_s, start_datetime)
+	daily_start_hour_time = 8
+    daily_finish_hour_time = 16
+
+    start_time_seconds = daily_start_hour_time * 60 * 60
+    finish_time_seconds = daily_finish_hour_time * 60 *60
+    seconds_in_a_day = 24 * 60 * 60
+
+    # adjust travel time so it happend only between daily start hour time and daily finish hour time
+    # TODO: think of in-place operations to reduce memory consumption
+    day_length = finish_time_seconds - start_time_seconds
+    day = time_s .÷ day_length .+ 1
+    time_s .+= start_time_seconds .* day .+
+    ( seconds_in_a_day .- finish_time_seconds) .* (day .- 1)
+
+    # create a DataFrame for time information
+    # adds seconds for 
+    return start_datetime .+ Dates.Millisecond.(round.(time_s .* 1000))
+end
+
+# ╔═╡ 294fa952-015d-4709-bb55-c17682ffe2fb
+function calculate_travel_time_datetime(speed_vector, track, start_datetime)
+    time_s = calculate_travel_time_seconds(speed_vector, track_df)
+	time_utc = travel_time_to_datetime(time_s, start_datetime)
+end
+
 # ╔═╡ 704c9c6a-8b13-4e82-92fd-edda72397320
 
 function solar_trip_calculation(input_speed, track, 
@@ -113,15 +210,6 @@ function solar_trip_cost(input_speed, track)
     return cost
 end
 
-# ╔═╡ 4e4c4794-aa95-49e9-961b-ed7c4bb81442
-
-function solar_trip_target_cost(input_speed::Vector{Float64}, target_energy::Float64, track,
-    start_energy::Float64, finish_energy::Float64)
-    power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(input_speed, track)
-    cost = last(time_s) + 10 * abs(last(energy_in_system) - target) + 100 * sum(input_speed[input_speed .< 0.0])
-    return cost
-end
-
 # ╔═╡ e80aee02-b99e-44c9-b503-9443c431b0e6
 
 # consider using Union for types for multiple dispatch
@@ -149,6 +237,43 @@ function solar_trip_chunks(speeds::Vector{<:Number}, track)
     speed_ms = convert_kmh_to_ms(speeds)
     speed_vector = propagate_speeds(speed_ms, track)
     return solar_trip_cost(speed_vector, track)
+end
+
+# ╔═╡ 3ca6f786-8add-4c46-b82a-30a570828d39
+function f(x)
+	return solar_trip_chunks(abs.(x), track)
+end
+
+# ╔═╡ e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
+d = OnceDifferentiable(f, fill(speed_chunks, number_of_chunks), autodiff = :forward)
+
+# ╔═╡ 5c9c006c-f814-4829-8c18-108546be870b
+td = TwiceDifferentiable(f, fill(speed_chunks, number_of_chunks), autodiff = :forward)
+
+# ╔═╡ 411e63ec-b83a-4e21-9535-5d0275381039
+#@time result_chunks = optimize(x -> solar_trip_chunks(x, track), fill(speed_chunks, number_of_chunks), iterations=iterations_num, LBFGS())
+
+# @time result_chunks = optimize(d, fill(speed_chunks, number_of_chunks), LBFGS(;m=lbfgs_m, linesearch = ls))
+
+@time result_chunks = optimize(td, fill(speed_chunks, number_of_chunks), Newton(; linesearch = ls),
+	Optim.Options(
+		x_tol = 1e-6,
+		f_tol = 1e-8,
+		g_tol = 1e-6
+	)
+)
+# change convergence criteria?
+
+# ╔═╡ 21634b70-7b3a-44b2-b629-01664ce81acf
+minimized_inputs_chunks = Optim.minimizer(result_chunks)
+
+# ╔═╡ 4e4c4794-aa95-49e9-961b-ed7c4bb81442
+
+function solar_trip_target_cost(input_speed::Vector{Float64}, target_energy::Float64, track,
+    start_energy::Float64, finish_energy::Float64)
+    power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(input_speed, track)
+    cost = last(time_s) + 10 * abs(last(energy_in_system) - target) + 100 * sum(input_speed[input_speed .< 0.0])
+    return cost
 end
 
 # ╔═╡ ca2f1ec3-4ed3-4b5d-bfcd-ab43de0d2abc
@@ -242,17 +367,6 @@ function minimize(speed::Vector{Float64}, track)
     show_results_wrapper(minimized_inputs, track);
 end
 
-# ╔═╡ c3d41246-37cb-45f6-ac98-f64d9158087a
-md""" # Playground """
-
-# ╔═╡ 4c91701c-f90e-48cf-bb9d-d925baa85667
-md""" ## Single speed graphs """
-
-# ╔═╡ 9977c5d5-4872-41d4-8e99-1e4034493e4d
-# speed in kmh
-@bind speed NumberField(0.0:0.1:100.0, default=40.0)
-#speed = 43.0;
-
 # ╔═╡ 422a0d48-40fe-41eb-b214-e21d009c00b2
 begin
 	input_speeds = convert_single_kmh_speed_to_ms_vector(speed, length(track.distance))
@@ -274,56 +388,6 @@ plot(time.utc_time, [power_use solar_power energy_in_system zeros(size(track,1))
 	    color=[:blue :green :cyan :red]
 	    # ,ylims=[-10000, 40000]
 	    )
-
-# ╔═╡ 54a5bf51-1723-4ce1-8f6b-1fd199c991b5
-md""" ## Optimization with different methods"""
-
-# ╔═╡ c7434aee-3089-4098-8c9d-2d13c9df5ee9
-@bind speed_chunks NumberField(0.0:0.1:100.0, default=40.0)
-
-# ╔═╡ 8794ae20-fe98-47ab-bd80-681c09edb7d1
-@bind number_of_chunks confirm(NumberField(1:50000, default=1))
-
-# ╔═╡ 7380a326-1e9e-437c-9cb7-3aa2b54b8ec5
-@bind lbfgs_m NumberField(1:50000, default=10)
-
-# ╔═╡ 596e51be-969e-4fe6-8170-22c1aac89aca
-md""" Selecting the line search and other parameters """
-
-# ╔═╡ eeb85fd3-6721-4e0f-aed9-73731960ac35
-# ls = LineSearches.HagerZhang()
-ls = LineSearches.BackTracking();
-
-# ╔═╡ 09bd67a1-a0f9-45f3-9839-2e9e592f01de
-iterations_num = 10000
-
-# ╔═╡ 3ca6f786-8add-4c46-b82a-30a570828d39
-function f(x)
-	return solar_trip_chunks(abs.(x), track)
-end
-
-# ╔═╡ e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
-d = OnceDifferentiable(f, fill(speed_chunks, number_of_chunks), autodiff = :forward)
-
-# ╔═╡ 5c9c006c-f814-4829-8c18-108546be870b
-td = TwiceDifferentiable(f, fill(speed_chunks, number_of_chunks), autodiff = :forward)
-
-# ╔═╡ 411e63ec-b83a-4e21-9535-5d0275381039
-#@time result_chunks = optimize(x -> solar_trip_chunks(x, track), fill(speed_chunks, number_of_chunks), iterations=iterations_num, LBFGS())
-
-# @time result_chunks = optimize(d, fill(speed_chunks, number_of_chunks), LBFGS(;m=lbfgs_m, linesearch = ls))
-
-@time result_chunks = optimize(td, fill(speed_chunks, number_of_chunks), Newton(; linesearch = ls),
-	Optim.Options(
-		x_tol = 1e-6,
-		f_tol = 1e-8,
-		g_tol = 1e-6
-	)
-)
-# change convergence criteria?
-
-# ╔═╡ 21634b70-7b3a-44b2-b629-01664ce81acf
-minimized_inputs_chunks = Optim.minimizer(result_chunks)
 
 # ╔═╡ 5f3a7fcf-e261-4f64-a94c-57a12093e353
 begin
@@ -361,42 +425,80 @@ begin
 	title = "Energy graph (time)")
 end
 
-# ╔═╡ 655ff7ad-d7fc-47d4-bd22-0bb2c4b63cd5
-@md_str " # Towards the recursive optimization! "
+# ╔═╡ 7fc0e776-c9cf-4736-b113-81c31ada99c9
+function solar_trip_calculation_bounds(input_speed, track, start_datetime,
+    start_energy::Float64=5100.)
+    # input speed in m/s
 
-# ╔═╡ 09b71f55-2e31-4a7f-a6ff-f4a3ff38e4b9
-function calculate_split_indexes(size_to_distribute, chunks_amount)
-	# TODO: split more evenly, if size%chunks < size/chunks/2 then use floor, otherwise - ceiling
-	chunks_indexes = zeros(Int, chunks_amount)
-	if size_to_distribute % chunks_amount < size_to_distribute / chunks_amount / 2
-		step_size = floor(Int, size_to_distribute / chunks_amount)
-	else
-		step_size = ceil(Int, size_to_distribute / chunks_amount)
-	end
-	#div_ceiling = ceil(Int, size_to_distribute / chunks_amount)
-	accumulator = 0
-	for i=1:chunks_amount - 1
-		accumulator += step_size
-		chunks_indexes[i] = accumulator
-	end
-	chunks_indexes[chunks_amount] = size_to_distribute
-	return chunks_indexes
+    # calculating time needed to spend to travel across distance
+    time_df = calculate_travel_time_datetime(input_speed, track, start_datetime)
+
+    #### calculcations
+    # mechanical calculations are now in separate file
+    mechanical_power = mechanical_power_calculation(input_speed, track.slope, track.diff_distance)
+
+    # electical losses
+    electrical_power = electrical_power_calculation(track.diff_distance, input_speed)
+    # converting mechanical work to elecctrical power and then power use
+    # power_use = calculate_power_use(mechanical_power, electrical_power)
+    power_use_accumulated_wt_h = calculate_power_use_accumulated(mechanical_power, electrical_power)
+
+    # get solar energy income
+    solar_power = solar_power_income(time_df, track, input_speed)
+    solar_power_accumulated = calculate_power_income_accumulated(solar_power)
+    # TODO: night charging with additional solar panels
+
+    # #### plotting
+    # plot(track.distance, power_use, title="Power spent on toute")
+    # plot(track.distance, solar_power, title="Power gained on the route")
+
+    # plot(track.distance, power_use_accumulated_wt_h, title="Power spent on the route, accumulated")
+    # plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
+
+    # plot(track.distance, solar_power_accumulated - power_use_accumulated_wt_h, title="Power balance w/o battery")
+    battery_capacity = 5100 # wt, to be used later for physical constraints
+    energy_in_system = start_energy .+ solar_power_accumulated .- power_use_accumulated_wt_h
+    # plot(track.distance, energy_in_system, title="Power balance with battery")
+
+    # TODO: calculate night charging - do it later since it is not critical as of right now
+    # TODO: block overcharging - cost function?
+    # at first do the black-box optimization, then gradient one
+    # will start with Optim
+    # TODO: find an optimal single speed - make a loss function and start optimization process
+    time_seconds = calculate_travel_time_seconds(input_speed, track)
+    # TODO: find an optimal speed vector
+    return power_use_accumulated_wt_h, solar_power_accumulated, energy_in_system, time_df, time_seconds
 end
 
-# ╔═╡ a5551c27-3f5c-4ea3-8c4e-9d4873c88751
-function split_track_by_indexes(track, indexes)
-	current_index = 1
-	results = []
-	for index in indexes
-		# println("from $(current_index) to $(index)")
-		push!(results, track[current_index:index, :])
-		current_index = index + 1
+# ╔═╡ 2b9b2782-09d8-4cfa-99fa-9c2e921efe36
+function solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
+	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(speed_vector, track, start_datetime, start_energy)
+	cost = last(time_s) + 10 * abs(last(energy_in_system) - finish_energy) + 100 * sum(speed_vector[speed_vector .< 0.0])
+	return cost
+end
+
+# ╔═╡ 119c4024-6e50-4d20-a0b2-734ec9bf515d
+function set_speeds(speeds, track, divide_at)
+	output_speeds = fill(last(speeds), size(track.distance, 1))
+	for i=1:size(divide_at,1)-1
+		if i==1
+			output_speeds[1:divide_at[1]] .= speeds[1]
+		else
+			output_speeds[divide_at[i-1]:divide_at[i]] .= speeds[i]
+		end
 	end
-	return results
+	return output_speeds
+end
+
+# ╔═╡ 360727dd-c241-4609-85fb-5f40553c1d2b
+function solar_partial_trip_wrapper(speeds, track, indexes, start_energy, finish_energy, start_datetime)
+	speed_ms = convert_kmh_to_ms(speeds)
+	speed_vector = set_speeds(speeds_ms, track, indexes)
+	return solar_partial_trip_cost(abs.(speeds), track, start_energy, finish_energy, start_datetime)
 end
 
 # ╔═╡ 141378f3-9b42-4b83-a87c-44b3ba3928aa
-function hierarchical_optimization(speed, track, track_raw, chunks_amount, energy_start, energy_finish, iteration)
+function hierarchical_optimization(speed, track, chunks_amount, start_energy, finish_energy, start_datetime, iteration)
 	# 0. if track is non-divisible on chunks_amount, then return (array of speeds)
 	# 1. split the whole track in chunks (chunks division and speed propagation with same logic - divide at the same idexes)
 	# 2. optimize it on chunks (initial speed = speed, use it for all chunks)
@@ -410,7 +512,7 @@ function hierarchical_optimization(speed, track, track_raw, chunks_amount, energ
 	# end
 
 	# track is non-divisible, if its size is <= 1, return speed
-	if size(track.distance, 1) <= 1
+	if size(track.distance, 1) == 1
 		return speed
 	end
 
@@ -422,17 +524,66 @@ function hierarchical_optimization(speed, track, track_raw, chunks_amount, energ
 	tracks = split_track_by_indexes(track, split_indexes)
 
 	# 2 - set up optimization itself
+	function f(speed)
+		return solar_partial_trip_wrapper(abs.(speed), track, split_indexes, start_energy, finish_energy, start_datetime)
+	end
+	td = TwiceDifferentiable(f, fill(speed, chunks_amount); autodiff = :forward)
 	
+	@time result = optimize(td, fill(start_speed, chunks_amount),
+	    Newton(; linesearch = line_search),
+	    Optim.Options(
+	        x_tol = 1e-6,
+	        f_tol = 1e-8,
+	        g_tol = 1e-6
+	    )
+	)
+
+	# 3 - save optimized speeds
+	minimized_speeds = Optim.minimizer(result)
+
+	# 4 - sumulate again to obtain energies and times around split indexes
+	minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds)
+	minimized_speed_vector = set_speeds(minimized_speeds_ms, track, indexes)
+	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(minimized_speed_vector, track, start_datetime, start_energy)
+	split_energies = energy_in_system[split_indexes]
+	pushfirst!(split_energies, start_energy)
+	split_times = time[split_indexes]
+	pushfirst!(split_times, start_datetime)
+	
+	# 5 - go though each track piece and enter function again
+	# hierarchical_optimization(minimized_speeds[1], tracks[1], chunks_amount, start_energy, split_energies[1], start_datetime, iteration + 1)
+	result_speeds = []
+	for i=1:chunks_amount
+		result_speeds_chunk = hierarchical_optimization(minimized_speeds[i], tracks[i], chunks_amount, split_energies[i], split_energies[i+1], split_times[i], iteration + 1 )
+		append!(result_speeds, result_speeds_chunk)
+	end
+
+	return result_speeds
 end
 
 # ╔═╡ 9a6f42a2-7a9f-41ef-8ff2-b325a5971e42
 size(track.distance, 1)
 
+# ╔═╡ 516e68a9-fb52-475c-b925-bba877341499
+calculate_split_indexes(1,1)
+
 # ╔═╡ 9384af58-d6ad-4abd-8df0-f4e0d5649e68
-ind = calculate_split_indexes(size(track.distance, 1), 9)
+ind = calculate_split_indexes(size(track.distance, 1), 3)
 
 # ╔═╡ 7ed6b68e-2cb3-4bd0-8c98-55ee42349d93
 tracks = split_track_by_indexes(track, ind)
+
+# ╔═╡ f0fdeb9c-8791-4119-acc6-a1ec9094c590
+set_speeds([1,2,3,4,5], track, ind)
+
+# ╔═╡ a6c2c405-08e9-43ba-843a-d4bd85ded0c8
+plot(set_speeds([1,2,3,4,5], track, ind))
+
+# ╔═╡ 9db98630-5796-4763-92e8-d04a4ad3845a
+tracks[2].distance
+
+# ╔═╡ e9e72767-4fd3-4e9f-97bc-01c1f35ec916
+# TODO: test hierarchical_optimization(speed, track, chunks_amount, start_energy, finish_energy, start_datetime, iteration) on some small_track
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1663,7 +1814,7 @@ version = "1.4.1+0"
 # ╠═9d915c29-314b-47f9-9e4c-898ebd28f88a
 # ╠═92e47c4c-2e70-4850-af86-a997fcce5587
 # ╟─9f2624cc-398b-42d2-bf7f-527285af6dc3
-# ╟─704c9c6a-8b13-4e82-92fd-edda72397320
+# ╠═704c9c6a-8b13-4e82-92fd-edda72397320
 # ╟─afe9cc57-f93c-4780-a592-b3d2609162f2
 # ╟─4e4c4794-aa95-49e9-961b-ed7c4bb81442
 # ╟─e80aee02-b99e-44c9-b503-9443c431b0e6
@@ -1700,9 +1851,20 @@ version = "1.4.1+0"
 # ╠═655ff7ad-d7fc-47d4-bd22-0bb2c4b63cd5
 # ╠═09b71f55-2e31-4a7f-a6ff-f4a3ff38e4b9
 # ╠═a5551c27-3f5c-4ea3-8c4e-9d4873c88751
+# ╠═b6a95a4d-6f5d-4fbc-87ed-622768e8d47a
+# ╠═294fa952-015d-4709-bb55-c17682ffe2fb
+# ╠═7fc0e776-c9cf-4736-b113-81c31ada99c9
+# ╠═2b9b2782-09d8-4cfa-99fa-9c2e921efe36
+# ╠═119c4024-6e50-4d20-a0b2-734ec9bf515d
+# ╠═360727dd-c241-4609-85fb-5f40553c1d2b
 # ╠═141378f3-9b42-4b83-a87c-44b3ba3928aa
 # ╠═9a6f42a2-7a9f-41ef-8ff2-b325a5971e42
+# ╠═516e68a9-fb52-475c-b925-bba877341499
 # ╠═9384af58-d6ad-4abd-8df0-f4e0d5649e68
 # ╠═7ed6b68e-2cb3-4bd0-8c98-55ee42349d93
+# ╠═f0fdeb9c-8791-4119-acc6-a1ec9094c590
+# ╠═a6c2c405-08e9-43ba-843a-d4bd85ded0c8
+# ╠═9db98630-5796-4763-92e8-d04a4ad3845a
+# ╠═e9e72767-4fd3-4e9f-97bc-01c1f35ec916
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
