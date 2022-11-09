@@ -479,7 +479,10 @@ end
 # ╔═╡ 2b9b2782-09d8-4cfa-99fa-9c2e921efe36
 function solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(speed_vector, track, start_datetime, start_energy)
-	cost = last(time_s) + 10 * abs(last(energy_in_system) - finish_energy) + 100 * sum(speed_vector[speed_vector .< 0.0])
+	cost = last(time_s) + 100 * abs(last(energy_in_system) - finish_energy)
+	# + 10 * abs(minimum(energy_in_system) - finish_energy)
+	+ 100 * sum(abs.(speed_vector[speed_vector .< 0.0]))
+	# + 100 * sum(speed_vector[speed_vector .> 200.0]) + 100 * sum(energy_in_system[energy_in_system .< 0.0])
 	return cost
 end
 
@@ -500,7 +503,7 @@ end
 function solar_partial_trip_wrapper(speeds, track, indexes, start_energy, finish_energy, start_datetime)
 	speeds_ms = convert_kmh_to_ms(speeds)
 	speed_vector = set_speeds(speeds_ms, track, indexes)
-	return solar_partial_trip_cost(abs.(speed_vector), track, start_energy, finish_energy, start_datetime)
+	return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 end
 
 # ╔═╡ 141378f3-9b42-4b83-a87c-44b3ba3928aa
@@ -550,7 +553,7 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 	)
 
 	# 3 - save optimized speeds
-	minimized_speeds = Optim.minimizer(result)
+	minimized_speeds = abs.(Optim.minimizer(result))
 
 	# 4 - sumulate again to obtain energies and times around split indexes
 	minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds)
@@ -609,10 +612,20 @@ md""" ## Experiment set-up
 @md_str " ### Short track "
 
 # ╔═╡ e75a6ae6-a09c-4c21-a421-d0124dd355c6
-track_size = 50
+track_size = 13148
+
+# ╔═╡ 64ec134c-e5cf-4c97-869f-d39b91e2599e
+size(keep_extremum_only_peaks(track),1)
 
 # ╔═╡ ca583c57-d93c-4bb3-8cd3-b92184226a5f
-short_track = track[1:track_size, :]
+# short_track = track[1:track_size, :]
+short_track = keep_extremum_only_peaks(track)[1:track_size, :]
+
+# ╔═╡ 19d51114-43d4-4c38-9a3d-55ec982f7c56
+distance_perc = last(short_track).distance / last(track.distance)
+
+# ╔═╡ 2de331ba-bd7d-49bd-80a2-60270c769a7c
+proposed_start_energy = distance_perc * 5100
 
 # ╔═╡ 724deff0-8265-4ca9-aa3e-2dfdd6f4d293
 @md_str " ### Regular optimization on short track (w/o propagation)"
@@ -621,7 +634,7 @@ short_track = track[1:track_size, :]
 function solar_trip_cost_energy(input_speed, track, start_energy)
 	# @debug "func solar_trip_cost_energy, speeds size is $(size(input_speed, 1)), track size is $(size(track.distance, 1))"
     power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation(input_speed, track, start_energy)
-    cost = last(time_s) + 10 * abs(minimum(energy_in_system)) + 100 * sum(input_speed[input_speed .< 0.0])
+    cost = last(time_s) + 10 * abs(minimum(energy_in_system)) + 100 * sum(abs.(input_speed[input_speed .< 0.0])) + 10 * abs(last(energy_in_system))
     return cost
 end
 
@@ -635,7 +648,8 @@ function solar_trip_chunks_energy(speeds, track, start_energy)
 end
 
 # ╔═╡ 56f144c3-43ed-46d5-9e55-fd800bd24e9e
-start_energy_short = 50.0 # W*h
+# start_energy_short = 150.0 # W*h
+start_energy_short = proposed_start_energy
 
 # ╔═╡ 7699d86d-4494-494a-b367-7c3f13fc0022
 initial_speed = 40.0
@@ -655,13 +669,13 @@ f_short(fill(initial_speed, track_size))
 td_short = TwiceDifferentiable(f_short, fill(initial_speed, track_size), autodiff = :forward)
 
 # ╔═╡ f6ed6270-5871-4dec-b2a3-5fa78caff34b
-@time result_short = optimize(td_short, fill(initial_speed, track_size), Newton(; linesearch = ls),
-	Optim.Options(
-		x_tol = 1e-6,
-		f_tol = 1e-8,
-		g_tol = 1e-6
-	)
-)
+# @time result_short = optimize(td_short, fill(initial_speed, track_size), Newton(; linesearch = ls),
+# 	Optim.Options(
+# 		x_tol = 1e-6,
+# 		f_tol = 1e-8,
+# 		g_tol = 1e-6
+# 	)
+# )
 
 # ╔═╡ 8d2d34de-64db-49a8-b874-cb5af3bcf6cd
 minimized_inputs_short = Optim.minimizer(result_short)
@@ -700,7 +714,7 @@ start_datetime_hierarchical = DateTime(2022, 7, 1, 0, 0, 0)
 
 # ╔═╡ b55c819b-f312-4078-b751-cf443355be19
 begin
-	inputs_ms_hier = convert_kmh_to_ms(result_hierarchical)
+	inputs_ms_hier = abs.(convert_kmh_to_ms(result_hierarchical))
 	power_use_hier, solar_power_hier, energy_in_system_hier, time_hier, time_s_hier = solar_trip_calculation(inputs_ms_hier, short_track, start_energy_short)
 	last(time_s_hier)
 end
@@ -708,7 +722,7 @@ end
 # ╔═╡ 3642f56d-ac97-435a-b446-68eb7814b03c
 begin
 	plot(short_track.distance, short_track.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
-	plot!(twinx(), short_track.distance, result_hierarchical, color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
+	plot!(twinx(), short_track.distance, abs.(result_hierarchical), color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
 end
 
 # ╔═╡ db7cc403-40ba-47d3-b27b-2a5913633ae5
@@ -722,6 +736,15 @@ plot(short_track.distance, [power_use_hier solar_power_hier energy_in_system_hie
 @md_str " ### Comparing the results "
 
 # ╔═╡ e983aeb2-38c2-4bc4-af61-8af08f2347f5
+# TODO: make a wrapper function for calling experiments with different track size and chunks amount. And which will also diplay plots
+
+# ╔═╡ 3c7d8d1d-f975-4743-99ca-263ac269fcab
+# TODO: somehow restrict huge speed changes
+
+# ╔═╡ 97bbd950-40f6-4026-afc0-eecef2d0c784
+# TODO: run hierarchical optim line-by-line
+
+# ╔═╡ 16d51785-7cc0-4943-ba5a-0f0241315cfd
 
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2009,7 +2032,10 @@ version = "1.4.1+0"
 # ╠═c1c47be6-b0a4-41bf-a284-26f193792748
 # ╠═eb193e5d-65ba-46b1-be15-5c399abad44b
 # ╠═e75a6ae6-a09c-4c21-a421-d0124dd355c6
+# ╠═64ec134c-e5cf-4c97-869f-d39b91e2599e
 # ╠═ca583c57-d93c-4bb3-8cd3-b92184226a5f
+# ╠═19d51114-43d4-4c38-9a3d-55ec982f7c56
+# ╠═2de331ba-bd7d-49bd-80a2-60270c769a7c
 # ╠═724deff0-8265-4ca9-aa3e-2dfdd6f4d293
 # ╠═99a41fe8-cc03-49fe-a39f-c27070fda62e
 # ╠═96ee2227-0386-4a86-93ad-fa41dcdbf615
@@ -2021,9 +2047,9 @@ version = "1.4.1+0"
 # ╠═87b00642-3d8a-4722-bb7b-b9ff12a26d8f
 # ╠═f6ed6270-5871-4dec-b2a3-5fa78caff34b
 # ╠═8d2d34de-64db-49a8-b874-cb5af3bcf6cd
-# ╠═79afe017-7206-4c35-b5c1-84a6e4cc3517
-# ╠═c1a6f532-e95b-4fc3-b419-255038ee3589
-# ╠═32bad172-97e7-485e-b64a-3c139400b471
+# ╟─79afe017-7206-4c35-b5c1-84a6e4cc3517
+# ╟─c1a6f532-e95b-4fc3-b419-255038ee3589
+# ╟─32bad172-97e7-485e-b64a-3c139400b471
 # ╠═100ab330-4b6c-4033-92ee-9d19b2f7d2e4
 # ╠═cc75dbac-9f9c-4465-a08b-e543d82021fd
 # ╠═0c127ac8-812e-4a99-9e0e-32b3fd316c26
@@ -2033,5 +2059,8 @@ version = "1.4.1+0"
 # ╠═db7cc403-40ba-47d3-b27b-2a5913633ae5
 # ╠═39b4c2a0-fb33-4820-87f3-fa575ebb4e30
 # ╠═e983aeb2-38c2-4bc4-af61-8af08f2347f5
+# ╠═3c7d8d1d-f975-4743-99ca-263ac269fcab
+# ╠═97bbd950-40f6-4026-afc0-eecef2d0c784
+# ╠═16d51785-7cc0-4943-ba5a-0f0241315cfd
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
