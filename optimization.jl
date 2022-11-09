@@ -745,7 +745,7 @@ plot(short_track.distance, [power_use_hier solar_power_hier energy_in_system_hie
 # TODO: run hierarchical optim line-by-line
 
 # ╔═╡ 16d51785-7cc0-4943-ba5a-0f0241315cfd
-
+# TODO: add penalty for big speed difference
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
