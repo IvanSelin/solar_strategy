@@ -34,8 +34,12 @@ function travel_time_to_real_time(time_s)
 end
 
 function travel_time_to_datetime(time_s)
-    start_datetime = DateTime(2022,7,1,0,0,0)
-    daily_start_hour_time = 8
+    return travel_time_to_datetime(time_s, DateTime(2022,7,1,0,0,0))
+    # TODO: make use of daily_start_hour_time and adjust millis for that
+end
+
+function travel_time_to_datetime(time_s, start_datetime)
+	daily_start_hour_time = 8
     daily_finish_hour_time = 16
 
     start_time_seconds = daily_start_hour_time * 60 * 60
@@ -52,8 +56,6 @@ function travel_time_to_datetime(time_s)
     # create a DataFrame for time information
     # adds seconds for 
     return start_datetime .+ Dates.Millisecond.(round.(time_s .* 1000))
-
-    # TODO: make use of daily_start_hour_time and adjust millis for that
 end
 
 function generate_year_time_dataframe(time_step_millis::Int64)
@@ -84,4 +86,10 @@ function calculate_travel_time_seconds(speed_vector, track_df)
     time_s_intervals = track_df.diff_distance ./ speed_vector
     # base time, seconds driven from start of the race
     return cumsum(time_s_intervals)
+end
+
+function calculate_travel_time_datetime(speed_vector, track, start_datetime)
+    time_s = calculate_travel_time_seconds(speed_vector, track)
+	time_utc = travel_time_to_datetime(time_s, start_datetime)
+	return DataFrame(utc_time=time_utc)
 end

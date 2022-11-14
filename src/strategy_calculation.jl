@@ -349,3 +349,186 @@ function flatten_track(track_raw, divide_indexes)
 	track.slope = atand.(track.diff_altitude ./ track.diff_distance)
 	return track
 end
+
+function calculate_split_indexes(size_to_distribute, chunks_amount)
+	if size_to_distribute <= chunks_amount
+		return collect(1:size_to_distribute)
+	end
+	# TODO: split more evenly, if size%chunks < size/chunks/2 then use floor, otherwise - ceiling
+	chunks_indexes = zeros(Int, chunks_amount)
+	# if size_to_distribute % chunks_amount < size_to_distribute / chunks_amount / 2
+		step_size = floor(Int, size_to_distribute / chunks_amount)
+	# else
+	# 	step_size = ceil(Int, size_to_distribute / chunks_amount)
+	# end
+	#div_ceiling = ceil(Int, size_to_distribute / chunks_amount)
+	accumulator = 0
+	for i=1:chunks_amount - 1
+		accumulator += step_size
+		chunks_indexes[i] = accumulator
+	end
+	chunks_indexes[chunks_amount] = size_to_distribute
+	return chunks_indexes
+end
+
+function split_track_by_indexes(track, indexes)
+	current_index = 1
+	results = []
+	for index in indexes
+		# println("from $(current_index) to $(index)")
+		push!(results, track[current_index:index, :])
+		current_index = index + 1
+	end
+	return results
+end
+
+function solar_trip_calculation_bounds(input_speed, track, start_datetime,
+    start_energy::Float64=5100.)
+    # input speed in m/s
+	# @debug "func solar_trip_calculation_bounds input_speed size is $(size(input_speed, 1)), track size is $(size(track.distance, 1)))"
+
+    # calculating time needed to spend to travel across distance
+    time_df = calculate_travel_time_datetime(input_speed, track, start_datetime)
+
+    #### calculcations
+    # mechanical calculations are now in separate file
+    mechanical_power = mechanical_power_calculation(input_speed, track.slope, track.diff_distance)
+
+    # electical losses
+    electrical_power = electrical_power_calculation(track.diff_distance, input_speed)
+    # converting mechanical work to elecctrical power and then power use
+    # power_use = calculate_power_use(mechanical_power, electrical_power)
+    power_use_accumulated_wt_h = calculate_power_use_accumulated(mechanical_power, electrical_power)
+
+    # get solar energy income
+	# @debug "track size is $(size(track.latitude, 1))"
+    solar_power = solar_power_income(time_df, track, input_speed)
+    solar_power_accumulated = calculate_power_income_accumulated(solar_power)
+    # TODO: night charging with additional solar panels
+
+    # #### plotting
+    # plot(track.distance, power_use, title="Power spent on toute")
+    # plot(track.distance, solar_power, title="Power gained on the route")
+
+    # plot(track.distance, power_use_accumulated_wt_h, title="Power spent on the route, accumulated")
+    # plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
+
+    # plot(track.distance, solar_power_accumulated - power_use_accumulated_wt_h, title="Power balance w/o battery")
+    # battery_capacity = 5100 # wt, to be used later for physical constraints
+    energy_in_system = start_energy .+ solar_power_accumulated .- power_use_accumulated_wt_h
+    # plot(track.distance, energy_in_system, title="Power balance with battery")
+
+    # TODO: calculate night charging - do it later since it is not critical as of right now
+    # TODO: block overcharging - cost function?
+    # at first do the black-box optimization, then gradient one
+    # will start with Optim
+    # TODO: find an optimal single speed - make a loss function and start optimization process
+    time_seconds = calculate_travel_time_seconds(input_speed, track)
+    # TODO: find an optimal speed vector
+    return power_use_accumulated_wt_h, solar_power_accumulated, energy_in_system, time_df, time_seconds
+end
+
+function set_speeds(speeds, track, divide_at)
+	output_speeds = fill(last(speeds), size(track.distance, 1))
+	for i=1:size(divide_at,1)-1
+		if i==1
+			output_speeds[1:divide_at[1]] .= speeds[1]
+		else
+			output_speeds[divide_at[i-1]:divide_at[i]] .= speeds[i]
+		end
+	end
+	return output_speeds
+end
+
+function solar_partial_trip_wrapper(speeds, track, indexes, start_energy, finish_energy, start_datetime)
+	speeds_ms = convert_kmh_to_ms(speeds)
+	speed_vector = set_speeds(speeds_ms, track, indexes)
+    power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(speed_vector, track, start_datetime, start_energy)
+	cost = last(time_s) + size(track.distance,1) * 10000 * abs(last(energy_in_system) - finish_energy)
+    return cost
+end
+
+function hierarchical_optimization(speed, track, chunks_amount, start_energy, finish_energy, start_datetime, iteration)
+	# 0. if track is non-divisible on chunks_amount, then return (array of speeds)
+	# 1. split the whole track in chunks (chunks division and speed propagation with same logic - divide at the same idexes)
+	# 2. optimize it on chunks (initial speed = speed, use it for all chunks)
+	# 3. save chunks_amount input speeds
+	# 4. simulate it again to get energy levels at start and finish of each chunk
+	# 5. go through resulting speeds and track chunks to optimize them (entering recursion)
+
+	# 0 - exit condition, stub for now
+	# if iteration == 5
+	# 	return speed
+	# end
+
+	# @debug "func hierarchical_optimization speed is $(speed), track_size is $(size(track.distance, 1))"
+	
+	# track is non-divisible, if its size is <= 1, return speed
+	if size(track.distance, 1) == 1
+		return speed
+	end
+
+	# 1 - splitting the track
+	# determine split indexes
+	track_size = size(track.distance, 1)
+	split_indexes = calculate_split_indexes(track_size, chunks_amount)
+	# @debug "split indexes are $(split_indexes), chunks are $(chunks_amount)"
+	# actually split the track
+	tracks = split_track_by_indexes(track, split_indexes)
+	# for the case when there are less indexes than chunks
+	chunks_amount = size(split_indexes,1)
+
+	# 2 - set up optimization itself
+	function f(speed)
+		return solar_partial_trip_wrapper(abs.(speed), track, split_indexes, start_energy, finish_energy, start_datetime)
+	end
+	td = TwiceDifferentiable(f, fill(speed, chunks_amount); autodiff = :forward)
+	lower_bound = fill(0.0, chunks_amount)
+	upper_bound = fill(100.0, chunks_amount)
+	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+	line_search = LineSearches.BackTracking();
+	# result = optimize(td, fill(speed, chunks_amount),
+	    #Newton(; linesearch = line_search),
+	result = optimize(td, tdc, fill(speed, chunks_amount),
+		IPNewton(),
+	    Optim.Options(
+	        x_tol = 1e-10,
+	        f_tol = 1e-10,
+	        g_tol = 1e-10
+	    )
+	)
+
+	# 3 - save optimized speeds
+	minimized_speeds = abs.(Optim.minimizer(result))
+	
+	# 4 - sumulate again to obtain energies and times around split indexes
+	minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds)
+	minimized_speed_vector = set_speeds(minimized_speeds_ms, track, split_indexes)
+	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(minimized_speed_vector, track, start_datetime, start_energy)
+	println("iteration $(iteration), speed is $(speed) planned finish energy is $(finish_energy)")
+	println("time is $(last(time_s)), cost is $(f(minimized_speeds))")
+	println("minimized speeds are: $(minimized_speeds)")
+	println("simulated finish energy is $(last(energy_in_system))")
+	println("calculated cost is $( last(time_s) + 100 * abs(last(energy_in_system) - finish_energy) + 100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0])) )")
+	println("finish energy difference penalty is: $(100 * abs(last(energy_in_system) - finish_energy))")
+	println("energy less than 0. penalty is: $(100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])))")
+	println("speed less than 0. penalty is: $(100 * sum(abs.(speed_vector[speed_vector .< 0.0])))")
+	println("speed more than 100. penalty is: $(100 * sum(abs.(speed_vector[speed_vector .> 100.0 / 3.6])))")
+	split_energies = energy_in_system[split_indexes]
+	pushfirst!(split_energies, start_energy)
+	split_times = time[split_indexes, :utc_time]
+	pushfirst!(split_times, start_datetime)
+	println("split energies are $(split_energies)")
+    println("")
+	
+	# 5 - go though each track piece and enter function again
+	# hierarchical_optimization(minimized_speeds[1], tracks[1], chunks_amount, start_energy, split_energies[1], start_datetime, iteration + 1)
+	# @debug "split_energies size is $(size(split_energies, 1)), chunks_amount is $(chunks_amount)"
+	result_speeds = []
+	for i=1:chunks_amount
+		result_speeds_chunk = hierarchical_optimization(minimized_speeds[i], tracks[i], chunks_amount, split_energies[i], split_energies[i+1], split_times[i], iteration + 1 )
+		append!(result_speeds, result_speeds_chunk)
+	end
+
+	return result_speeds
+end

@@ -70,7 +70,7 @@ plot(track_test_peaks.distance, track_test_peaks.altitude, title="Track extremum
 
 line_search = LineSearches.BackTracking();
 iterations_num = 10000
-number_of_chunks = 3
+number_of_chunks = 5
 start_speed = 40.
 
 
@@ -80,8 +80,13 @@ end
 
 td = TwiceDifferentiable(f, fill(start_speed, number_of_chunks), autodiff = :forward)
 
-@time result_chunks = optimize(td, fill(start_speed, number_of_chunks),
-    Newton(; linesearch = line_search),
+lower_bound = fill(0.0, number_of_chunks)
+upper_bound = fill(100.0, number_of_chunks)
+
+tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+
+@time result_chunks = optimize(td, tdc, fill(start_speed, number_of_chunks),
+    IPNewton(),
     Optim.Options(
         x_tol = 1e-6,
         f_tol = 1e-8,
@@ -127,6 +132,43 @@ plot!(twinx(), time_chunks.utc_time, speed_vector * 3.6, color=:red, ylabel="spe
     ylim=[0, 60], label="speed (km/h)", ymirror = true,
     title = "Energy graph (time)"
 )
+
+### HIERARCHICAL
+
+track_size = 100
+# size(keep_extremum_only_peaks(track),1)
+short_track = keep_extremum_only_peaks(track)[1:track_size, :]
+distance_perc = last(short_track).distance / last(track.distance)
+proposed_start_energy = distance_perc * 5100
+start_energy_short = proposed_start_energy
+initial_speed = 40.0
+chunks_amount_hierarchical = 5
+start_datetime_hierarchical = DateTime(2022, 7, 1, 0, 0, 0)
+
+
+@time result_hierarchical = hierarchical_optimization(
+    initial_speed, short_track, chunks_amount_hierarchical,
+    start_energy_short, 0., start_datetime_hierarchical, 1
+)
+
+inputs_ms_hier = abs.(convert_kmh_to_ms(result_hierarchical))
+power_use_hier, solar_power_hier, energy_in_system_hier, time_hier, time_s_hier = solar_trip_calculation(inputs_ms_hier, short_track, start_energy_short)
+println(last(time_s_hier))
+
+plot(short_track.distance, short_track.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
+plot!(twinx(), short_track.distance, result_hierarchical, color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
+
+plot(short_track.distance, [power_use_hier solar_power_hier energy_in_system_hier zeros(track_size)],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance) for short track Hierarchical",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+
+# TODO: penalty for huge speed change?
+# OR see why that happens
+
+# TODO: run line-by-line in debug
+
 
 # TODO: refactor code, calculations in separate function, wrapper for optimization
 # make an optimization with full vector

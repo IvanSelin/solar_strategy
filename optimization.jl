@@ -479,10 +479,15 @@ end
 # ╔═╡ 2b9b2782-09d8-4cfa-99fa-9c2e921efe36
 function solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(speed_vector, track, start_datetime, start_energy)
-	cost = last(time_s) + 100 * abs(last(energy_in_system) - finish_energy)
-	# + 10 * abs(minimum(energy_in_system) - finish_energy)
-	+ 100 * sum(abs.(speed_vector[speed_vector .< 0.0]))
+	cost = last(time_s) + 10 * abs(last(energy_in_system) - finish_energy) #+ 10 * sum(energy_in_system[energy_in_system .< 0.0])
+	
+	# + 100 * sum(abs.(speed_vector[speed_vector .< 0.0])) + 100 * sum(abs.(speed_vector[speed_vector .> 100.0 / 3.6]))
+	# + 100 * abs(minimum(energy_in_system) - finish_energy) 
+	
 	# + 100 * sum(speed_vector[speed_vector .> 200.0]) + 100 * sum(energy_in_system[energy_in_system .< 0.0])
+
+
+	# cost = last(time_s) + 10 * abs(minimum(energy_in_system)) + 100 * sum(input_speed[input_speed .< 0.0])
 	return cost
 end
 
@@ -507,7 +512,7 @@ function solar_partial_trip_wrapper(speeds, track, indexes, start_energy, finish
 end
 
 # ╔═╡ 141378f3-9b42-4b83-a87c-44b3ba3928aa
-function hierarchical_optimization(speed, track, chunks_amount, start_energy, finish_energy, start_datetime, iteration)
+function hierarchical_optimization(speed, track, chunks_amount, start_energy, finish_energy, start_datetime, iteration, end_index)
 	# 0. if track is non-divisible on chunks_amount, then return (array of speeds)
 	# 1. split the whole track in chunks (chunks division and speed propagation with same logic - divide at the same idexes)
 	# 2. optimize it on chunks (initial speed = speed, use it for all chunks)
@@ -530,6 +535,7 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 	# 1 - splitting the track
 	# determine split indexes
 	track_size = size(track.distance, 1)
+	start_index = end_index - track_size + 1
 	split_indexes = calculate_split_indexes(track_size, chunks_amount)
 	# @debug "split indexes are $(split_indexes), chunks are $(chunks_amount)"
 	# actually split the track
@@ -542,34 +548,55 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 		return solar_partial_trip_wrapper(abs.(speed), track, split_indexes, start_energy, finish_energy, start_datetime)
 	end
 	td = TwiceDifferentiable(f, fill(speed, chunks_amount); autodiff = :forward)
+	lower_bound = fill(0.0, chunks_amount)
+	upper_bound = fill(100.0, chunks_amount)
+	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
 	line_search = LineSearches.BackTracking();
-	@time result = optimize(td, fill(speed, chunks_amount),
-	    Newton(; linesearch = line_search),
+	# result = optimize(td, fill(speed, chunks_amount),
+	    #Newton(; linesearch = line_search),
+	result = optimize(td, tdc, fill(speed, chunks_amount),
+		IPNewton(),
 	    Optim.Options(
-	        x_tol = 1e-6,
-	        f_tol = 1e-8,
-	        g_tol = 1e-6
+	        x_tol = 1e-10,
+	        f_tol = 1e-10,
+	        g_tol = 1e-10
 	    )
 	)
 
 	# 3 - save optimized speeds
 	minimized_speeds = abs.(Optim.minimizer(result))
-
+	
 	# 4 - sumulate again to obtain energies and times around split indexes
 	minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds)
 	minimized_speed_vector = set_speeds(minimized_speeds_ms, track, split_indexes)
 	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(minimized_speed_vector, track, start_datetime, start_energy)
+	println("iteration $(iteration), speed is $(speed) planned finish energy is $(finish_energy)")
+	println("track from $(start_index) to $(end_index)")
+	println("start datetime $(start_datetime)")
+	println("stare energy $(start_energy)")
+	println("time is $(last(time_s)), cost is $(f(minimized_speeds))")
+	println("split indexes are $(split_indexes)")
+	println("distances are $(track[split_indexes, :])")
+	println("minimized speeds are: $(minimized_speeds)")
+	println("simulated finish energy is $(last(energy_in_system))")
+	println("calculated cost is $( last(time_s) + 100 * abs(last(energy_in_system) - finish_energy) + 100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0])) )")
+	println("finish energy difference penalty is: $(100 * abs(last(energy_in_system) - finish_energy))")
+	println("energy less than 0. penalty is: $(100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])))")
+	println("speed less than 0. penalty is: $(100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])))")
+	println("speed more than 100. penalty is: $(100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0 / 3.6])))")
 	split_energies = energy_in_system[split_indexes]
 	pushfirst!(split_energies, start_energy)
 	split_times = time[split_indexes, :utc_time]
 	pushfirst!(split_times, start_datetime)
+	println("split energies are $(split_energies)")
+	println("")
 	
 	# 5 - go though each track piece and enter function again
 	# hierarchical_optimization(minimized_speeds[1], tracks[1], chunks_amount, start_energy, split_energies[1], start_datetime, iteration + 1)
 	# @debug "split_energies size is $(size(split_energies, 1)), chunks_amount is $(chunks_amount)"
 	result_speeds = []
 	for i=1:chunks_amount
-		result_speeds_chunk = hierarchical_optimization(minimized_speeds[i], tracks[i], chunks_amount, split_energies[i], split_energies[i+1], split_times[i], iteration + 1 )
+		result_speeds_chunk = hierarchical_optimization(minimized_speeds[i], tracks[i], chunks_amount, split_energies[i], split_energies[i+1], split_times[i], iteration + 1 , start_index + split_indexes[i] - 1)
 		append!(result_speeds, result_speeds_chunk)
 	end
 
@@ -612,7 +639,8 @@ md""" ## Experiment set-up
 @md_str " ### Short track "
 
 # ╔═╡ e75a6ae6-a09c-4c21-a421-d0124dd355c6
-track_size = 13148
+# track_size = 13148
+track_size = 100
 
 # ╔═╡ 64ec134c-e5cf-4c97-869f-d39b91e2599e
 size(keep_extremum_only_peaks(track),1)
@@ -704,25 +732,25 @@ plot(short_track.distance, [power_use_short solar_power_short energy_in_system_s
 @md_str " ### Launching a hierarchical optimization "
 
 # ╔═╡ cc75dbac-9f9c-4465-a08b-e543d82021fd
-chunks_amount_hierarchical = 5
+chunks_amount_hierarchical = 10
 
 # ╔═╡ 0c127ac8-812e-4a99-9e0e-32b3fd316c26
 start_datetime_hierarchical = DateTime(2022, 7, 1, 0, 0, 0)
 
 # ╔═╡ d9e30de2-e75f-423b-8fcc-ab3847331274
-@time result_hierarchical = hierarchical_optimization(initial_speed, short_track, chunks_amount_hierarchical, start_energy_short, 0., start_datetime_hierarchical, 1)
+@time result_hierarchical = hierarchical_optimization(initial_speed, short_track, chunks_amount_hierarchical, start_energy_short, 0., start_datetime_hierarchical, 1, track_size)
 
 # ╔═╡ b55c819b-f312-4078-b751-cf443355be19
 begin
 	inputs_ms_hier = abs.(convert_kmh_to_ms(result_hierarchical))
-	power_use_hier, solar_power_hier, energy_in_system_hier, time_hier, time_s_hier = solar_trip_calculation(inputs_ms_hier, short_track, start_energy_short)
+	power_use_hier, solar_power_hier, energy_in_system_hier, time_hier, time_s_hier = solar_trip_calculation_bounds(inputs_ms_hier, short_track, start_datetime_hierarchical, start_energy_short)
 	last(time_s_hier)
 end
 
 # ╔═╡ 3642f56d-ac97-435a-b446-68eb7814b03c
 begin
 	plot(short_track.distance, short_track.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
-	plot!(twinx(), short_track.distance, abs.(result_hierarchical), color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
+	plot!(twinx(), short_track.distance, result_hierarchical, color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
 end
 
 # ╔═╡ db7cc403-40ba-47d3-b27b-2a5913633ae5
@@ -746,6 +774,224 @@ plot(short_track.distance, [power_use_hier solar_power_hier energy_in_system_hie
 
 # ╔═╡ 16d51785-7cc0-4943-ba5a-0f0241315cfd
 # TODO: add penalty for big speed difference
+
+# ╔═╡ bb69fdb6-b6b8-42ab-9a27-0f926067c1a6
+# TODO: maybe speed spikes are because of boundaries in hierarchical optim?
+
+# ╔═╡ 569ab1f6-c5aa-48d8-88ae-1884ca22518a
+# TODO: try to simulate bad conditioned hierarchical pieces where finish_energy not met and speeds differ a lot
+
+# ╔═╡ aab805b0-2fe4-4ece-8f8c-f922226a9912
+@time result_hierarchical_bad = hierarchical_optimization(26.90116336126291, short_track[25:28,:], chunks_amount_hierarchical, 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8), 1, 28)
+
+# ╔═╡ 48e146a3-861b-4005-acf1-e877dbd83a50
+begin
+	function f_test(speed)
+		return solar_partial_trip_wrapper(speed, short_track[25:28,:], [1,2,3,4], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+	end
+	td_test = TwiceDifferentiable(f_test, fill(26.90116336126291, 4); autodiff = :forward)
+	lower_bound_test = fill(0.0, 4)
+	upper_bound_test = fill(100.0, 4)
+	tdc_test = TwiceDifferentiableConstraints(lower_bound_test, upper_bound_test)
+	# line_search = LineSearches.BackTracking();
+	# result = optimize(td, fill(speed, chunks_amount),
+	    #Newton(; linesearch = line_search),
+	# inputs_test = fill(26.90116336126291, 4)
+	inputs_test = [10., 20., 30., 40.]
+	@time result_test = optimize(td_test, tdc_test, inputs_test,
+		IPNewton(),
+	    Optim.Options(
+	        x_tol = 1e-10,
+	        f_tol = 1e-10,
+	        g_tol = 1e-10,
+			allow_f_increases = true,
+			successive_f_tol = 50,
+			show_trace = true
+	    )
+	)
+end
+
+# ╔═╡ 337efda5-da6c-40c2-97a7-486ba07d2175
+minimized_speeds_test = Optim.minimizer(result_test)
+
+# ╔═╡ 7107b365-28d2-4ec7-bea7-a93b5c89a9d8
+# TODO: run hierarchical with plots depth-by-depth
+
+# ╔═╡ 710b23ba-7648-4795-96e4-8141766479d5
+# for some reason energy in control run differs from energies inside hierarchical opt#
+# maybe because not every time finish energy is the same as it should?
+
+# ╔═╡ f744cc32-907f-40b0-8586-20af362b2dc9
+# build a parameter plane to see what is really happening
+# make a 2-part track
+# and select different speeds and see resulted cost
+# make a surf plot
+
+# ╔═╡ 873458fc-f7bd-4154-838d-0f65461f0178
+track_2_pcs = short_track[25:26,:]
+
+# ╔═╡ 70e5a89c-4694-4a5a-906e-73b2adbd1336
+function solar_partial_trip_test_wrapper(speeds, track, indexes, start_energy, finish_energy, start_datetime)
+	speeds_ms = convert_kmh_to_ms(speeds)
+	speed_vector = set_speeds(speeds_ms, track, indexes)
+
+	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(speed_vector, track, start_datetime, start_energy)
+	cost = last(time_s) + 10 * abs(last(energy_in_system) - finish_energy) + sum(energy_in_system[energy_in_system .< 0.0])
+	
+	# + 100 * sum(abs.(speed_vector[speed_vector .< 0.0])) + 100 * sum(abs.(speed_vector[speed_vector .> 100.0 / 3.6]))
+	# + 100 * abs(minimum(energy_in_system) - finish_energy) 
+	
+	# + 100 * sum(speed_vector[speed_vector .> 200.0]) + 100 * sum(energy_in_system[energy_in_system .< 0.0])
+
+
+	# cost = last(time_s) + 10 * abs(minimum(energy_in_system)) + 100 * sum(input_speed[input_speed .< 0.0])
+	return cost
+end
+
+# ╔═╡ c5d6352a-fd03-4045-a91a-8574c15d9989
+begin
+	dim = 50
+	start = 20
+	cost_results = zeros(dim,dim)
+	for i=1:dim
+		for j=1:dim
+			cost_results[i, j] = solar_partial_trip_test_wrapper([start+i*1, start+j*1], track_2_pcs, [1, 2], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+		end
+	end
+end
+
+# ╔═╡ 3a4a992b-3050-43c0-b1f2-c7965a48d202
+function cost_calc(speed1, speed2)
+	return solar_partial_trip_test_wrapper([speed1, speed2], track_2_pcs, [1, 2], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+end
+
+# ╔═╡ 92281858-95ad-4748-8088-cc6c74ae16dc
+cost_results
+
+# ╔═╡ 8ef52f08-6518-4c82-912e-b3a20f4c81a7
+Plots.surface(30:50, 30:50, cost_calc)
+
+# ╔═╡ c289432f-5827-4651-8e2c-f6bd31d8fe24
+Plots.surface(5:5:80, 5:5:80, cost_calc)
+
+# ╔═╡ 4dd7879c-147e-41d6-8527-83dbac04567b
+
+
+# ╔═╡ 5797e1bf-7bf8-4343-b740-6f09c433f6c5
+minimum(cost_results)
+
+# ╔═╡ e3ea8615-1bd2-40f3-bb79-c27e3c5375fe
+argmin(cost_results)
+
+# ╔═╡ c4bfa3e8-142b-47a9-9aa4-0457cd15f6c4
+cost_calc(20+19, 20+19)
+
+# ╔═╡ 45c6e6ca-d9d5-4895-829f-3522bb4485e0
+begin
+
+	# function f_test(speed)
+	# 	return solar_partial_trip_wrapper(speed, short_track[25:28,:], [1,2,3,4], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+	# end
+	# td_test = TwiceDifferentiable(f_test, fill(26.90116336126291, 4); autodiff = :forward)
+	# lower_bound_test = fill(0.0, 4)
+	# upper_bound_test = fill(100.0, 4)
+	# tdc_test = TwiceDifferentiableConstraints(lower_bound_test, upper_bound_test)
+
+	
+	function f_test_plane(speed_inp)
+		return solar_partial_trip_test_wrapper(speed_inp, track_2_pcs, [1, 2], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+	end
+	td_test_2d = TwiceDifferentiable(f_test_plane, [25.0, 25.0]; autodiff = :forward)
+	lower_bound_test_2d = fill(0.0, 2)
+	upper_bound_test_2d = fill(100.0, 2)
+	tdc_test_2d = TwiceDifferentiableConstraints(lower_bound_test_2d, upper_bound_test_2d)
+	# line_search = LineSearches.BackTracking();
+	# result = optimize(td, fill(speed, chunks_amount),
+	    #Newton(; linesearch = line_search),
+	# inputs_test = fill(26.90116336126291, 4)
+	inputs_test_2d = [25.0, 25.0]
+	@time result_test_2d = optimize(td_test_2d, tdc_test_2d, inputs_test_2d,
+		IPNewton(),
+	    Optim.Options(
+	        x_tol = 1e-10,
+	        f_tol = 1e-10,
+	        g_tol = 1e-10,
+			allow_f_increases = true,
+			successive_f_tol = 50,
+			show_trace = false
+	    )
+	)
+end
+
+# ╔═╡ 474bfcdf-7c28-472a-acb0-07aa7fcc719d
+Optim.minimizer(result_test_2d)
+
+# ╔═╡ efe841ab-9d93-4792-917e-6c27916381af
+begin
+
+	# function f_test(speed)
+	# 	return solar_partial_trip_wrapper(speed, short_track[25:28,:], [1,2,3,4], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+	# end
+	# td_test = TwiceDifferentiable(f_test, fill(26.90116336126291, 4); autodiff = :forward)
+	# lower_bound_test = fill(0.0, 4)
+	# upper_bound_test = fill(100.0, 4)
+	# tdc_test = TwiceDifferentiableConstraints(lower_bound_test, upper_bound_test)
+
+	
+	function f_test_plane_3d(speed_inp)
+		return solar_partial_trip_test_wrapper(speed_inp, track[25:27,:], [1, 2, 3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+	end
+	td_test_3d = TwiceDifferentiable(f_test_plane_3d, [25.0, 25.0, 25.]; autodiff = :forward)
+	lower_bound_test_3d = fill(0.0, 3)
+	upper_bound_test_3d = fill(100.0, 3)
+	tdc_test_3d = TwiceDifferentiableConstraints(lower_bound_test_3d, upper_bound_test_3d)
+	# line_search = LineSearches.BackTracking();
+	# result = optimize(td, fill(speed, chunks_amount),
+	    #Newton(; linesearch = line_search),
+	# inputs_test = fill(26.90116336126291, 4)
+	inputs_test_3d = [25.0, 25.0, 25.]
+	@time result_test_3d = optimize(td_test_3d, tdc_test_3d, inputs_test_3d,
+		IPNewton(),
+	    Optim.Options(
+	        x_tol = 1e-10,
+	        f_tol = 1e-10,
+	        g_tol = 1e-10,
+			allow_f_increases = true,
+			successive_f_tol = 50,
+			show_trace = false
+	    )
+	)
+end
+
+# ╔═╡ 9c58b595-b903-4bfc-bf4d-6e7cf8acf588
+Optim.minimizer(result_test_3d)
+
+# ╔═╡ fb78a338-c2ab-499e-bddd-bf36a15ea8cc
+function cost_calc_3d_1(speed1, speed2)
+	return solar_partial_trip_test_wrapper([30., speed1, speed2], track[25:27,:], [1, 2,3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+end
+
+# ╔═╡ 56b71cfd-b90b-4d2c-9307-2b3b97a30c6f
+function cost_calc_3d_2(speed1, speed2)
+	return solar_partial_trip_test_wrapper([speed1, 30., speed2], track[25:27,:], [1, 2,3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+end
+
+# ╔═╡ c3bd2406-abc7-4e48-b8af-a231c9cda891
+function cost_calc_3d_3(speed1, speed2)
+	return solar_partial_trip_test_wrapper([speed1, speed2, 30.], track[25:27,:], [1, 2,3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+end
+
+# ╔═╡ 50f0d299-5b25-452d-9a95-adb121d6abd4
+Plots.surface(5:5:80, 5:5:80, cost_calc_3d_1)
+
+# ╔═╡ 4ffa67f3-c4bd-47e6-885a-28cab178dd61
+Plots.surface(5:5:80, 5:5:80, cost_calc_3d_2)
+
+# ╔═╡ ca232f87-1c5e-4cdf-8ed8-aef9e5a34db2
+Plots.surface(5:5:80, 5:5:80, cost_calc_3d_3)
+
+# ╔═╡ fa0a86ad-a9e7-4d53-b7dd-7866f85c000f
+# make a penalty for different speeds
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1992,7 +2238,7 @@ version = "1.4.1+0"
 # ╟─c3d41246-37cb-45f6-ac98-f64d9158087a
 # ╟─4c91701c-f90e-48cf-bb9d-d925baa85667
 # ╟─9977c5d5-4872-41d4-8e99-1e4034493e4d
-# ╟─422a0d48-40fe-41eb-b214-e21d009c00b2
+# ╠═422a0d48-40fe-41eb-b214-e21d009c00b2
 # ╟─6a5416d0-39c0-431b-8add-5dbf13a1bda0
 # ╟─bef6c840-8dc7-4839-b2ba-623c6c46c856
 # ╟─54a5bf51-1723-4ce1-8f6b-1fd199c991b5
@@ -2062,5 +2308,35 @@ version = "1.4.1+0"
 # ╠═3c7d8d1d-f975-4743-99ca-263ac269fcab
 # ╠═97bbd950-40f6-4026-afc0-eecef2d0c784
 # ╠═16d51785-7cc0-4943-ba5a-0f0241315cfd
+# ╠═bb69fdb6-b6b8-42ab-9a27-0f926067c1a6
+# ╠═569ab1f6-c5aa-48d8-88ae-1884ca22518a
+# ╠═aab805b0-2fe4-4ece-8f8c-f922226a9912
+# ╠═48e146a3-861b-4005-acf1-e877dbd83a50
+# ╠═337efda5-da6c-40c2-97a7-486ba07d2175
+# ╠═7107b365-28d2-4ec7-bea7-a93b5c89a9d8
+# ╠═710b23ba-7648-4795-96e4-8141766479d5
+# ╠═f744cc32-907f-40b0-8586-20af362b2dc9
+# ╠═873458fc-f7bd-4154-838d-0f65461f0178
+# ╠═70e5a89c-4694-4a5a-906e-73b2adbd1336
+# ╠═c5d6352a-fd03-4045-a91a-8574c15d9989
+# ╠═3a4a992b-3050-43c0-b1f2-c7965a48d202
+# ╠═92281858-95ad-4748-8088-cc6c74ae16dc
+# ╠═8ef52f08-6518-4c82-912e-b3a20f4c81a7
+# ╠═c289432f-5827-4651-8e2c-f6bd31d8fe24
+# ╠═4dd7879c-147e-41d6-8527-83dbac04567b
+# ╠═5797e1bf-7bf8-4343-b740-6f09c433f6c5
+# ╠═e3ea8615-1bd2-40f3-bb79-c27e3c5375fe
+# ╠═c4bfa3e8-142b-47a9-9aa4-0457cd15f6c4
+# ╠═45c6e6ca-d9d5-4895-829f-3522bb4485e0
+# ╠═474bfcdf-7c28-472a-acb0-07aa7fcc719d
+# ╠═efe841ab-9d93-4792-917e-6c27916381af
+# ╠═9c58b595-b903-4bfc-bf4d-6e7cf8acf588
+# ╠═fb78a338-c2ab-499e-bddd-bf36a15ea8cc
+# ╠═56b71cfd-b90b-4d2c-9307-2b3b97a30c6f
+# ╠═c3bd2406-abc7-4e48-b8af-a231c9cda891
+# ╠═50f0d299-5b25-452d-9a95-adb121d6abd4
+# ╠═4ffa67f3-c4bd-47e6-885a-28cab178dd61
+# ╠═ca232f87-1c5e-4cdf-8ed8-aef9e5a34db2
+# ╠═fa0a86ad-a9e7-4d53-b7dd-7866f85c000f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
