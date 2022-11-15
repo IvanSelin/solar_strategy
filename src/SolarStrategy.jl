@@ -181,6 +181,8 @@ plot(short_track.distance, [power_use_hier solar_power_hier energy_in_system_hie
 # https://github.com/JuliaOpt/Pajarito.jl - integer linear programming
 # https://github.com/anriseth/MultiJuMP.jl - multicriterial optimiztion
 # also http://julia.cookbook.tips/doku.php?id=optim , Nelder-Mead Simplex	NM
+# https://github.com/SciML/Optimization.jl - wraper for optimizers
+# https://github.com/JuliaFirstOrder/ProximalOperators.jl - proximal operators for semi-continuous functions
 
 # https://juliahub.com/ui/Packages/LightGraphs/Xm08G/1.3.5?t=0 for graphs
 

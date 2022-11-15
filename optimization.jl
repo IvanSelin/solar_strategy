@@ -27,6 +27,7 @@ begin
 	using LineSearches
 	using PlutoUI
 	using Peaks
+	using ReverseDiff
 	# using Alert
 	# selecting a Plots backend
 	# plotly(ticks=:native)
@@ -498,8 +499,18 @@ function set_speeds(speeds, track, divide_at)
 		if i==1
 			output_speeds[1:divide_at[1]] .= speeds[1]
 		else
-			output_speeds[divide_at[i-1]:divide_at[i]] .= speeds[i]
+			output_speeds[divide_at[i-1] + 1:divide_at[i]] .= speeds[i]
 		end
+	end
+	return output_speeds
+end
+
+# ╔═╡ f243f6d4-c1b8-4284-abed-d74ae47a7af5
+function set_speeds_grad(speeds, track, divide_at)
+	# output_speeds = fill(last(speeds), size(track.distance, 1))
+	output_speeds = fill(speeds[1], divide_at[1])
+	for i=2:size(divide_at,1)
+		output_speeds = vcat(output_speeds, fill(speeds[i], divide_at[i] - divide_at[i-1]))
 	end
 	return output_speeds
 end
@@ -963,6 +974,37 @@ begin
 	)
 end
 
+# ╔═╡ 14a03646-a5b6-4381-a3ed-39a6eb85c113
+test_res = 5.
+
+# ╔═╡ ccd02e1b-b33c-4aec-a95f-da12dbb4cda7
+function solar_partial_trip_grad_wrapper(speeds, track, indexes, start_energy, finish_energy, start_datetime)
+	speeds_ms = convert_kmh_to_ms(speeds)
+	speed_vector = set_speeds_grad(speeds_ms, track, indexes)
+
+	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(speed_vector, track, start_datetime, start_energy)
+	cost = last(time_s) + 10 * abs(last(energy_in_system) - finish_energy) + sum(energy_in_system[energy_in_system .< 0.0])
+	
+	# + 100 * sum(abs.(speed_vector[speed_vector .< 0.0])) + 100 * sum(abs.(speed_vector[speed_vector .> 100.0 / 3.6]))
+	# + 100 * abs(minimum(energy_in_system) - finish_energy) 
+	
+	# + 100 * sum(speed_vector[speed_vector .> 200.0]) + 100 * sum(energy_in_system[energy_in_system .< 0.0])
+
+
+	# cost = last(time_s) + 10 * abs(minimum(energy_in_system)) + 100 * sum(input_speed[input_speed .< 0.0])
+	return cost
+end
+
+# ╔═╡ 68b614f2-dc13-4c46-9649-273179fbe27c
+function f_test_plane_3d_grad(speed_inp)
+		return solar_partial_trip_grad_wrapper(speed_inp, track[25:27,:], [1, 2, 3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+	end
+
+# ╔═╡ 4261573f-2207-45e2-b117-49c64079263a
+ftape_vec = ReverseDiff.GradientTape(f_test_plane_3d_grad, rand(3))
+# not differiantiable - see last point in https://juliadiff.org/ReverseDiff.jl/limits/
+# revert to simpler methods?
+
 # ╔═╡ 9c58b595-b903-4bfc-bf4d-6e7cf8acf588
 Optim.minimizer(result_test_3d)
 
@@ -993,6 +1035,19 @@ Plots.surface(5:5:80, 5:5:80, cost_calc_3d_3)
 # ╔═╡ fa0a86ad-a9e7-4d53-b7dd-7866f85c000f
 # make a penalty for different speeds
 
+# ╔═╡ 167ec4cf-c863-4a85-b429-02571fad0f30
+# it is better to use reverse diff
+
+# ╔═╡ 8193ba21-d8d2-40e0-af7b-3028d26afafc
+# Functions like f which map a vector to a scalar are the best case for reverse-mode automatic differentiation, but ForwardDiff may still be a good choice if x is not too large, as it is much simpler. The best case for forward-mode differentiation is a function which maps a scalar to a vector, like this g:
+# from https://github.com/JuliaDiff/ForwardDiff.jl 
+
+# ╔═╡ 98eef687-eff7-4872-8541-85baeb577b77
+# so, trying out https://github.com/JuliaDiff/ReverseDiff.jl
+
+# ╔═╡ 6e64c5d0-c9cf-4c4b-a9df-1f28225b7eff
+# example here: https://github.com/JuliaDiff/ReverseDiff.jl/blob/master/examples/gradient.jl 
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -1005,6 +1060,7 @@ Peaks = "18e31ff7-3703-566c-8e60-38913d67486b"
 PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 
 [compat]
@@ -1016,6 +1072,7 @@ Peaks = "~0.4.1"
 PlotlyBase = "~0.8.19"
 Plots = "~1.35.4"
 PlutoUI = "~0.7.48"
+ReverseDiff = "~1.14.4"
 TimeZones = "~1.9.0"
 """
 
@@ -1025,7 +1082,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "30f2190f3240c27a9a6774d947b68ee58d848e29"
+project_hash = "2d3856c8178bfe7db6c75cd9de0cdf014ad75635"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1283,6 +1340,11 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "aa31987c2ba8704e23c6c8ba8a4f769d5d7e4f91"
 uuid = "559328eb-81f9-559d-9380-de523a88c83c"
 version = "1.0.10+0"
+
+[[deps.FunctionWrappers]]
+git-tree-sha1 = "d62485945ce5ae9c0c48f124a84998d755bae00e"
+uuid = "069b7b12-0de2-55c6-9aab-29f3d0a68a2e"
+version = "1.1.3"
 
 [[deps.Future]]
 deps = ["Random"]
@@ -1763,9 +1825,9 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [[deps.Qt5Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "xkbcommon_jll"]
-git-tree-sha1 = "c6c0f690d0cc7caddb74cef7aa847b824a16b256"
+git-tree-sha1 = "0c03844e2231e12fda4d0086fd7cbe4098ee8dc5"
 uuid = "ea2cea3b-5b76-57ae-a6ef-0a8af62496e1"
-version = "5.15.3+1"
+version = "5.15.3+2"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -1803,6 +1865,12 @@ deps = ["UUIDs"]
 git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.0"
+
+[[deps.ReverseDiff]]
+deps = ["ChainRulesCore", "DiffResults", "DiffRules", "ForwardDiff", "FunctionWrappers", "LinearAlgebra", "LogExpFunctions", "MacroTools", "NaNMath", "Random", "SpecialFunctions", "StaticArrays", "Statistics"]
+git-tree-sha1 = "afc870db2b2c2df1ba3f7b199278bb071e4f6f90"
+uuid = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
+version = "1.14.4"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -2265,6 +2333,7 @@ version = "1.4.1+0"
 # ╠═7fc0e776-c9cf-4736-b113-81c31ada99c9
 # ╠═2b9b2782-09d8-4cfa-99fa-9c2e921efe36
 # ╠═119c4024-6e50-4d20-a0b2-734ec9bf515d
+# ╠═f243f6d4-c1b8-4284-abed-d74ae47a7af5
 # ╠═360727dd-c241-4609-85fb-5f40553c1d2b
 # ╠═141378f3-9b42-4b83-a87c-44b3ba3928aa
 # ╠═9a6f42a2-7a9f-41ef-8ff2-b325a5971e42
@@ -2330,6 +2399,10 @@ version = "1.4.1+0"
 # ╠═45c6e6ca-d9d5-4895-829f-3522bb4485e0
 # ╠═474bfcdf-7c28-472a-acb0-07aa7fcc719d
 # ╠═efe841ab-9d93-4792-917e-6c27916381af
+# ╠═14a03646-a5b6-4381-a3ed-39a6eb85c113
+# ╠═ccd02e1b-b33c-4aec-a95f-da12dbb4cda7
+# ╠═68b614f2-dc13-4c46-9649-273179fbe27c
+# ╠═4261573f-2207-45e2-b117-49c64079263a
 # ╠═9c58b595-b903-4bfc-bf4d-6e7cf8acf588
 # ╠═fb78a338-c2ab-499e-bddd-bf36a15ea8cc
 # ╠═56b71cfd-b90b-4d2c-9307-2b3b97a30c6f
@@ -2338,5 +2411,9 @@ version = "1.4.1+0"
 # ╠═4ffa67f3-c4bd-47e6-885a-28cab178dd61
 # ╠═ca232f87-1c5e-4cdf-8ed8-aef9e5a34db2
 # ╠═fa0a86ad-a9e7-4d53-b7dd-7866f85c000f
+# ╠═167ec4cf-c863-4a85-b429-02571fad0f30
+# ╠═8193ba21-d8d2-40e0-af7b-3028d26afafc
+# ╠═98eef687-eff7-4872-8541-85baeb577b77
+# ╠═6e64c5d0-c9cf-4c4b-a9df-1f28225b7eff
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

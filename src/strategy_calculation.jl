@@ -296,7 +296,7 @@ function set_speeds(speeds, track, divide_at)
 		if i==1
 			output_speeds[1:divide_at[1]] .= speeds[1]
 		else
-			output_speeds[divide_at[i-1]:divide_at[i]] .= speeds[i]
+			output_speeds[divide_at[i-1] + 1:divide_at[i]] .= speeds[i]
 		end
 	end
 	return output_speeds
