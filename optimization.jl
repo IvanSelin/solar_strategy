@@ -480,7 +480,7 @@ end
 # ╔═╡ 2b9b2782-09d8-4cfa-99fa-9c2e921efe36
 function solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(speed_vector, track, start_datetime, start_energy)
-	cost = last(time_s) + 10 * abs(last(energy_in_system) - finish_energy) #+ 10 * sum(energy_in_system[energy_in_system .< 0.0])
+	cost = last(time_s) + 10 * abs(last(energy_in_system) - finish_energy) + 1 * sum(abs.(energy_in_system[energy_in_system .< 0.0]))
 	
 	# + 100 * sum(abs.(speed_vector[speed_vector .< 0.0])) + 100 * sum(abs.(speed_vector[speed_vector .> 100.0 / 3.6]))
 	# + 100 * abs(minimum(energy_in_system) - finish_energy) 
@@ -650,8 +650,8 @@ md""" ## Experiment set-up
 @md_str " ### Short track "
 
 # ╔═╡ e75a6ae6-a09c-4c21-a421-d0124dd355c6
-# track_size = 13148
-track_size = 100
+track_size = 13148
+# track_size = 5000
 
 # ╔═╡ 64ec134c-e5cf-4c97-869f-d39b91e2599e
 size(keep_extremum_only_peaks(track),1)
@@ -762,6 +762,12 @@ end
 begin
 	plot(short_track.distance, short_track.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
 	plot!(twinx(), short_track.distance, result_hierarchical, color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
+end
+
+# ╔═╡ 6732e4c8-cd5f-454c-84fb-14aae6c02fbe
+begin
+	plot(short_track[1000:1050,:].distance, short_track[1000:1050,:].altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance [1000:1050]", right_margin = 15Plots.mm)
+	plot!(twinx(), short_track[1000:1050,:].distance, result_hierarchical[1000:1050], color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance [1000:1050]")
 end
 
 # ╔═╡ db7cc403-40ba-47d3-b27b-2a5913633ae5
@@ -1001,7 +1007,7 @@ function f_test_plane_3d_grad(speed_inp)
 	end
 
 # ╔═╡ 4261573f-2207-45e2-b117-49c64079263a
-ftape_vec = ReverseDiff.GradientTape(f_test_plane_3d_grad, rand(3))
+# ftape_vec = ReverseDiff.GradientTape(f_test_plane_3d_grad, rand(3))
 # not differiantiable - see last point in https://juliadiff.org/ReverseDiff.jl/limits/
 # revert to simpler methods?
 
@@ -1009,19 +1015,19 @@ ftape_vec = ReverseDiff.GradientTape(f_test_plane_3d_grad, rand(3))
 Optim.minimizer(result_test_3d)
 
 # ╔═╡ fb78a338-c2ab-499e-bddd-bf36a15ea8cc
-function cost_calc_3d_1(speed1, speed2)
-	return solar_partial_trip_test_wrapper([30., speed1, speed2], track[25:27,:], [1, 2,3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
-end
+# function cost_calc_3d_1(speed1, speed2)
+# 	return solar_partial_trip_test_wrapper([30., speed1, speed2], track[25:27,:], [1, 2,3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+# end
 
 # ╔═╡ 56b71cfd-b90b-4d2c-9307-2b3b97a30c6f
-function cost_calc_3d_2(speed1, speed2)
-	return solar_partial_trip_test_wrapper([speed1, 30., speed2], track[25:27,:], [1, 2,3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
-end
+# function cost_calc_3d_2(speed1, speed2)
+# 	return solar_partial_trip_test_wrapper([speed1, 30., speed2], track[25:27,:], [1, 2,3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+# end
 
 # ╔═╡ c3bd2406-abc7-4e48-b8af-a231c9cda891
-function cost_calc_3d_3(speed1, speed2)
-	return solar_partial_trip_test_wrapper([speed1, speed2, 30.], track[25:27,:], [1, 2,3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
-end
+# function cost_calc_3d_3(speed1, speed2)
+# 	return solar_partial_trip_test_wrapper([speed1, speed2, 30.], track[25:27,:], [1, 2,3], 1.5990611991330004, 1.1239726167707227, DateTime(2022,7,1,16,0,8))
+# end
 
 # ╔═╡ 50f0d299-5b25-452d-9a95-adb121d6abd4
 Plots.surface(5:5:80, 5:5:80, cost_calc_3d_1)
@@ -1082,7 +1088,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "2d3856c8178bfe7db6c75cd9de0cdf014ad75635"
+project_hash = "4a00228acf5c4ed037e08a4e454ed29f6326b0e6"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -2371,6 +2377,7 @@ version = "1.4.1+0"
 # ╠═d9e30de2-e75f-423b-8fcc-ab3847331274
 # ╠═b55c819b-f312-4078-b751-cf443355be19
 # ╠═3642f56d-ac97-435a-b446-68eb7814b03c
+# ╠═6732e4c8-cd5f-454c-84fb-14aae6c02fbe
 # ╠═db7cc403-40ba-47d3-b27b-2a5913633ae5
 # ╠═39b4c2a0-fb33-4820-87f3-fa575ebb4e30
 # ╠═e983aeb2-38c2-4bc4-af61-8af08f2347f5
