@@ -77,7 +77,7 @@ function calculate_travel_time_datetime(speed_vector, track_df)
     time_s = calculate_travel_time_seconds(speed_vector, track_df)
     # coverting the journey time to real time
     time_utc = travel_time_to_datetime(time_s)
-    return DataFrame(utc_time=time_utc)
+    return DataFrame(utc_time=time_utc, time_s=time_s)
 end
 
 function calculate_travel_time_seconds(speed_vector, track_df)
@@ -91,5 +91,5 @@ end
 function calculate_travel_time_datetime(speed_vector, track, start_datetime)
     time_s = calculate_travel_time_seconds(speed_vector, track)
 	time_utc = travel_time_to_datetime(time_s, start_datetime)
-	return DataFrame(utc_time=time_utc)
+	return DataFrame(utc_time=time_utc, time_s=time_s)
 end

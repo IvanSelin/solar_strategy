@@ -504,6 +504,18 @@ function solar_power_income(time_df, track_df, speed_vector)
     return power_income_wt_h 
 end
 
+function solar_power_income(time_df, track_df)
+    electrics_efficiency = 0.86
+    solar_panels_efficiency = 0.228
+    panels_area = 4 # m^2
+    solar_intensity = solar_radiation_pvedication_time(time_df, track_df)
+    power_income = electrics_efficiency .* solar_panels_efficiency .* solar_intensity .* panels_area .* time_df.time_s # W*s
+    power_income_wt_h = power_income ./ 3600
+    # power_income(i) = electrics_efficiency * panels_efficiency * solar_rad_h * panels_area * ...
+    # ( dist_diff(i) * 3.6 / ( speed * 3600 ) ); % kWt*h
+    return power_income_wt_h 
+end
+
 function calculate_power_income_accumulated(power_income)
     return cumsum!(power_income, power_income)
 end
