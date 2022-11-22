@@ -57,7 +57,7 @@ track = get_track_data("data/data_australia.csv")
 # plotly(ticks=:native)
 
 # ╔═╡ 92e47c4c-2e70-4850-af86-a997fcce5587
-plot(track.distance, track.altitude, title="Altitude (m)")
+plot(track.distance, track.altitude, title="Altitude (m)", xlabel="Distance (m)", ylabel="Altitude (m)")
 
 # ╔═╡ 9f2624cc-398b-42d2-bf7f-527285af6dc3
 md""" # Defining the functions """
@@ -98,6 +98,12 @@ iterations_num = 10000
 # ╔═╡ 655ff7ad-d7fc-47d4-bd22-0bb2c4b63cd5
 @md_str " # Towards the recursive optimization! "
 
+# ╔═╡ da6bb535-9601-4cf9-ba64-f8bfc68f3e5d
+@md_str " ## The code itself"
+
+# ╔═╡ 4f9da3c2-36e1-405a-9c83-edce6f9a30af
+@md_str " ### Splitting the track"
+
 # ╔═╡ 09b71f55-2e31-4a7f-a6ff-f4a3ff38e4b9
 function calculate_split_indexes(size_to_distribute, chunks_amount)
 	if size_to_distribute <= chunks_amount
@@ -132,8 +138,13 @@ function split_track_by_indexes(track, indexes)
 	return results
 end
 
+# ╔═╡ e7445b07-20e8-404e-8d40-eccb9eb6ddc2
+@md_str " ### Time calculation"
+
 # ╔═╡ b6a95a4d-6f5d-4fbc-87ed-622768e8d47a
 function travel_time_to_datetime(time_s, start_datetime)
+	# adjust to timezone, this is for UTC!
+	utc_fix = 9 # since darwin is UTC+9:30
 	daily_start_hour_time = 8
     daily_finish_hour_time = 16
 
@@ -150,14 +161,115 @@ function travel_time_to_datetime(time_s, start_datetime)
 
     # create a DataFrame for time information
     # adds seconds for 
+
+	# creating new start datetime with proper timezone
+	# new_start_datetime = start_datetime - Dates.Hour(utc_fix)
     return start_datetime .+ Dates.Millisecond.(round.(time_s .* 1000))
+	# return new_start_datetime .+ Dates.Millisecond.(round.(time_s .* 1000))
 end
+
+# ╔═╡ 7be923ff-1be1-4496-a571-b3dd68a03ebc
+travel_time_to_datetime([5, 15, 25], DateTime(2022,7,1,0,0,0))
+
+# ╔═╡ d240b89b-2d6c-4379-8132-1a47ec0ef6f3
+time_size = 1000
+
+# ╔═╡ 2b239f4b-7149-4771-8498-35b0314fb928
+time_s_temp = fill(100, time_size)
+
+# ╔═╡ b57ed73a-a69e-4944-b6f2-2e6bcafc2442
+tt_original = travel_time_to_datetime(cumsum(time_s_temp), DateTime(2022,7,1,0,0,0))
+
+# ╔═╡ 07cd4d1e-a293-4aa4-85fc-43cc26be9f29
+plot(tt_original)
+
+# ╔═╡ 9f924c63-9558-4915-ab1a-f8a383795906
+plot(tt_original, 1:time_size)
+
+# ╔═╡ 7779fe61-ca38-4bb6-aa6e-e7bc84870fe4
+travel_time_to_datetime(cumsum(time_s_temp),DateTime(2022,7,2,8,41,20))
+
+# ╔═╡ 249b0a50-0713-474f-a2ce-f7c012522318
+plot(travel_time_to_datetime(cumsum(time_s_temp),DateTime(2022,7,2,8,41,20)), 1:time_size)
+
+# ╔═╡ 899c3a73-28ef-46e3-b08b-d2335d91f52d
+@md_str "## That's where error happens!
+
+Starting on a 8:41 i should have it still running until 16:00, and not from 16:41 to some other time"
+
+# ╔═╡ 55157e96-b0b0-40fd-9db1-52edf69b4001
+DateTime(2022,7,2,8,41,20) - DateTime(2022,7,2,0,0,0)
+
+# ╔═╡ d2b833e2-fd0a-4ae9-8f98-eb03f658339e
+Dates.second(DateTime(2022,7,2,8,41,20))
+
+# ╔═╡ 848b59f6-d3f4-49c6-af22-7a40f5449071
+(Dates.Time(DateTime(2022,7,2,8,41,20)) - Time(0,0,0)) / 10^9
+
+# ╔═╡ 35285182-9a52-4e37-959a-09b41927d56f
+Dates.hour(DateTime(2022,7,2,8,41,20))*3600 + Dates.minute(DateTime(2022,7,2,8,41,20))*60 + Dates.second(DateTime(2022,7,2,8,41,20))
+
+# ╔═╡ cec4a60b-07f6-429a-8c15-6211ba3ded74
+Dates.Date(DateTime(2022,7,2,8,41,20))
+
+# ╔═╡ 21a36ea3-d1d8-4a64-bb19-12cb85df5da7
+function travel_time_to_datetime_new(time_s, start_datetime)
+	start_date = Dates.Date(start_datetime)
+	start_seconds = Dates.hour(start_datetime)*3600 + Dates.minute(start_datetime)*60 + Dates.second(start_datetime)
+	time_s .+= start_seconds
+
+	Dates.hour(start_datetime)*3600 + Dates.minute(start_datetime)*60 + Dates.second(start_datetime)
+	# adjust to timezone, this is for UTC!
+	utc_fix = 9 # since darwin is UTC+9:30
+	daily_start_hour_time = 8
+    daily_finish_hour_time = 16
+
+    start_time_seconds = daily_start_hour_time * 60 * 60
+    finish_time_seconds = daily_finish_hour_time * 60 *60
+    seconds_in_a_day = 24 * 60 * 60
+
+	
+
+    # adjust travel time so it happend only between daily start hour time and daily finish hour time
+    # TODO: think of in-place operations to reduce memory consumption
+    day_length = finish_time_seconds - start_time_seconds
+	days_amount = last(time_s) ÷ day_length
+	if first(time_s) < start_time_seconds
+		δ = start_time_seconds - first(time_s)
+		time_s .+= δ
+	end
+	for day=1:days_amount
+		# @debug day*finish_time_seconds + (day-1)*seconds_in_a_day
+		time_s[time_s .> finish_time_seconds + (day-1)*seconds_in_a_day] .+= (seconds_in_a_day - finish_time_seconds) + start_time_seconds
+	end
+	
+	# @debug days_amount
+	# day = time_s .÷ day_length
+	# @debug day
+	# time_s .+= start_time_seconds .* day .+ ( seconds_in_a_day .- finish_time_seconds) .* (day .- 1)
+	# @debug time_s
+
+    # create a DataFrame for time information
+    # adds seconds for 
+
+	# creating new start datetime with proper timezone
+	# new_start_datetime = start_datetime - Dates.Hour(utc_fix)
+    return Dates.DateTime(start_date) .+ Dates.Millisecond.(round.(time_s .* 1000))
+	# return Dates.DateTime(start_date) .+ Dates.Second.(round.(time_s))
+	# return new_start_datetime .+ Dates.Millisecond.(round.(time_s .* 1000))
+end
+
+# ╔═╡ f3e06f95-0dd8-4c48-bbdc-fdac37be6548
+Dates.Second.(cumsum(time_s_temp))
+
+# ╔═╡ 805f1520-28b0-45dd-80a5-470a33bacdee
+plot(travel_time_to_datetime_new(cumsum(time_s_temp),DateTime(2022,7,2,9,41,20)), 1:time_size)
 
 # ╔═╡ 294fa952-015d-4709-bb55-c17682ffe2fb
 function calculate_travel_time_datetime(speed_vector, track, start_datetime)
     time_s = calculate_travel_time_seconds(speed_vector, track)
-	time_utc = travel_time_to_datetime(time_s, start_datetime)
-	return DataFrame(utc_time=time_utc)
+	time_utc = travel_time_to_datetime_new(time_s, start_datetime)
+	return DataFrame(utc_time=time_utc, time_s=time_s)
 end
 
 # ╔═╡ 704c9c6a-8b13-4e82-92fd-edda72397320
@@ -430,6 +542,9 @@ begin
 	title = "Energy graph (time)")
 end
 
+# ╔═╡ f0206c0b-e35f-499b-8aa0-32c69541b2e3
+@md_str " ### Trip calculation"
+
 # ╔═╡ 7fc0e776-c9cf-4736-b113-81c31ada99c9
 function solar_trip_calculation_bounds(input_speed, track, start_datetime,
     start_energy::Float64=5100.)
@@ -463,7 +578,7 @@ function solar_trip_calculation_bounds(input_speed, track, start_datetime,
     # plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
 
     # plot(track.distance, solar_power_accumulated - power_use_accumulated_wt_h, title="Power balance w/o battery")
-    battery_capacity = 5100 # wt, to be used later for physical constraints
+    # battery_capacity = 5100 # wt, to be used later for physical constraints
     energy_in_system = start_energy .+ solar_power_accumulated .- power_use_accumulated_wt_h
     # plot(track.distance, energy_in_system, title="Power balance with battery")
 
@@ -477,10 +592,13 @@ function solar_trip_calculation_bounds(input_speed, track, start_datetime,
     return power_use_accumulated_wt_h, solar_power_accumulated, energy_in_system, time_df, time_seconds
 end
 
+# ╔═╡ ff9dad0d-4a00-439c-b704-486e395e5997
+@md_str " ### Cost function "
+
 # ╔═╡ 2b9b2782-09d8-4cfa-99fa-9c2e921efe36
 function solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(speed_vector, track, start_datetime, start_energy)
-	cost = last(time_s) + 10 * abs(last(energy_in_system) - finish_energy) + 1 * sum(abs.(energy_in_system[energy_in_system .< 0.0]))
+	cost = last(time_s) + 10 * abs(finish_energy - last(energy_in_system)) #+ 0 * sum(abs.(energy_in_system[energy_in_system .< 0.0]))
 	
 	# + 100 * sum(abs.(speed_vector[speed_vector .< 0.0])) + 100 * sum(abs.(speed_vector[speed_vector .> 100.0 / 3.6]))
 	# + 100 * abs(minimum(energy_in_system) - finish_energy) 
@@ -491,6 +609,9 @@ function solar_partial_trip_cost(speed_vector, track, start_energy, finish_energ
 	# cost = last(time_s) + 10 * abs(minimum(energy_in_system)) + 100 * sum(input_speed[input_speed .< 0.0])
 	return cost
 end
+
+# ╔═╡ 08f34cff-83b5-4e0b-a789-3c180c8d5cea
+@md_str " ### Setting speeds by index"
 
 # ╔═╡ 119c4024-6e50-4d20-a0b2-734ec9bf515d
 function set_speeds(speeds, track, divide_at)
@@ -515,12 +636,18 @@ function set_speeds_grad(speeds, track, divide_at)
 	return output_speeds
 end
 
+# ╔═╡ 6baaa312-94f8-4fc3-923f-30033a4a75d4
+@md_str " ### Wrapper"
+
 # ╔═╡ 360727dd-c241-4609-85fb-5f40553c1d2b
 function solar_partial_trip_wrapper(speeds, track, indexes, start_energy, finish_energy, start_datetime)
 	speeds_ms = convert_kmh_to_ms(speeds)
 	speed_vector = set_speeds(speeds_ms, track, indexes)
 	return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 end
+
+# ╔═╡ cb7bf1ac-4abd-4c08-8893-e367cda83f8f
+@md_str " ### Hierarchical optimization"
 
 # ╔═╡ 141378f3-9b42-4b83-a87c-44b3ba3928aa
 function hierarchical_optimization(speed, track, chunks_amount, start_energy, finish_energy, start_datetime, iteration, end_index)
@@ -758,6 +885,9 @@ begin
 	last(time_s_hier)
 end
 
+# ╔═╡ a8b6ce9d-5507-4acb-954f-b43d702e1060
+@md_str " ### Reult speed graph"
+
 # ╔═╡ 3642f56d-ac97-435a-b446-68eb7814b03c
 begin
 	plot(short_track.distance, short_track.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
@@ -770,12 +900,308 @@ begin
 	plot!(twinx(), short_track[1000:1050,:].distance, result_hierarchical[1000:1050], color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance [1000:1050]")
 end
 
+# ╔═╡ f0d3e885-68c3-424e-8a50-d3d981bef295
+@md_str " ### Result energy graph "
+
 # ╔═╡ db7cc403-40ba-47d3-b27b-2a5913633ae5
 plot(short_track.distance, [power_use_hier solar_power_hier energy_in_system_hier zeros(track_size)],
 	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance) for short track Hierarchical",
 	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
 	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
 )
+
+# ╔═╡ e1c90043-eae2-40fd-afc4-e5cd0ab4a540
+@md_str "### Speed graph for 1st iteration"
+
+# ╔═╡ bb76116a-5399-4d95-9e24-a158cd438619
+begin
+	speeds_1 = [43.564454419763095, 43.228254912151826, 43.60447581734879, 43.83531436356016, 43.987136764852366, 44.1190050188417, 44.271435203396315, 44.458800898738986, 44.61090449283989, 44.83363942288998]
+	indexes_1 = [1314, 2628, 3942, 5256, 6570, 7884, 9198, 10512, 11826, 13148]
+	speeds_ms_1 = convert_kmh_to_ms(speeds_1)
+	minimized_speed_vector_1 = set_speeds(speeds_ms_1, short_track, indexes_1)
+	power_use_1, solar_power_1, energy_in_system_1, time_1, time_s_1 = solar_trip_calculation_bounds(minimized_speed_vector_1, short_track, start_datetime_hierarchical, start_energy_short)
+	
+	
+	plot(short_track.distance, short_track.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance for 1st iteration", right_margin = 15Plots.mm)
+	plot!(twinx(), short_track.distance, minimized_speed_vector_1 * 3.6, color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance for 1st iteration")
+end
+
+# ╔═╡ d8e62070-5595-4e5f-b066-77f9e7d816b1
+plot(short_track.distance, [power_use_1 solar_power_1 energy_in_system_1 zeros(track_size)],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance) for short track Hierarchical iter 1",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+
+# ╔═╡ e7b301c0-7c5d-4d45-a70f-91653e81ea0d
+time_1
+
+# ╔═╡ 9a73fa1f-ac16-420d-8c98-91d1aeba773a
+@md_str " #### And for selected bad conditioned part on 2nd iteration"
+
+# ╔═╡ 785c4601-6d60-49b6-9470-abe90eed9d4c
+begin
+	# 1 - splitting the track
+	# determine split indexes
+	track_size_2_bad = 2628-1315+1
+	start_index_2 = 1315
+	end_index_2 = 2628
+	chunks_amount_2 = 10
+	split_indexes_2 = calculate_split_indexes(track_size_2_bad, chunks_amount_2)
+	# for the case when there are less indexes than chunks
+	chunks_amount_2 = size(split_indexes_2,1)
+
+	start_energy_2 = 4990.610198979855
+	start_datetime_2 = DateTime(2022,7,2,8,41,20)
+	finish_energy_2 = 4990.257345152248
+
+	# 2 - set up optimization itself
+	function f_2(speed)
+		return solar_partial_trip_wrapper(speed, short_track[start_index_2:end_index_2,:], split_indexes_2, start_energy_2, finish_energy_2, start_datetime_2)
+	end
+	td_2 = TwiceDifferentiable(f_2, fill(60., chunks_amount_2); autodiff = :forward)
+	lower_bound_2 = fill(30.0, chunks_amount_2)
+	upper_bound_2 = fill(100.0, chunks_amount_2)
+	tdc_2 = TwiceDifferentiableConstraints(lower_bound_2, upper_bound_2)
+	# result = optimize(td, fill(speed, chunks_amount),
+	    #Newton(; linesearch = line_search),
+	result_2 = optimize(td_2, tdc_2, fill(60., chunks_amount_2),
+		IPNewton(),
+	    Optim.Options(
+	        x_tol = 1e-10,
+	        f_tol = 1e-10,
+	        g_tol = 1e-10,
+			allow_f_increases = true,
+			successive_f_tol = 50,
+			show_trace = false,
+			extended_trace = false
+	    )
+	)
+
+	# 3 - save optimized speeds
+	minimized_speeds_2 = Optim.minimizer(result_2)
+	println(minimized_speeds_2)
+	
+	# 4 - sumulate again to obtain energies and times around split indexes
+	minimized_speeds_ms_2 = convert_kmh_to_ms(minimized_speeds_2/3.6)
+	minimized_speed_vector_2 = set_speeds(minimized_speeds_ms_2, short_track[start_index_2:end_index_2,:], split_indexes_2)
+	power_use_2, solar_power_2, energy_in_system_2, time_2, time_s_2 = solar_trip_calculation_bounds(minimized_speed_vector_2, short_track[start_index_2:end_index_2,:], start_datetime_2, start_energy_2)
+	println(last(energy_in_system_2))
+
+	plot(short_track[start_index_2:end_index_2,:].distance, short_track[start_index_2:end_index_2,:].altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance for 2nd iteration", right_margin = 15Plots.mm)
+	plot!(twinx(), short_track[start_index_2:end_index_2,:].distance, minimized_speed_vector_2 * 3.6, color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance for 2nd iteration")
+end
+
+# ╔═╡ 8635aede-c512-470a-b1d0-f53d783c6179
+begin
+	plot(short_track[1315:2628,:].distance, [power_use_1[1315:2628] solar_power_1[1315:2628] energy_in_system_1[1315:2628] zeros(track_size_2_bad)],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance) for short track Hierarchical iter 1 region",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+end
+
+# ╔═╡ 802e662b-0922-4993-bcf6-059c34ce02b7
+split_indexes_2
+
+# ╔═╡ d5a4ad7a-2d5c-4597-947e-3f2e6b9e67e9
+begin
+	plot(short_track[start_index_2:end_index_2,:].distance, [power_use_2 solar_power_2 energy_in_system_2 zeros(track_size_2_bad)],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance) for short track Hierarchical iter 2",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+end
+
+# ╔═╡ 55a9fc54-39b7-4c40-b06e-eba6ba260c50
+@md_str " #### Negative energy income? WTF?!"
+
+# ╔═╡ ce217af4-f88e-4767-984b-557eaf007bfb
+time_2
+
+# ╔═╡ 0a54b576-9d04-42ee-a19f-5ecafed7b2d6
+solar_income_2 = solar_power_income(time_2, short_track[start_index_2:end_index_2,:], minimized_speed_vector_2)
+
+# ╔═╡ ef772852-003d-4c0c-b360-62941a8c8357
+plot(short_track[start_index_2:end_index_2,:].distance, solar_income_2)
+
+# ╔═╡ c9c142d9-2bfb-4722-8d7e-a8c6724f3351
+plot(short_track[start_index_2:end_index_2,:].distance./minimized_speed_vector_2, solar_income_2)
+
+# ╔═╡ bf7b5b54-2f2a-4f5c-a877-1fd8f53510b0
+# solar_income_2_no_speed = solar_power_income(time_2, short_track[start_index_2:end_index_2,:])
+
+# ╔═╡ d75bf2cc-5a06-4cd6-b4ce-ed0ce415fd79
+plot(short_track[start_index_2:end_index_2,:].distance, solar_income_2_no_speed)
+
+# ╔═╡ c7197a1e-d135-46e5-88b1-771934d58bf5
+plot(time_2.time_s, solar_income_2_no_speed)
+
+# ╔═╡ 63245989-6885-4d7c-bedd-cece121bbdef
+plot(time_2.utc_time, solar_income_2_no_speed)
+
+# ╔═╡ 25f0fcbb-382e-4254-b058-52af29f212f9
+@md_str "## Time problems investigation"
+
+# ╔═╡ 7d514799-a9b2-482f-aa16-c7d4a9fbfe78
+@md_str " #### Why do i get negative solar income?
+
+I need to investigate the source of the problem"
+
+# ╔═╡ 9ad839d3-40cd-438b-9a93-aaa0635ec0a1
+time_2
+
+# ╔═╡ 32160090-9fef-4216-a160-76a0f0af0f0f
+@md_str " #### Why does everything starts from 16:45, and not from 8:45? 
+
+Is it the problem in the datetime calculation shift?
+
+Check difference between UTC and LST times"
+
+# ╔═╡ 8d6a6e0f-044b-4c6e-8432-b5da6817d019
+@md_str " LST looks fine
+
+https://www.timeanddate.com/worldclock/converter.html?iso=20220701T080000&p1=72&p2=1440
+
+For UTC 01-07-2022T08:00 it is 17:30 in Darwin and LST is ~16:38
+
+(caclulated by https://www.pveducation.org/pvcdrom/properties-of-sunlight/solar-time with parameters: 130.83, 9.5, 182, 17, 30)
+
+"
+
+# ╔═╡ 5d4ac822-380e-477d-b8a3-7d6f39b0d9ec
+@md_str "#### Maybe we are riding during the wrong hours?
+
+Since model input is UTC time, not LST time"
+
+# ╔═╡ 2c6fbc64-c7f3-430d-b6a8-c4a78f49c9c4
+calculate_travel_time_datetime(minimized_speed_vector_2, short_track[start_index_2:end_index_2,:], DateTime(2022,7,2,8,41,20))
+
+# ╔═╡ adc5d37e-5f66-4d11-8ba3-1426bb823230
+@md_str " calculate travel time datetime produces only utc_time from speeds, track and start datetime"
+
+# ╔═╡ f30abea4-a1d3-40fe-8328-3a0e5ce8a0d9
+travel_time_to_datetime(time_s, DateTime(2022,7,2,8,41,20))
+
+# ╔═╡ 8a3b49a9-4472-4b4d-944c-6b3e92a47b9f
+plot(travel_time_to_datetime(time_s, DateTime(2022,7,2,8,41,20)))
+
+# ╔═╡ 65f69edd-24a7-4a21-91b3-2e86c17df1a1
+time_s_test = collect(1:100:100000)
+
+# ╔═╡ f7b832ee-c8d5-4144-bd18-a68ed34c3e6a
+@md_str "#### Check how solar income works for constant time change in fixed place"
+
+# ╔═╡ 2e5f895b-c8b4-4bbb-8e69-88c554022be6
+start_test = DateTime(2022,1,7,0,0,0)
+
+# ╔═╡ d08e3a6e-9ca6-4ab9-8228-5a24546e1d36
+time_test_time = start_test .+ Dates.Millisecond.(round.(time_s_test .* 1000))
+
+# ╔═╡ 2143a79c-efe9-47df-88c8-eda9c2e16623
+plot(time_test_time)
+
+# ╔═╡ 5629455d-a6ce-430d-862d-5467ffc50ac9
+plot(Dates.hour.(time_test_time))
+
+# ╔═╡ 8f29c327-a738-4599-be47-4ff868b303e6
+@md_str "where are hours 0-8 and 16-24?"
+
+# ╔═╡ 51765acb-8459-426c-9c3a-773782f9789f
+@md_str "try to simulate power income for a fixed point over a period of time"
+
+# ╔═╡ c8a9d213-b294-4c46-9af3-3682ea171766
+@md_str "data prep"
+
+# ╔═╡ bb508865-1543-4621-abfd-f79a90f80db6
+input_speed_solar_test = fill(10, size(time_test_time, 1)) #m/s
+
+# ╔═╡ 981ee4ea-1a83-44de-81da-6e472496aa7b
+track[1:5,:]
+
+# ╔═╡ 93aafc03-dd14-4ca8-9226-5bbf8d42f378
+size(input_speed_solar_test, 1)
+
+# ╔═╡ c8941591-bacb-469e-8d7f-cf15d32169d3
+begin
+	track_test_df = DataFrame(track[1,:])
+	for i=1:999
+		track_test_df = vcat(track_test_df, DataFrame(track[1,:]))
+	end
+end
+
+# ╔═╡ 5bc52c1f-bf9f-447c-a7d8-795d374ca4f4
+track_test_df
+
+# ╔═╡ a13b519f-10e2-49eb-9903-8f198676cb76
+time_test_df = DataFrame(time_s=input_speed_solar_test)
+
+# ╔═╡ a92a0f58-0462-4a07-9053-a89caf5be9bb
+time_test_df.utc_time = DateTime(2022,7,1,0,0,0) .+ Dates.Millisecond.(round.(time_s_test .* 1000))
+
+# ╔═╡ 840dd334-16ad-4645-9773-393497547ae6
+spi_10s = solar_power_income(time_test_df, track_test_df)
+
+# ╔═╡ 22d50e51-2cee-474b-87f9-28f73cfd25b1
+plot(time_test_df.utc_time, spi_10s)
+
+# ╔═╡ f4c411a4-1c12-42b6-aa9b-030d7afdccc4
+
+
+# ╔═╡ 6187da23-54e1-475d-9afd-73cd90600088
+speed_spi_test = fill(2.4, 1000)
+
+# ╔═╡ 71291ca2-6ab5-43a8-9f54-58990e4dcbb3
+spi_10s_speed = solar_power_income(time_test_df, track_test_df, speed_spi_test)
+
+# ╔═╡ 233a5ed0-00eb-4b4e-9225-5838ceddb187
+plot(time_test_df.utc_time, spi_10s_speed)
+
+# ╔═╡ e7eafaf3-35be-43ab-a8d5-30bff227664b
+@md_str " #### So, maximum solar activity is at 12:00 utc_time 
+
+Which is, on one hand, is wrong (UTC12+8:30 is 20:30 when sun is set)
+
+But, on the other hand, it means that code is working based on utc time, like it is a local time
+
+Which means that most likely there is an error with +8h in datetime"
+
+# ╔═╡ 2f20704a-f2e0-4843-b458-6c3208758ab6
+
+
+# ╔═╡ aa00efad-65b3-449d-9085-da6cf66c57c6
+
+
+# ╔═╡ b7e2d987-463b-4d51-ba98-6cdbd3fbb01c
+@md_str " #### Trying out starting speed from above iteration "
+
+# ╔═╡ 1c14c9e2-a05c-4301-bfe6-69f36d0be865
+begin
+	minimized_speeds_2_same = [43.228254912151826, 43.228254912151826, 43.228254912151826, 43.228254912151826, 43.228254912151826, 43.228254912151826, 43.228254912151826, 43.228254912151826, 43.228254912151826, 43.228254912151826]
+	
+	# 4 - sumulate again to obtain energies and times around split indexes
+	minimized_speeds_ms_2_same = convert_kmh_to_ms(minimized_speeds_2_same)
+	minimized_speed_vector_2_same = set_speeds(minimized_speeds_ms_2_same, short_track[start_index_2:end_index_2,:], split_indexes_2)
+	power_use_2_same, solar_power_2_same, energy_in_system_2_same, time_2_same, time_s_2_same = solar_trip_calculation_bounds(minimized_speed_vector_2_same, short_track[start_index_2:end_index_2,:], start_datetime_2, start_energy_2)
+	println(last(energy_in_system_2_same))
+
+	plot(short_track[start_index_2:end_index_2,:].distance, short_track[start_index_2:end_index_2,:].altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance for 2nd iteration same speed", right_margin = 15Plots.mm)
+	plot!(twinx(), short_track[start_index_2:end_index_2,:].distance, minimized_speed_vector_2_same * 3.6, color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance for 2nd iteration same speed")
+end
+
+# ╔═╡ c8d5a429-ea0e-4730-bc15-4b1e49642407
+begin
+	plot(short_track[start_index_2:end_index_2,:].distance, [power_use_2_same solar_power_2_same energy_in_system_2_same zeros(track_size_2_bad)],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance) for short track Hierarchical iter 2 same speed",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+end
+
+# ╔═╡ 9f247245-a14d-42ce-97e7-a60911988d9c
+@md_str " #### Something is wrong with iterations/optimization design 
+
+And again, negative energy income"
 
 # ╔═╡ 39b4c2a0-fb33-4820-87f3-fa575ebb4e30
 @md_str " ### Comparing the results "
@@ -2332,15 +2758,40 @@ version = "1.4.1+0"
 # ╠═96a68dec-d781-4fd6-8146-649434f60919
 # ╠═77d82639-dd61-46e0-b6a0-7c7400a10453
 # ╠═655ff7ad-d7fc-47d4-bd22-0bb2c4b63cd5
+# ╠═da6bb535-9601-4cf9-ba64-f8bfc68f3e5d
+# ╠═4f9da3c2-36e1-405a-9c83-edce6f9a30af
 # ╠═09b71f55-2e31-4a7f-a6ff-f4a3ff38e4b9
 # ╠═a5551c27-3f5c-4ea3-8c4e-9d4873c88751
+# ╠═e7445b07-20e8-404e-8d40-eccb9eb6ddc2
 # ╠═b6a95a4d-6f5d-4fbc-87ed-622768e8d47a
+# ╠═7be923ff-1be1-4496-a571-b3dd68a03ebc
+# ╠═d240b89b-2d6c-4379-8132-1a47ec0ef6f3
+# ╠═2b239f4b-7149-4771-8498-35b0314fb928
+# ╠═b57ed73a-a69e-4944-b6f2-2e6bcafc2442
+# ╠═07cd4d1e-a293-4aa4-85fc-43cc26be9f29
+# ╠═9f924c63-9558-4915-ab1a-f8a383795906
+# ╠═7779fe61-ca38-4bb6-aa6e-e7bc84870fe4
+# ╠═249b0a50-0713-474f-a2ce-f7c012522318
+# ╠═899c3a73-28ef-46e3-b08b-d2335d91f52d
+# ╠═55157e96-b0b0-40fd-9db1-52edf69b4001
+# ╠═d2b833e2-fd0a-4ae9-8f98-eb03f658339e
+# ╠═848b59f6-d3f4-49c6-af22-7a40f5449071
+# ╠═35285182-9a52-4e37-959a-09b41927d56f
+# ╠═cec4a60b-07f6-429a-8c15-6211ba3ded74
+# ╠═21a36ea3-d1d8-4a64-bb19-12cb85df5da7
+# ╠═f3e06f95-0dd8-4c48-bbdc-fdac37be6548
+# ╠═805f1520-28b0-45dd-80a5-470a33bacdee
 # ╠═294fa952-015d-4709-bb55-c17682ffe2fb
+# ╠═f0206c0b-e35f-499b-8aa0-32c69541b2e3
 # ╠═7fc0e776-c9cf-4736-b113-81c31ada99c9
+# ╠═ff9dad0d-4a00-439c-b704-486e395e5997
 # ╠═2b9b2782-09d8-4cfa-99fa-9c2e921efe36
+# ╠═08f34cff-83b5-4e0b-a789-3c180c8d5cea
 # ╠═119c4024-6e50-4d20-a0b2-734ec9bf515d
 # ╠═f243f6d4-c1b8-4284-abed-d74ae47a7af5
+# ╠═6baaa312-94f8-4fc3-923f-30033a4a75d4
 # ╠═360727dd-c241-4609-85fb-5f40553c1d2b
+# ╠═cb7bf1ac-4abd-4c08-8893-e367cda83f8f
 # ╠═141378f3-9b42-4b83-a87c-44b3ba3928aa
 # ╠═9a6f42a2-7a9f-41ef-8ff2-b325a5971e42
 # ╠═516e68a9-fb52-475c-b925-bba877341499
@@ -2376,9 +2827,68 @@ version = "1.4.1+0"
 # ╠═0c127ac8-812e-4a99-9e0e-32b3fd316c26
 # ╠═d9e30de2-e75f-423b-8fcc-ab3847331274
 # ╠═b55c819b-f312-4078-b751-cf443355be19
+# ╠═a8b6ce9d-5507-4acb-954f-b43d702e1060
 # ╠═3642f56d-ac97-435a-b446-68eb7814b03c
 # ╠═6732e4c8-cd5f-454c-84fb-14aae6c02fbe
+# ╠═f0d3e885-68c3-424e-8a50-d3d981bef295
 # ╠═db7cc403-40ba-47d3-b27b-2a5913633ae5
+# ╠═e1c90043-eae2-40fd-afc4-e5cd0ab4a540
+# ╠═bb76116a-5399-4d95-9e24-a158cd438619
+# ╠═d8e62070-5595-4e5f-b066-77f9e7d816b1
+# ╠═e7b301c0-7c5d-4d45-a70f-91653e81ea0d
+# ╠═8635aede-c512-470a-b1d0-f53d783c6179
+# ╠═9a73fa1f-ac16-420d-8c98-91d1aeba773a
+# ╠═785c4601-6d60-49b6-9470-abe90eed9d4c
+# ╠═802e662b-0922-4993-bcf6-059c34ce02b7
+# ╠═d5a4ad7a-2d5c-4597-947e-3f2e6b9e67e9
+# ╠═55a9fc54-39b7-4c40-b06e-eba6ba260c50
+# ╠═ce217af4-f88e-4767-984b-557eaf007bfb
+# ╠═0a54b576-9d04-42ee-a19f-5ecafed7b2d6
+# ╠═ef772852-003d-4c0c-b360-62941a8c8357
+# ╠═c9c142d9-2bfb-4722-8d7e-a8c6724f3351
+# ╠═bf7b5b54-2f2a-4f5c-a877-1fd8f53510b0
+# ╠═d75bf2cc-5a06-4cd6-b4ce-ed0ce415fd79
+# ╠═c7197a1e-d135-46e5-88b1-771934d58bf5
+# ╠═63245989-6885-4d7c-bedd-cece121bbdef
+# ╠═25f0fcbb-382e-4254-b058-52af29f212f9
+# ╠═7d514799-a9b2-482f-aa16-c7d4a9fbfe78
+# ╠═9ad839d3-40cd-438b-9a93-aaa0635ec0a1
+# ╠═32160090-9fef-4216-a160-76a0f0af0f0f
+# ╠═8d6a6e0f-044b-4c6e-8432-b5da6817d019
+# ╠═5d4ac822-380e-477d-b8a3-7d6f39b0d9ec
+# ╠═2c6fbc64-c7f3-430d-b6a8-c4a78f49c9c4
+# ╠═adc5d37e-5f66-4d11-8ba3-1426bb823230
+# ╠═f30abea4-a1d3-40fe-8328-3a0e5ce8a0d9
+# ╠═8a3b49a9-4472-4b4d-944c-6b3e92a47b9f
+# ╠═65f69edd-24a7-4a21-91b3-2e86c17df1a1
+# ╠═f7b832ee-c8d5-4144-bd18-a68ed34c3e6a
+# ╠═2e5f895b-c8b4-4bbb-8e69-88c554022be6
+# ╠═d08e3a6e-9ca6-4ab9-8228-5a24546e1d36
+# ╠═2143a79c-efe9-47df-88c8-eda9c2e16623
+# ╠═5629455d-a6ce-430d-862d-5467ffc50ac9
+# ╠═8f29c327-a738-4599-be47-4ff868b303e6
+# ╠═51765acb-8459-426c-9c3a-773782f9789f
+# ╠═c8a9d213-b294-4c46-9af3-3682ea171766
+# ╠═bb508865-1543-4621-abfd-f79a90f80db6
+# ╠═981ee4ea-1a83-44de-81da-6e472496aa7b
+# ╠═93aafc03-dd14-4ca8-9226-5bbf8d42f378
+# ╠═c8941591-bacb-469e-8d7f-cf15d32169d3
+# ╠═5bc52c1f-bf9f-447c-a7d8-795d374ca4f4
+# ╠═a13b519f-10e2-49eb-9903-8f198676cb76
+# ╠═a92a0f58-0462-4a07-9053-a89caf5be9bb
+# ╠═840dd334-16ad-4645-9773-393497547ae6
+# ╠═22d50e51-2cee-474b-87f9-28f73cfd25b1
+# ╠═f4c411a4-1c12-42b6-aa9b-030d7afdccc4
+# ╠═6187da23-54e1-475d-9afd-73cd90600088
+# ╠═71291ca2-6ab5-43a8-9f54-58990e4dcbb3
+# ╠═233a5ed0-00eb-4b4e-9225-5838ceddb187
+# ╠═e7eafaf3-35be-43ab-a8d5-30bff227664b
+# ╠═2f20704a-f2e0-4843-b458-6c3208758ab6
+# ╠═aa00efad-65b3-449d-9085-da6cf66c57c6
+# ╠═b7e2d987-463b-4d51-ba98-6cdbd3fbb01c
+# ╠═1c14c9e2-a05c-4301-bfe6-69f36d0be865
+# ╠═c8d5a429-ea0e-4730-bc15-4b1e49642407
+# ╠═9f247245-a14d-42ce-97e7-a60911988d9c
 # ╠═39b4c2a0-fb33-4820-87f3-fa575ebb4e30
 # ╠═e983aeb2-38c2-4bc4-af61-8af08f2347f5
 # ╠═3c7d8d1d-f975-4743-99ca-263ac269fcab
