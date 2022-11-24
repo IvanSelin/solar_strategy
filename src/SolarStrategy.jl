@@ -155,7 +155,7 @@ start_datetime_hierarchical = DateTime(2022, 7, 1, 0, 0, 0)
 
 inputs_ms_hier = convert_kmh_to_ms(result_hierarchical)
 power_use_hier, solar_power_hier, energy_in_system_hier, time_hier, time_s_hier = solar_trip_calculation(inputs_ms_hier, short_track, start_energy_short)
-println(last(time_s_hier))
+println(last(time_s_hier)) #247523.356
 
 plot(
     short_track.distance, short_track.altitude,
@@ -167,6 +167,18 @@ plot!(
     twinx(), short_track.distance, result_hierarchical,
     color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true,
     title="Speed (km/h) vs distance",
+    size=(1200, 500),
+    linetype = :steppost
+    )
+
+linetypes = [:path :steppost]
+plot(
+    short_track.distance, [short_track.altitude, result_hierarchical],
+    layout=(2,1),
+    labels=["altitude", "speed (km/h)"], ylabel=["altitude","2"],
+    line=(linetypes,2), lab=map(string, linetypes),
+    # lines=linetypes,
+    title="Speed (km/h) vs distance", right_margin = 15Plots.mm,
     size=(1200, 500)
     )
 

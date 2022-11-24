@@ -508,7 +508,7 @@ function hierarchical_optimization(
 	    #Newton(; linesearch = line_search),
 	result = optimize(
         td, tdc, fill(speed, chunks_amount)
-        # .+ (rand(chunks_amount) .* 0.5)
+        .+ (rand(chunks_amount) .* 0.5)
         ,
 		IPNewton(),
 	    Optim.Options(
