@@ -39,6 +39,10 @@ function travel_time_to_datetime(time_s)
 end
 
 function travel_time_to_datetime(time_s, start_datetime)
+    start_date = Dates.Date(start_datetime)
+	start_seconds = Dates.hour(start_datetime) * 3600 + Dates.minute(start_datetime) * 60 + Dates.second(start_datetime)
+	time_s .+= start_seconds
+
 	daily_start_hour_time = 8
     daily_finish_hour_time = 16
 
@@ -49,13 +53,23 @@ function travel_time_to_datetime(time_s, start_datetime)
     # adjust travel time so it happend only between daily start hour time and daily finish hour time
     # TODO: think of in-place operations to reduce memory consumption
     day_length = finish_time_seconds - start_time_seconds
-    day = time_s .÷ day_length .+ 1
-    time_s .+= start_time_seconds .* day .+
-    ( seconds_in_a_day .- finish_time_seconds) .* (day .- 1)
+    days_amount = last(time_s) ÷ day_length
+	if first(time_s) < start_time_seconds
+		δ = start_time_seconds - first(time_s)
+		time_s .+= δ
+	end
+    for day=1:days_amount
+		# @debug day*finish_time_seconds + (day-1)*seconds_in_a_day
+		time_s[time_s .> finish_time_seconds + (day-1)*seconds_in_a_day] .+= (seconds_in_a_day - finish_time_seconds) + start_time_seconds
+	end
+
+    # day = time_s .÷ day_length .+ 1
+    # time_s .+= start_time_seconds .* day .+
+    # ( seconds_in_a_day .- finish_time_seconds) .* (day .- 1)
 
     # create a DataFrame for time information
     # adds seconds for 
-    return start_datetime .+ Dates.Millisecond.(round.(time_s .* 1000))
+    return Dates.DateTime(start_date) .+ Dates.Millisecond.(round.(time_s .* 1000))
 end
 
 function generate_year_time_dataframe(time_step_millis::Int64)

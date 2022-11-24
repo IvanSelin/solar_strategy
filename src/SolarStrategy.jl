@@ -137,30 +137,42 @@ plot!(twinx(), time_chunks.utc_time, speed_vector * 3.6, color=:red, ylabel="spe
 
 track_size = 100
 # size(keep_extremum_only_peaks(track),1)
-short_track = keep_extremum_only_peaks(track)[1:track_size, :]
+# short_track = keep_extremum_only_peaks(track)[1:track_size, :]
+short_track = keep_extremum_only_peaks(track)
+track_size = size(short_track.distance, 1)
 distance_perc = last(short_track).distance / last(track.distance)
 proposed_start_energy = distance_perc * 5100
 start_energy_short = proposed_start_energy
 initial_speed = 40.0
-chunks_amount_hierarchical = 5
+chunks_amount_hierarchical = 10
 start_datetime_hierarchical = DateTime(2022, 7, 1, 0, 0, 0)
 
 
 @time result_hierarchical = hierarchical_optimization(
     initial_speed, short_track, chunks_amount_hierarchical,
-    start_energy_short, 0., start_datetime_hierarchical, 1
+    start_energy_short, 0., start_datetime_hierarchical, 1, track_size
 )
 
-inputs_ms_hier = abs.(convert_kmh_to_ms(result_hierarchical))
+inputs_ms_hier = convert_kmh_to_ms(result_hierarchical)
 power_use_hier, solar_power_hier, energy_in_system_hier, time_hier, time_s_hier = solar_trip_calculation(inputs_ms_hier, short_track, start_energy_short)
 println(last(time_s_hier))
 
-plot(short_track.distance, short_track.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
-plot!(twinx(), short_track.distance, result_hierarchical, color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
+plot(
+    short_track.distance, short_track.altitude,
+    label="altitude", ylabel="altitude",
+    title="Speed (km/h) vs distance", right_margin = 15Plots.mm,
+    size=(1200, 500)
+    )
+plot!(
+    twinx(), short_track.distance, result_hierarchical,
+    color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true,
+    title="Speed (km/h) vs distance",
+    size=(1200, 500)
+    )
 
 plot(short_track.distance, [power_use_hier solar_power_hier energy_in_system_hier zeros(track_size)],
 	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance) for short track Hierarchical",
-	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
 	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
 )
 

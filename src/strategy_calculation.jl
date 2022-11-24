@@ -440,15 +440,28 @@ function set_speeds(speeds, track, divide_at)
 	return output_speeds
 end
 
+# differentiable with ReverseDiff.jl
+function set_speeds_grad(speeds, track, divide_at)
+	# output_speeds = fill(last(speeds), size(track.distance, 1))
+	output_speeds = fill(speeds[1], divide_at[1])
+	for i=2:size(divide_at,1)
+		output_speeds = vcat(output_speeds, fill(speeds[i], divide_at[i] - divide_at[i-1]))
+	end
+	return output_speeds
+end
+
 function solar_partial_trip_wrapper(speeds, track, indexes, start_energy, finish_energy, start_datetime)
 	speeds_ms = convert_kmh_to_ms(speeds)
 	speed_vector = set_speeds(speeds_ms, track, indexes)
     power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(speed_vector, track, start_datetime, start_energy)
-	cost = last(time_s) + size(track.distance,1) * 10000 * abs(last(energy_in_system) - finish_energy)
+	cost = last(time_s) + 10 * abs(finish_energy - last(energy_in_system))
     return cost
 end
 
-function hierarchical_optimization(speed, track, chunks_amount, start_energy, finish_energy, start_datetime, iteration)
+function hierarchical_optimization(
+    speed, track, chunks_amount, start_energy, finish_energy, start_datetime,
+    iteration, end_index
+    )
 	# 0. if track is non-divisible on chunks_amount, then return (array of speeds)
 	# 1. split the whole track in chunks (chunks division and speed propagation with same logic - divide at the same idexes)
 	# 2. optimize it on chunks (initial speed = speed, use it for all chunks)
@@ -471,6 +484,7 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 	# 1 - splitting the track
 	# determine split indexes
 	track_size = size(track.distance, 1)
+    start_index = end_index - track_size + 1
 	split_indexes = calculate_split_indexes(track_size, chunks_amount)
 	# @debug "split indexes are $(split_indexes), chunks are $(chunks_amount)"
 	# actually split the track
@@ -480,7 +494,10 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 
 	# 2 - set up optimization itself
 	function f(speed)
-		return solar_partial_trip_wrapper(abs.(speed), track, split_indexes, start_energy, finish_energy, start_datetime)
+		return solar_partial_trip_wrapper(
+            abs.(speed), track, split_indexes, start_energy, finish_energy,
+            start_datetime
+            )
 	end
 	td = TwiceDifferentiable(f, fill(speed, chunks_amount); autodiff = :forward)
 	lower_bound = fill(0.0, chunks_amount)
@@ -489,7 +506,10 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 	line_search = LineSearches.BackTracking();
 	# result = optimize(td, fill(speed, chunks_amount),
 	    #Newton(; linesearch = line_search),
-	result = optimize(td, tdc, fill(speed, chunks_amount),
+	result = optimize(
+        td, tdc, fill(speed, chunks_amount)
+        # .+ (rand(chunks_amount) .* 0.5)
+        ,
 		IPNewton(),
 	    Optim.Options(
 	        x_tol = 1e-10,
@@ -504,16 +524,17 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 	# 4 - sumulate again to obtain energies and times around split indexes
 	minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds)
 	minimized_speed_vector = set_speeds(minimized_speeds_ms, track, split_indexes)
-	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(minimized_speed_vector, track, start_datetime, start_energy)
+	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(
+        minimized_speed_vector, track, start_datetime, start_energy)
 	println("iteration $(iteration), speed is $(speed) planned finish energy is $(finish_energy)")
 	println("time is $(last(time_s)), cost is $(f(minimized_speeds))")
 	println("minimized speeds are: $(minimized_speeds)")
 	println("simulated finish energy is $(last(energy_in_system))")
-	println("calculated cost is $( last(time_s) + 100 * abs(last(energy_in_system) - finish_energy) + 100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0])) )")
-	println("finish energy difference penalty is: $(100 * abs(last(energy_in_system) - finish_energy))")
-	println("energy less than 0. penalty is: $(100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])))")
-	println("speed less than 0. penalty is: $(100 * sum(abs.(speed_vector[speed_vector .< 0.0])))")
-	println("speed more than 100. penalty is: $(100 * sum(abs.(speed_vector[speed_vector .> 100.0 / 3.6])))")
+	# println("calculated cost is $( last(time_s) + 100 * abs(last(energy_in_system) - finish_energy) + 100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0])) )")
+	println("finish energy difference penalty is: $(10 * abs(last(energy_in_system) - finish_energy))")
+	# println("energy less than 0. penalty is: $(100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])))")
+	# println("speed less than 0. penalty is: $(100 * sum(abs.(speed_vector[speed_vector .< 0.0])))")
+	# println("speed more than 100. penalty is: $(100 * sum(abs.(speed_vector[speed_vector .> 100.0 / 3.6])))")
 	split_energies = energy_in_system[split_indexes]
 	pushfirst!(split_energies, start_energy)
 	split_times = time[split_indexes, :utc_time]
@@ -526,7 +547,11 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 	# @debug "split_energies size is $(size(split_energies, 1)), chunks_amount is $(chunks_amount)"
 	result_speeds = []
 	for i=1:chunks_amount
-		result_speeds_chunk = hierarchical_optimization(minimized_speeds[i], tracks[i], chunks_amount, split_energies[i], split_energies[i+1], split_times[i], iteration + 1 )
+		result_speeds_chunk = hierarchical_optimization(
+            minimized_speeds[i], tracks[i], chunks_amount, split_energies[i],
+            split_energies[i+1], split_times[i], iteration + 1,
+            start_index + split_indexes[i] - 1
+            )
 		append!(result_speeds, result_speeds_chunk)
 	end
 
