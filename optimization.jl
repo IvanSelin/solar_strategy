@@ -95,6 +95,13 @@ ls = LineSearches.BackTracking();
 # ╔═╡ 09bd67a1-a0f9-45f3-9839-2e9e592f01de
 iterations_num = 10000
 
+# ╔═╡ 264d9d64-6a6d-4e84-9af1-5795bd5bf829
+begin
+	lower_bound_c = fill(0.0, number_of_chunks)
+	upper_bound_c = fill(100.0, number_of_chunks)
+	tdc_0 = TwiceDifferentiableConstraints(lower_bound_c, upper_bound_c)
+end
+
 # ╔═╡ 655ff7ad-d7fc-47d4-bd22-0bb2c4b63cd5
 @md_str " # Towards the recursive optimization! "
 
@@ -217,8 +224,7 @@ function travel_time_to_datetime_new(time_s, start_datetime)
 	start_date = Dates.Date(start_datetime)
 	start_seconds = Dates.hour(start_datetime)*3600 + Dates.minute(start_datetime)*60 + Dates.second(start_datetime)
 	time_s .+= start_seconds
-
-	Dates.hour(start_datetime)*3600 + Dates.minute(start_datetime)*60 + Dates.second(start_datetime)
+	
 	# adjust to timezone, this is for UTC!
 	utc_fix = 9 # since darwin is UTC+9:30
 	daily_start_hour_time = 8
@@ -372,7 +378,15 @@ td = TwiceDifferentiable(f, fill(speed_chunks, number_of_chunks), autodiff = :fo
 
 # @time result_chunks = optimize(d, fill(speed_chunks, number_of_chunks), LBFGS(;m=lbfgs_m, linesearch = ls))
 
-@time result_chunks = optimize(td, fill(speed_chunks, number_of_chunks), Newton(; linesearch = ls),
+# @time result_chunks = optimize(td, fill(speed_chunks, number_of_chunks), Newton(; linesearch = ls),
+# 	Optim.Options(
+# 		x_tol = 1e-6,
+# 		f_tol = 1e-8,
+# 		g_tol = 1e-6
+# 	)
+# )
+
+@time result_chunks = optimize(td, tdc_0, fill(speed_chunks, number_of_chunks), IPNewton(),
 	Optim.Options(
 		x_tol = 1e-6,
 		f_tol = 1e-8,
@@ -692,7 +706,9 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 	line_search = LineSearches.BackTracking();
 	# result = optimize(td, fill(speed, chunks_amount),
 	    #Newton(; linesearch = line_search),
-	result = optimize(td, tdc, fill(speed, chunks_amount),
+	result = optimize(td, tdc, fill(speed, chunks_amount) 
+	.+ (rand(chunks_amount) .* 0.5)
+		,
 		IPNewton(),
 	    Optim.Options(
 	        x_tol = 1e-10,
@@ -776,16 +792,18 @@ md""" ## Experiment set-up
 # ╔═╡ eb193e5d-65ba-46b1-be15-5c399abad44b
 @md_str " ### Short track "
 
-# ╔═╡ e75a6ae6-a09c-4c21-a421-d0124dd355c6
-track_size = 13148
-# track_size = 5000
-
 # ╔═╡ 64ec134c-e5cf-4c97-869f-d39b91e2599e
 size(keep_extremum_only_peaks(track),1)
 
 # ╔═╡ ca583c57-d93c-4bb3-8cd3-b92184226a5f
 # short_track = track[1:track_size, :]
-short_track = keep_extremum_only_peaks(track)[1:track_size, :]
+short_track = keep_extremum_only_peaks(track)#[1:track_size, :]
+# short_track = copy(track)
+
+# ╔═╡ e75a6ae6-a09c-4c21-a421-d0124dd355c6
+# track_size = 13148
+track_size = size(short_track.distance, 1)
+# track_size = 5000
 
 # ╔═╡ 19d51114-43d4-4c38-9a3d-55ec982f7c56
 distance_perc = last(short_track).distance / last(track.distance)
@@ -886,7 +904,7 @@ begin
 end
 
 # ╔═╡ a8b6ce9d-5507-4acb-954f-b43d702e1060
-@md_str " ### Reult speed graph"
+@md_str " ### Result speed graph"
 
 # ╔═╡ 3642f56d-ac97-435a-b446-68eb7814b03c
 begin
@@ -2751,6 +2769,7 @@ version = "1.4.1+0"
 # ╠═3ca6f786-8add-4c46-b82a-30a570828d39
 # ╠═e50a7ae9-a46e-41b0-8a10-d77e9ffa7b14
 # ╠═5c9c006c-f814-4829-8c18-108546be870b
+# ╠═264d9d64-6a6d-4e84-9af1-5795bd5bf829
 # ╠═411e63ec-b83a-4e21-9535-5d0275381039
 # ╠═21634b70-7b3a-44b2-b629-01664ce81acf
 # ╠═5f3a7fcf-e261-4f64-a94c-57a12093e353
@@ -2803,9 +2822,9 @@ version = "1.4.1+0"
 # ╠═e9e72767-4fd3-4e9f-97bc-01c1f35ec916
 # ╠═c1c47be6-b0a4-41bf-a284-26f193792748
 # ╠═eb193e5d-65ba-46b1-be15-5c399abad44b
-# ╠═e75a6ae6-a09c-4c21-a421-d0124dd355c6
 # ╠═64ec134c-e5cf-4c97-869f-d39b91e2599e
 # ╠═ca583c57-d93c-4bb3-8cd3-b92184226a5f
+# ╠═e75a6ae6-a09c-4c21-a421-d0124dd355c6
 # ╠═19d51114-43d4-4c38-9a3d-55ec982f7c56
 # ╠═2de331ba-bd7d-49bd-80a2-60270c769a7c
 # ╠═724deff0-8265-4ca9-aa3e-2dfdd6f4d293
