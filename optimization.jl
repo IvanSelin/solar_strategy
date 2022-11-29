@@ -1939,7 +1939,7 @@ solar_power_income_expanded(
 )
 
 # ╔═╡ ff5c50ef-19df-4123-9da2-2efd43229b6f
-solar_power_income_expanded(
+solar_power_income_expanded.(
 	time_df_no_b.latitude,
 	time_df_no_b.longitude, 
 	time_df_no_b.altitude, 
@@ -1982,7 +1982,7 @@ solar_power_income_expanded(
 # ╔═╡ 0d4cccc7-56bf-45c2-8529-16adf8eaecc7
 @md_str "### Regular version makes a lot more allocations!
 
-Time to switch to "
+Time to switch to less-allocative code"
 
 # ╔═╡ 1aff4c3c-f4fa-4cda-9810-f91514dc81a1
 @md_str "trying out in-place variant"
@@ -2338,13 +2338,6 @@ end
 # ╔═╡ f336bb29-2ac3-41e0-9930-623e8fea3af5
 @md_str " # Trying out faster function in optimization"
 
-# ╔═╡ 65fe49a5-a715-426b-98e0-895996f0ddf8
-function calculate_power_use_accumulated_alloc(mechanical, electrical)
-    power_use = mechanical + electrical;
-    power_use_accumulated = cumsum(power_use);
-    return  power_use_accumulated / 3600;
-end
-
 # ╔═╡ 6038ed31-c1c5-4a3a-8809-9e6a39fd0e5b
 function mechanical_power_calculation_alloc(speed_ms, slope, diff_distance)
     drag = 0.18
@@ -2565,6 +2558,11 @@ end
 # ╔═╡ 28f216c0-f5b3-4f22-a5eb-192423b980e9
 @time result_hierarchical_alloc = hierarchical_optimization_alloc(initial_speed, short_track, chunks_amount_hierarchical, start_energy_short, 0., start_datetime_hierarchical, 1, track_size)
 
+# ╔═╡ e5b2c108-25a9-4035-bc60-5c5ca3eb54f1
+@md_str " About 35-40 seconds on second run 
+
+2-3x times faster!"
+
 # ╔═╡ 3198a48f-36e2-452a-9acd-e478a15057a3
 begin
 	inputs_ms_hier_alloc = abs.(convert_kmh_to_ms(result_hierarchical_alloc))
@@ -2599,6 +2597,14 @@ plot(short_track.distance, result_hierarchical_alloc - result_hierarchical)
 
 # ╔═╡ e13c04ce-bb90-480f-978c-2f02f01d31de
 plot(short_track.distance, power_use_hier_alloc - power_use_hier)
+
+# ╔═╡ 559f597f-0d11-4212-b1e7-9ccd22661ae0
+@md_str "## Time to transfer solar power income expanded alloc into the main code
+
+Along with solar trip calculation bounds alloc, mechanical power calculation alloc, solar partial trip wrapper alloc and hierarchical optimization alloc"
+
+# ╔═╡ 01d54fa2-cd95-4150-af88-f1fbf8f1ae08
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -4090,7 +4096,6 @@ version = "1.4.1+0"
 # ╠═b1c4718b-3829-4b39-a84b-2445d605f08d
 # ╠═ad211fed-2077-4869-bdcb-23c9804db113
 # ╠═f336bb29-2ac3-41e0-9930-623e8fea3af5
-# ╠═65fe49a5-a715-426b-98e0-895996f0ddf8
 # ╠═6038ed31-c1c5-4a3a-8809-9e6a39fd0e5b
 # ╠═69b2fd33-615a-4bf3-8936-8c9ee0651ad1
 # ╠═c4d4fb36-fcd4-4d1c-b5f3-f208ad48fd3f
@@ -4103,6 +4108,7 @@ version = "1.4.1+0"
 # ╠═54daafd9-2842-43f4-bde3-eabdd6403767
 # ╠═2a00bd6b-a0ce-4b54-bf88-d6cc2b2204c8
 # ╠═28f216c0-f5b3-4f22-a5eb-192423b980e9
+# ╠═e5b2c108-25a9-4035-bc60-5c5ca3eb54f1
 # ╠═3198a48f-36e2-452a-9acd-e478a15057a3
 # ╠═a80b460a-efac-4ecc-ad30-3a00e200f31e
 # ╠═bd7d392b-f98f-4e98-9a5d-155d1d6fd199
@@ -4110,5 +4116,7 @@ version = "1.4.1+0"
 # ╠═9e921706-7eda-4574-b8c5-ad368490b4e1
 # ╠═fdec6c16-d095-4914-86bb-b94983b04465
 # ╠═e13c04ce-bb90-480f-978c-2f02f01d31de
+# ╠═559f597f-0d11-4212-b1e7-9ccd22661ae0
+# ╠═01d54fa2-cd95-4150-af88-f1fbf8f1ae08
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
