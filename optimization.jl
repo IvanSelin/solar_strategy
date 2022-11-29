@@ -697,7 +697,7 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 
 	# 2 - set up optimization itself
 	function f(speed)
-		return solar_partial_trip_wrapper(abs.(speed), track, split_indexes, start_energy, finish_energy, start_datetime)
+		return solar_partial_trip_wrapper(speed, track, split_indexes, start_energy, finish_energy, start_datetime)
 	end
 	td = TwiceDifferentiable(f, fill(speed, chunks_amount); autodiff = :forward)
 	lower_bound = fill(0.0, chunks_amount)
@@ -724,26 +724,26 @@ function hierarchical_optimization(speed, track, chunks_amount, start_energy, fi
 	minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds)
 	minimized_speed_vector = set_speeds(minimized_speeds_ms, track, split_indexes)
 	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(minimized_speed_vector, track, start_datetime, start_energy)
-	println("iteration $(iteration), speed is $(speed) planned finish energy is $(finish_energy)")
-	println("track from $(start_index) to $(end_index)")
-	println("start datetime $(start_datetime)")
-	println("stare energy $(start_energy)")
-	println("time is $(last(time_s)), cost is $(f(minimized_speeds))")
-	println("split indexes are $(split_indexes)")
-	println("distances are $(track[split_indexes, :])")
-	println("minimized speeds are: $(minimized_speeds)")
-	println("simulated finish energy is $(last(energy_in_system))")
-	println("calculated cost is $( last(time_s) + 100 * abs(last(energy_in_system) - finish_energy) + 100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0])) )")
-	println("finish energy difference penalty is: $(100 * abs(last(energy_in_system) - finish_energy))")
-	println("energy less than 0. penalty is: $(100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])))")
-	println("speed less than 0. penalty is: $(100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])))")
-	println("speed more than 100. penalty is: $(100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0 / 3.6])))")
+	# println("iteration $(iteration), speed is $(speed) planned finish energy is $(finish_energy)")
+	# println("track from $(start_index) to $(end_index)")
+	# println("start datetime $(start_datetime)")
+	# println("stare energy $(start_energy)")
+	# println("time is $(last(time_s)), cost is $(f(minimized_speeds))")
+	# println("split indexes are $(split_indexes)")
+	# println("distances are $(track[split_indexes, :])")
+	# println("minimized speeds are: $(minimized_speeds)")
+	# println("simulated finish energy is $(last(energy_in_system))")
+	# println("calculated cost is $( last(time_s) + 100 * abs(last(energy_in_system) - finish_energy) + 100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0])) )")
+	# println("finish energy difference penalty is: $(100 * abs(last(energy_in_system) - finish_energy))")
+	# println("energy less than 0. penalty is: $(100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])))")
+	# println("speed less than 0. penalty is: $(100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])))")
+	# println("speed more than 100. penalty is: $(100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0 / 3.6])))")
 	split_energies = energy_in_system[split_indexes]
 	pushfirst!(split_energies, start_energy)
 	split_times = time[split_indexes, :utc_time]
 	pushfirst!(split_times, start_datetime)
-	println("split energies are $(split_energies)")
-	println("")
+	# println("split energies are $(split_energies)")
+	# println("")
 	
 	# 5 - go though each track piece and enter function again
 	# hierarchical_optimization(minimized_speeds[1], tracks[1], chunks_amount, start_energy, split_energies[1], start_datetime, iteration + 1)
@@ -1497,6 +1497,1108 @@ Plots.surface(5:5:80, 5:5:80, cost_calc_3d_3)
 
 # ╔═╡ 6e64c5d0-c9cf-4c4b-a9df-1f28225b7eff
 # example here: https://github.com/JuliaDiff/ReverseDiff.jl/blob/master/examples/gradient.jl 
+
+# ╔═╡ e2a35442-6974-4607-bbc0-b12ca32b4594
+@md_str " ## Trying out solar calc without broadcasting"
+
+# ╔═╡ 2a19189a-8da9-4e1a-a76b-6d4a09e0ad0f
+function solar_radiation_no_broadcasting(data_df, track_dataframe)
+    # starts here: https://www.pveducation.org/pvcdrom/properties-of-sunlight/solar-radiation-outside-the-earths-atmosphere
+
+    # copy generate_year_time_dataframe(100000)
+    # data_df = copy(time_dataframe)
+    data_df.latitude = track_dataframe.latitude
+    data_df.longitude = track_dataframe.longitude
+    data_df.altitude = track_dataframe.altitude
+
+    # for debug purposes
+    # data_df = copy(time_df)
+    # data_df.latitude = track.latitude
+    # data_df.longitude = track.longitude
+    # data_df.altitude = track.altitude
+
+    # setting up needed values for calculcations
+    # data_df.day = Dates.day.(data_df.datetime)
+
+    # solar constant
+    H_constant = 1353 # W/m^2
+    # AM0 = 1366 # air mass zero, W/m^2
+
+    # radiant power density otside the Erath's athmosphere in W/m^2
+    # H = H_constant * (1 .+ 0.033*cosd.( (360 * (Dates.dayofyear.(data_df.utc_time) .- 2)) / 365 ) )
+    # plot(Dates.dayofyear.(data_df.utc_time),H, title = "Radial power density W/m^2")
+
+    # TODO: air mass calculation with phi? and theta?
+
+    # time shift for current latitude, hours
+    # local_standard_time_meridian = 15 * Dates.Hour(local_time - UTC_time).value
+    # very rough estimation
+    # proper solution like https://stackoverflow.com/questions/5584602/determine-timezone-from-latitude-longitude-without-using-web-services-like-geona
+    # data_df.lstm = 15 * ceil(data_df.longitude * 24 / 360)
+
+    # equation of time
+    B = 360 / 365 * (Dates.dayofyear(data_df.utc_time) - 81) # in degrees
+    equation_of_time = 9.87 * sind(2B) - 7.53 * cosd(B) - 1.5 * sind(B) # minutes
+    # plot(
+    #     equation_of_time,
+    #     title = "Equation of time",
+    #     label = "Equation of time",
+    #     xlabel = "Day of the Year",
+    #     ylabel = "Minutes"
+    # )
+
+    # TODO: resume from here
+    # because local standard time meridian is not real sun time , minutes
+    # time_correction_factor = 4 * (data_df.longitude - data_df.lstm) + equation_of_time
+    # plot(time_correction_factor, title="Time correction factor")
+
+    # local_solar_time = local_time + Dates.Second(round(time_correction_factor * 60.0))
+    # # LST = 4 longitude + 60 UTC_minutes +EoT
+    # # so, we only need to know UTC time and longitude
+    # local_solar_time = UTC_time +
+    #     Dates.Second( round( (4*longitude + equation_of_time[day]) * 60) )
+
+    local_solar_time = data_df.utc_time +
+        Dates.Second( round(4 * data_df.longitude + equation_of_time) * 60)
+    
+    # TODO: should hour angle be only in integer values? 
+    # minutes_from_start_of_the_day = Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time);
+    hour_angle = 15 * ((Dates.hour(data_df.utc_time) * 60 + Dates.minute(data_df.utc_time)) /60 - 12)
+    # TODO: hour angle calculation for UTC time
+    # plot(data_df.utc_time, hour_angle, title="Hour angle vs UTC time")
+    # TODO: hour angle calculation for local solar time ??? check if needed
+
+    # TODO: continue to sun declination angle
+    # TODO: continous sun declination angle calculation? (as for now quantified by days)
+    sun_declination_angle = -23.45 * cosd(360 / 365 * (Dates.dayofyear(data_df.utc_time) + 10))
+    # plot(sun_declination_angle, title = "Sun declination angle")
+
+    # elevation (altitude) angle
+    # elevation_angle = 90 .+ data_df.latitude .- sun_declination_angle
+    # plot(data_df.utc_time, elevation_angle, title="Elevation angle (deg)")
+
+    # elevation?
+    elevation = asin(
+        sind(sun_declination_angle) * sind(data_df.latitude) +
+        cosd(sun_declination_angle) * cosd(data_df.latitude) * cosd.(hour_angle)
+    )
+    # plot(elevation, title="Elevation of the sun in rad")
+    # when elevation angle is negative it means that sun is below horizon 
+    # so, we should nullify these elements
+    elevation_filtered = copy(elevation)
+	if elevation_filtered <= 0
+		elevation_filtered = 0
+	end
+    # elevation_filtered[elevation_filtered .<=0] .= 0
+	
+    # plot(data_df.utc_time, elevation_filtered, title="elevation angle when sun above horizon")
+
+    # TODO: sunrise and sunset hours
+
+    # sunrise_hour = 12 .- 1 / 15.0 .*
+    #     acosd.(
+    #         (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+    #         (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+    #         )
+    #     .- time_correction_factor / 60
+    # # plot(data_df.utc_time, sunrise_hour, title = "sunrise hour")
+
+    # sunset_hour = 12 .+ 1 / 15.0 .*
+    #     acosd.(
+    #         (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+    #         (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+    #         )
+    #     .- time_correction_factor / 60
+
+    # plot(data_df.utc_time, sunset_hour, title = "sunset hour")
+
+    # calculating zenith angle, needed for optical air mass
+    zenith_angle = pi/2 - elevation_filtered
+    # plot(data_df.utc_time, zenith_angle, title="Zenith angle of the sun in rad")
+    cos_zenith_angle = cos(zenith_angle)
+
+    # solar radiation consists of direct and diffuse radiation
+    # https://www.pveducation.org/pvcdrom/properties-of-sunlight/air-mass 
+
+    # calculate air mass - how much air light must pass through
+    air_mass_full = 1 / (cos_zenith_angle + 0.50572 * (96.07995 - deg2rad(zenith_angle))^-1.6364 )
+
+    # direct intensity, not actually used
+    # intensity_direct = H_constant .* 0.7 .^ (air_mass_full .^ 0.678) # W/m^2
+    # H_constant * 70% of radiation ^ air_mass_full ^ coefficient to fit the experimental data
+    # plot(data_df.utc_time, intensity_direct, title="Direct intensity at Earth ground, W/m^2")
+
+    # with altitude (from sea level)
+    intensity_direct_altitude = H_constant * ( (1 - 0.14 * data_df.altitude / 1000) * 0.7 ^ (air_mass_full ^ 0.678) + 0.14 * data_df.altitude / 1000) # W/m^2
+    # plot(data_df.utc_time, intensity_direct_altitude, title="Direct intensity at altitude, W/m^2")
+    # diffuse radiation
+    intensity_diffuse = intensity_direct_altitude * 0.1
+    # global irradiance
+    intensity_global = intensity_direct_altitude + intensity_diffuse
+    # plot(data_df.utc_time, intensity_global, title = "Global irradiance at altitude")
+    # irradiance * cos(zenith_angle) is incident radiation ?
+
+    
+    s_incident = intensity_global
+    # TODO: calculate radiation on a tilted surface
+    # can be done through perpendecular (incident) or horizontal
+    # s_horizontal = s_incident .* sin.(elevation)
+    # module_angle_rad - at what angle to surface panels are located
+    module_angle_rad = 0.0 # just on the ground
+    # azimuth_angle = 0.0 # just something, since it is on the ground, will not be used
+    # TODO: calculate sun azimuth angle according to https://www.pveducation.org/pvcdrom/properties-of-sunlight/azimuth-angle 
+    azimuth_cos = ( sind(sun_declination_angle) * cos(data_df.latitude) - 
+    cosd(sun_declination_angle) * sin(data_df.latitude) * cos(hour_angle) ) / cos(elevation)
+	if azimuth_cos > 1
+		azimuth_cos = 1
+	elseif azimuth_cos < -1
+		azimuth_cos = -1
+	end
+    # azimuth_cos[azimuth_cos .> 1] .= 1
+    # azimuth_cos[azimuth_cos .< -1] .= -1
+    azimuth_angle = acos( azimuth_cos )
+    lst = Dates.hour(local_solar_time)
+	if Dates.hour(local_solar_time) > 12
+		azimuth_angle = 2*pi - azimuth_angle
+	end
+    # data_df.azimuth_angle[Dates.hour.(data_df.local_solar_time) .> 12 ] .= 2*pi .- data_df.azimuth_angle[Dates.hour.(data_df.local_solar_time) .> 12 ]
+		
+    # module azimuth angle
+    module_azimuth_angle = azimuth_angle
+    # s_module stand for solar module, tilted surface
+    # s_module = s_incident .* sin.(elevation .+ data_df.module_angle_rad)
+    # plot(data_df.utc_time, s_module, title="Solar intensity without module azimuth")
+    # OR https://www.pveducation.org/pvcdrom/properties-of-sunlight/arbitrary-orientation-and-tilt 
+    s_module_azimuth = s_incident * (
+        cos(elevation) * sin(module_angle_rad) * cos(azimuth_angle - module_azimuth_angle) +
+        sin(elevation) * cos(module_angle_rad)
+        )
+    # plot(data_df.utc_time, s_module_azimuth, title="Solar intensity with module azimuth")
+
+    # next - simulate the race
+    return s_module_azimuth
+end
+
+# ╔═╡ 9020198b-e68e-4253-a6ed-31a8d76944a6
+function solar_power_income_no_broadcasting(time_df, track_df, speed_vector)
+    electrics_efficiency = 0.86
+    solar_panels_efficiency = 0.228
+    panels_area = 4 # m^2
+    solar_intensity = solar_radiation_no_broadcasting(time_df, track_df)
+    power_income = electrics_efficiency * solar_panels_efficiency * solar_intensity * panels_area * track_df.diff_distance / speed_vector # W*s
+    power_income_wt_h = power_income / 3600
+    # power_income(i) = electrics_efficiency * panels_efficiency * solar_rad_h * panels_area * ...
+    # ( dist_diff(i) * 3.6 / ( speed * 3600 ) ); % kWt*h
+    return power_income_wt_h 
+end
+
+# ╔═╡ b2707113-fb5b-4600-bd48-4be882759436
+speed_vec_no_b = fill(40.0, size(short_track.distance, 1) )
+
+# ╔═╡ 6a9d745e-e8ee-499c-ba72-fc95570ce442
+time_df_no_b = calculate_travel_time_datetime(
+	speed_vec_no_b,
+	short_track,
+	DateTime(2022,7,1,0,0,0)
+)
+
+# ╔═╡ 10b601b5-b24e-44e9-8d1a-c14aeba3dcf7
+short_track
+
+# ╔═╡ b88cc8dd-39d6-4879-98a2-cccaf6e000b7
+first(short_track)
+
+# ╔═╡ 2ab21d7e-7416-4057-a53e-8ebde10295e6
+first(short_track).latitude
+
+# ╔═╡ 84ce8c14-0f67-46a6-9386-818c8003818f
+first(short_track).lstm = 12
+
+# ╔═╡ c22bfed6-38cf-454f-93b1-6516e10e3b96
+solar_power_income_no_broadcasting(time_df_no_b[1,:], short_track[1,:], speed_vec_no_b[1])
+
+# ╔═╡ a37676f5-e278-4df8-aa88-4f3ec1e3c414
+solar_power_income_no_broadcasting(first(time_df_no_b), first(short_track), first(speed_vec_no_b))
+
+# ╔═╡ 63775bee-b22e-4f99-a16c-d74ceaa91e65
+@md_str "### Nice! It's time to understand how to make it work with arrays"
+
+# ╔═╡ 45a74d26-5ad9-404d-af14-33ae4f863a3d
+solar_power_income_no_broadcasting(time_df_no_b, short_track, speed_vec_no_b)
+
+# ╔═╡ 7f7ab4bd-69d4-498e-b6f1-a01bb5857ce5
+broadcast(solar_power_income_no_broadcasting, time_df_no_b, short_track, speed_vec_no_b)
+
+# ╔═╡ 3ee9dae1-bccc-41b3-9980-3649683dae3c
+size(time_df_no_b)
+
+# ╔═╡ cecb4231-6cdf-42dd-81fc-7fb304e4ffc0
+size(short_track)
+
+# ╔═╡ b10c3e4b-edbc-474e-8c79-f37d9726439f
+size(speed_vec_no_b)
+
+# ╔═╡ a57b759e-9c4b-49c4-9439-4b842131f325
+@md_str "Should I pass not dataframe, but separate arrays?"
+
+# ╔═╡ 15186cf0-a932-47b6-9f4c-3378b123de04
+function solar_radiation_no_broadcasting_arrays(latitude, longitude, altitude, utc_time)
+    # starts here: https://www.pveducation.org/pvcdrom/properties-of-sunlight/solar-radiation-outside-the-earths-atmosphere
+
+    # copy generate_year_time_dataframe(100000)
+
+    # for debug purposes
+    # data_df = copy(time_df)
+    # data_df.latitude = track.latitude
+    # data_df.longitude = track.longitude
+    # data_df.altitude = track.altitude
+
+    # setting up needed values for calculcations
+    # data_df.day = Dates.day.(data_df.datetime)
+
+    # solar constant
+    H_constant = 1353 # W/m^2
+    # AM0 = 1366 # air mass zero, W/m^2
+
+    # radiant power density otside the Erath's athmosphere in W/m^2
+    # H = H_constant * (1 .+ 0.033*cosd.( (360 * (Dates.dayofyear.(data_df.utc_time) .- 2)) / 365 ) )
+    # plot(Dates.dayofyear.(data_df.utc_time),H, title = "Radial power density W/m^2")
+
+    # TODO: air mass calculation with phi? and theta?
+
+    # time shift for current latitude, hours
+    # local_standard_time_meridian = 15 * Dates.Hour(local_time - UTC_time).value
+    # very rough estimation
+    # proper solution like https://stackoverflow.com/questions/5584602/determine-timezone-from-latitude-longitude-without-using-web-services-like-geona
+    # data_df.lstm = 15 * ceil(data_df.longitude * 24 / 360)
+
+    # equation of time
+    B = 360 / 365 * (Dates.dayofyear(utc_time) - 81) # in degrees
+    equation_of_time = 9.87 * sind(2B) - 7.53 * cosd(B) - 1.5 * sind(B) # minutes
+    # plot(
+    #     equation_of_time,
+    #     title = "Equation of time",
+    #     label = "Equation of time",
+    #     xlabel = "Day of the Year",
+    #     ylabel = "Minutes"
+    # )
+
+    # TODO: resume from here
+    # because local standard time meridian is not real sun time , minutes
+    # time_correction_factor = 4 * (data_df.longitude - data_df.lstm) + equation_of_time
+    # plot(time_correction_factor, title="Time correction factor")
+
+    # local_solar_time = local_time + Dates.Second(round(time_correction_factor * 60.0))
+    # # LST = 4 longitude + 60 UTC_minutes +EoT
+    # # so, we only need to know UTC time and longitude
+    # local_solar_time = UTC_time +
+    #     Dates.Second( round( (4*longitude + equation_of_time[day]) * 60) )
+
+    local_solar_time = utc_time +
+        Dates.Second( round(4 * longitude + equation_of_time) * 60)
+    
+    # TODO: should hour angle be only in integer values? 
+    # minutes_from_start_of_the_day = Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time);
+    hour_angle = 15 * ((Dates.hour(utc_time) * 60 + Dates.minute(utc_time)) /60 - 12)
+    # TODO: hour angle calculation for UTC time
+    # plot(data_df.utc_time, hour_angle, title="Hour angle vs UTC time")
+    # TODO: hour angle calculation for local solar time ??? check if needed
+
+    # TODO: continue to sun declination angle
+    # TODO: continous sun declination angle calculation? (as for now quantified by days)
+    sun_declination_angle = -23.45 * cosd(360 / 365 * (Dates.dayofyear(utc_time) + 10))
+    # plot(sun_declination_angle, title = "Sun declination angle")
+
+    # elevation (altitude) angle
+    # elevation_angle = 90 .+ data_df.latitude .- sun_declination_angle
+    # plot(data_df.utc_time, elevation_angle, title="Elevation angle (deg)")
+
+    # elevation?
+    elevation = asin(
+        sind(sun_declination_angle) * sind(latitude) +
+        cosd(sun_declination_angle) * cosd(latitude) * cosd.(hour_angle)
+    )
+    # plot(elevation, title="Elevation of the sun in rad")
+    # when elevation angle is negative it means that sun is below horizon 
+    # so, we should nullify these elements
+    elevation_filtered = copy(elevation)
+	if elevation_filtered <= 0
+		elevation_filtered = 0
+	end
+    # elevation_filtered[elevation_filtered .<=0] .= 0
+	
+    # plot(data_df.utc_time, elevation_filtered, title="elevation angle when sun above horizon")
+
+    # TODO: sunrise and sunset hours
+
+    # sunrise_hour = 12 .- 1 / 15.0 .*
+    #     acosd.(
+    #         (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+    #         (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+    #         )
+    #     .- time_correction_factor / 60
+    # # plot(data_df.utc_time, sunrise_hour, title = "sunrise hour")
+
+    # sunset_hour = 12 .+ 1 / 15.0 .*
+    #     acosd.(
+    #         (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+    #         (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+    #         )
+    #     .- time_correction_factor / 60
+
+    # plot(data_df.utc_time, sunset_hour, title = "sunset hour")
+
+    # calculating zenith angle, needed for optical air mass
+    zenith_angle = pi/2 - elevation_filtered
+    # plot(data_df.utc_time, zenith_angle, title="Zenith angle of the sun in rad")
+    cos_zenith_angle = cos(zenith_angle)
+
+    # solar radiation consists of direct and diffuse radiation
+    # https://www.pveducation.org/pvcdrom/properties-of-sunlight/air-mass 
+
+    # calculate air mass - how much air light must pass through
+    air_mass_full = 1 / (cos_zenith_angle + 0.50572 * (96.07995 - deg2rad(zenith_angle))^-1.6364 )
+
+    # direct intensity, not actually used
+    # intensity_direct = H_constant .* 0.7 .^ (air_mass_full .^ 0.678) # W/m^2
+    # H_constant * 70% of radiation ^ air_mass_full ^ coefficient to fit the experimental data
+    # plot(data_df.utc_time, intensity_direct, title="Direct intensity at Earth ground, W/m^2")
+
+    # with altitude (from sea level)
+    intensity_direct_altitude = H_constant * ( (1 - 0.14 * altitude / 1000) * 0.7 ^ (air_mass_full ^ 0.678) + 0.14 * altitude / 1000) # W/m^2
+    # plot(data_df.utc_time, intensity_direct_altitude, title="Direct intensity at altitude, W/m^2")
+    # diffuse radiation
+    intensity_diffuse = intensity_direct_altitude * 0.1
+    # global irradiance
+    intensity_global = intensity_direct_altitude + intensity_diffuse
+    # plot(data_df.utc_time, intensity_global, title = "Global irradiance at altitude")
+    # irradiance * cos(zenith_angle) is incident radiation ?
+
+    
+    s_incident = intensity_global
+    # TODO: calculate radiation on a tilted surface
+    # can be done through perpendecular (incident) or horizontal
+    # s_horizontal = s_incident .* sin.(elevation)
+    # module_angle_rad - at what angle to surface panels are located
+    module_angle_rad = 0.0 # just on the ground
+    # azimuth_angle = 0.0 # just something, since it is on the ground, will not be used
+    # TODO: calculate sun azimuth angle according to https://www.pveducation.org/pvcdrom/properties-of-sunlight/azimuth-angle 
+    azimuth_cos = ( sind(sun_declination_angle) * cos(latitude) - 
+    cosd(sun_declination_angle) * sin(latitude) * cos(hour_angle) ) / cos(elevation)
+	if azimuth_cos > 1
+		azimuth_cos = 1
+	elseif azimuth_cos < -1
+		azimuth_cos = -1
+	end
+    # azimuth_cos[azimuth_cos .> 1] .= 1
+    # azimuth_cos[azimuth_cos .< -1] .= -1
+    azimuth_angle = acos( azimuth_cos )
+    lst = Dates.hour(local_solar_time)
+	if Dates.hour(local_solar_time) > 12
+		azimuth_angle = 2*pi - azimuth_angle
+	end
+    # data_df.azimuth_angle[Dates.hour.(data_df.local_solar_time) .> 12 ] .= 2*pi .- data_df.azimuth_angle[Dates.hour.(data_df.local_solar_time) .> 12 ]
+		
+    # module azimuth angle
+    module_azimuth_angle = azimuth_angle
+    # s_module stand for solar module, tilted surface
+    # s_module = s_incident .* sin.(elevation .+ data_df.module_angle_rad)
+    # plot(data_df.utc_time, s_module, title="Solar intensity without module azimuth")
+    # OR https://www.pveducation.org/pvcdrom/properties-of-sunlight/arbitrary-orientation-and-tilt 
+    s_module_azimuth = s_incident * (
+        cos(elevation) * sin(module_angle_rad) * cos(azimuth_angle - module_azimuth_angle) +
+        sin(elevation) * cos(module_angle_rad)
+        )
+    # plot(data_df.utc_time, s_module_azimuth, title="Solar intensity with module azimuth")
+
+    # next - simulate the race
+    return s_module_azimuth
+end
+
+# ╔═╡ 01382010-99aa-4393-b6e0-7eaefd2b2ace
+function solar_power_income_expanded(latitude, longitude, altitude, utc_time, diff_distance, speed_vector)
+    electrics_efficiency = 0.86
+    solar_panels_efficiency = 0.228
+    panels_area = 4 # m^2
+    solar_intensity = solar_radiation_no_broadcasting_arrays(latitude, longitude, altitude, utc_time)
+    power_income = electrics_efficiency * solar_panels_efficiency * solar_intensity * panels_area * diff_distance / speed_vector # W*s
+    power_income_wt_h = power_income / 3600
+    # power_income(i) = electrics_efficiency * panels_efficiency * solar_rad_h * panels_area * ...
+    # ( dist_diff(i) * 3.6 / ( speed * 3600 ) ); % kWt*h
+    return power_income_wt_h 
+end
+
+# ╔═╡ 89b6d6ee-1b73-4e2b-aa06-eda5a40979f7
+solar_power_income_expanded(
+	first(time_df_no_b.latitude),
+	first(time_df_no_b.longitude), 
+	first(time_df_no_b.altitude), 
+	first(time_df_no_b.utc_time),
+	first(short_track.diff_distance),
+	first(speed_vec_no_b)
+)
+
+# ╔═╡ ff5c50ef-19df-4123-9da2-2efd43229b6f
+solar_power_income_expanded(
+	time_df_no_b.latitude,
+	time_df_no_b.longitude, 
+	time_df_no_b.altitude, 
+	time_df_no_b.utc_time,
+	short_track.diff_distance,
+	speed_vec_no_b
+)
+
+# ╔═╡ f46e89ce-dfa7-4eb4-91d4-6f8e97ab50ba
+@time broadcasted_function_result = broadcast(solar_power_income_expanded, time_df_no_b.latitude,
+	time_df_no_b.longitude, 
+	time_df_no_b.altitude, 
+	time_df_no_b.utc_time,
+	short_track.diff_distance,
+	speed_vec_no_b
+)
+
+# ╔═╡ e662491c-5165-4d3f-926f-fac8549e94e0
+@md_str "0.007323 seconds (15 allocations: 103.297 KiB)"
+
+# ╔═╡ 178b9ad6-7784-4984-9684-3241ba7217dd
+@time broadcasted_function_result_dot = solar_power_income_expanded.(
+	time_df_no_b.latitude,
+	time_df_no_b.longitude, 
+	time_df_no_b.altitude, 
+	time_df_no_b.utc_time,
+	short_track.diff_distance,
+	speed_vec_no_b
+)
+
+# ╔═╡ 564bb277-404c-413f-9e5b-1d56df39040f
+@md_str "0.006838 seconds (14 allocations: 103.234 KiB)"
+
+# ╔═╡ 5a64f67e-f9f0-4942-a3f9-7c7e468e9225
+@time vectorized_function_result = solar_power_income(time_df_no_b, short_track, speed_vec_no_b)
+
+# ╔═╡ 5b04879a-5029-4439-b4df-c1449fe27834
+@md_str "0.013377 seconds (323 allocations: 5.050 MiB)"
+
+# ╔═╡ 0d4cccc7-56bf-45c2-8529-16adf8eaecc7
+@md_str "### Regular version makes a lot more allocations!
+
+Time to switch to "
+
+# ╔═╡ 1aff4c3c-f4fa-4cda-9810-f91514dc81a1
+@md_str "trying out in-place variant"
+
+# ╔═╡ cbe4aeeb-ad2a-4607-b010-20b34569773d
+function solar_radiation_pvedication_alloc(data_df, track_dataframe)
+    # starts here: https://www.pveducation.org/pvcdrom/properties-of-sunlight/solar-radiation-outside-the-earths-atmosphere
+
+    # copy generate_year_time_dataframe(100000)
+    # data_df = copy(time_dataframe)
+    data_df.latitude = track_dataframe.latitude
+    data_df.longitude = track_dataframe.longitude
+    data_df.altitude = track_dataframe.altitude
+
+    # for debug purposes
+    # data_df = copy(time_df)
+    # data_df.latitude = track.latitude
+    # data_df.longitude = track.longitude
+    # data_df.altitude = track.altitude
+
+    # setting up needed values for calculcations
+    # data_df.day = Dates.day.(data_df.datetime)
+
+    # solar constant
+    H_constant = 1353 # W/m^2
+    # AM0 = 1366 # air mass zero, W/m^2
+
+    # radiant power density otside the Erath's athmosphere in W/m^2
+    # H = H_constant * (1 .+ 0.033*cosd.( (360 * (Dates.dayofyear.(data_df.utc_time) .- 2)) / 365 ) )
+    # plot(Dates.dayofyear.(data_df.utc_time),H, title = "Radial power density W/m^2")
+
+    # TODO: air mass calculation with phi? and theta?
+
+    # time shift for current latitude, hours
+    # local_standard_time_meridian = 15 * Dates.Hour(local_time - UTC_time).value
+    # very rough estimation
+    # proper solution like https://stackoverflow.com/questions/5584602/determine-timezone-from-latitude-longitude-without-using-web-services-like-geona
+
+
+    # equation of time
+    B = 360 / 365 * (Dates.dayofyear.(data_df.utc_time) .- 81) # in degrees
+    equation_of_time = 9.87 * sind.(2B) - 7.53 * cosd.(B) - 1.5 * sind.(B) # minutes
+    # plot(
+    #     equation_of_time,
+    #     title = "Equation of time",
+    #     label = "Equation of time",
+    #     xlabel = "Day of the Year",
+    #     ylabel = "Minutes"
+    # )
+
+    # TODO: resume from here
+    # because local standard time meridian is not real sun time , minutes
+    # time_correction_factor = 4 * (data_df.longitude - data_df.lstm) + equation_of_time
+    # plot(time_correction_factor, title="Time correction factor")
+
+    # local_solar_time = local_time + Dates.Second(round(time_correction_factor * 60.0))
+    # # LST = 4 longitude + 60 UTC_minutes +EoT
+    # # so, we only need to know UTC time and longitude
+    # local_solar_time = UTC_time +
+    #     Dates.Second( round( (4*longitude + equation_of_time[day]) * 60) )
+
+    data_df.local_solar_time = data_df.utc_time +
+        Dates.Second.( round.(4 * data_df.longitude + equation_of_time) * 60)
+    
+    # TODO: should hour angle be only in integer values? 
+    # minutes_from_start_of_the_day = Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time);
+    hour_angle = 15 * ((Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time)) ./60 .- 12)
+    # TODO: hour angle calculation for UTC time
+    # plot(data_df.utc_time, hour_angle, title="Hour angle vs UTC time")
+    # TODO: hour angle calculation for local solar time ??? check if needed
+
+    # TODO: continue to sun declination angle
+    # TODO: continous sun declination angle calculation? (as for now quantified by days)
+    sun_declination_angle = -23.45 * cosd.(360 / 365 * (Dates.dayofyear.(data_df.utc_time) .+ 10))
+    # plot(sun_declination_angle, title = "Sun declination angle")
+
+    # elevation (altitude) angle
+    # elevation_angle = 90 .+ data_df.latitude .- sun_declination_angle
+    # plot(data_df.utc_time, elevation_angle, title="Elevation angle (deg)")
+
+    # elevation?
+    elevation = asin.(
+        sind.(sun_declination_angle) .* sind.(data_df.latitude) +
+        cosd.(sun_declination_angle) .* cosd.(data_df.latitude) .* cosd.(hour_angle)
+    )
+    # plot(elevation, title="Elevation of the sun in rad")
+    # when elevation angle is negative it means that sun is below horizon 
+    # so, we should nullify these elements
+    # elevation_filtered = copy(elevation)
+	# elevation_filtered = elevation
+    elevation[elevation .<=0] .= 0
+    # plot(data_df.utc_time, elevation_filtered, title="elevation angle when sun above horizon")
+
+    # TODO: sunrise and sunset hours
+
+    # sunrise_hour = 12 .- 1 / 15.0 .*
+    #     acosd.(
+    #         (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+    #         (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+    #         )
+    #     .- time_correction_factor / 60
+    # # plot(data_df.utc_time, sunrise_hour, title = "sunrise hour")
+
+    # sunset_hour = 12 .+ 1 / 15.0 .*
+    #     acosd.(
+    #         (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+    #         (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+    #         )
+    #     .- time_correction_factor / 60
+
+    # plot(data_df.utc_time, sunset_hour, title = "sunset hour")
+
+    # calculating zenith angle, needed for optical air mass
+    zenith_angle = pi/2 .- elevation
+    # plot(data_df.utc_time, zenith_angle, title="Zenith angle of the sun in rad")
+    cos_zenith_angle = cos.(zenith_angle)
+
+    # solar radiation consists of direct and diffuse radiation
+    # https://www.pveducation.org/pvcdrom/properties-of-sunlight/air-mass 
+
+    # calculate air mass - how much air light must pass through
+    air_mass_full = 1 ./ (cos_zenith_angle .+ 0.50572 .* (96.07995 .- deg2rad.(zenith_angle)).^-1.6364 )
+
+    # direct intensity, not actually used
+    # intensity_direct = H_constant .* 0.7 .^ (air_mass_full .^ 0.678) # W/m^2
+    # H_constant * 70% of radiation ^ air_mass_full ^ coefficient to fit the experimental data
+    # plot(data_df.utc_time, intensity_direct, title="Direct intensity at Earth ground, W/m^2")
+
+    # with altitude (from sea level)
+    intensity_direct_altitude = H_constant .* ( (1 .- 0.14 .* data_df.altitude ./ 1000) .* 0.7 .^ (air_mass_full .^ 0.678) .+ 0.14 .* data_df.altitude ./ 1000) # W/m^2
+    # plot(data_df.utc_time, intensity_direct_altitude, title="Direct intensity at altitude, W/m^2")
+    # diffuse radiation
+    # intensity_diffuse = intensity_direct_altitude * 0.1
+    # global irradiance
+    intensity_global = intensity_direct_altitude * 1.1
+    # plot(data_df.utc_time, intensity_global, title = "Global irradiance at altitude")
+    # irradiance * cos(zenith_angle) is incident radiation ?
+
+    
+    # s_incident = intensity_global
+    # TODO: calculate radiation on a tilted surface
+    # can be done through perpendecular (incident) or horizontal
+    # s_horizontal = s_incident .* sin.(elevation)
+    # module_angle_rad - at what angle to surface panels are located
+    # data_df.module_angle_rad .= 0.0 # just on the ground
+    # data_df.azimuth_angle .= 0.0 # just something, since it is on the ground, will not be used
+    # TODO: calculate sun azimuth angle according to https://www.pveducation.org/pvcdrom/properties-of-sunlight/azimuth-angle 
+    # azimuth_cos = ( sind.(sun_declination_angle) .* cos.(data_df.latitude) .- 
+    # cosd.(sun_declination_angle) .* sin.(data_df.latitude) .* cos.(hour_angle) ) ./ cos.(elevation)
+    # azimuth_cos[azimuth_cos .> 1] .= 1
+    # azimuth_cos[azimuth_cos .< -1] .= -1
+    # data_df.azimuth_angle .= acos.( azimuth_cos )
+    # data_df.lst .= Dates.hour.(data_df.local_solar_time)
+    # data_df.azimuth_angle[Dates.hour.(data_df.local_solar_time) .> 12 ] .= 2*pi .- data_df.azimuth_angle[Dates.hour.(data_df.local_solar_time) .> 12 ]
+    # module azimuth angle
+    # module_azimuth_angle = data_df.azimuth_angle
+    # s_module stand for solar module, tilted surface
+    # s_module = s_incident .* sin.(elevation .+ data_df.module_angle_rad)
+    # plot(data_df.utc_time, s_module, title="Solar intensity without module azimuth")
+    # OR https://www.pveducation.org/pvcdrom/properties-of-sunlight/arbitrary-orientation-and-tilt 
+    # s_module_azimuth = s_incident .* (
+    #     cos.(elevation) .* sin.(data_df.module_angle_rad) .* cos.(data_df.azimuth_angle .- module_azimuth_angle) .+
+    #     sin.(elevation) .* cos.(data_df.module_angle_rad)
+    #     )
+	s_module_azimuth = intensity_global .* sin.(elevation)
+    # plot(data_df.utc_time, s_module_azimuth, title="Solar intensity with module azimuth")
+
+    # next - simulate the race
+    return s_module_azimuth
+end
+
+
+# ╔═╡ daee61c5-6a65-4688-8f1d-7ee6c5a8d884
+function solar_radiation_no_broadcasting_arrays_alloc(latitude, longitude, altitude, utc_time)
+    # starts here: https://www.pveducation.org/pvcdrom/properties-of-sunlight/solar-radiation-outside-the-earths-atmosphere
+
+    # copy generate_year_time_dataframe(100000)
+
+    # for debug purposes
+    # data_df = copy(time_df)
+    # data_df.latitude = track.latitude
+    # data_df.longitude = track.longitude
+    # data_df.altitude = track.altitude
+
+    # setting up needed values for calculcations
+    # data_df.day = Dates.day.(data_df.datetime)
+
+    # solar constant
+    H_constant = 1353 # W/m^2
+    # AM0 = 1366 # air mass zero, W/m^2
+
+    # radiant power density otside the Erath's athmosphere in W/m^2
+    # H = H_constant * (1 .+ 0.033*cosd.( (360 * (Dates.dayofyear.(data_df.utc_time) .- 2)) / 365 ) )
+    # plot(Dates.dayofyear.(data_df.utc_time),H, title = "Radial power density W/m^2")
+
+    # TODO: air mass calculation with phi? and theta?
+
+    # time shift for current latitude, hours
+    # local_standard_time_meridian = 15 * Dates.Hour(local_time - UTC_time).value
+    # very rough estimation
+    # proper solution like https://stackoverflow.com/questions/5584602/determine-timezone-from-latitude-longitude-without-using-web-services-like-geona
+    # data_df.lstm = 15 * ceil(data_df.longitude * 24 / 360)
+
+    # equation of time
+    B = 360 / 365 * (Dates.dayofyear(utc_time) - 81) # in degrees
+    equation_of_time = 9.87 * sind(2B) - 7.53 * cosd(B) - 1.5 * sind(B) # minutes
+    # plot(
+    #     equation_of_time,
+    #     title = "Equation of time",
+    #     label = "Equation of time",
+    #     xlabel = "Day of the Year",
+    #     ylabel = "Minutes"
+    # )
+
+    # TODO: resume from here
+    # because local standard time meridian is not real sun time , minutes
+    # time_correction_factor = 4 * (data_df.longitude - data_df.lstm) + equation_of_time
+    # plot(time_correction_factor, title="Time correction factor")
+
+    # local_solar_time = local_time + Dates.Second(round(time_correction_factor * 60.0))
+    # # LST = 4 longitude + 60 UTC_minutes +EoT
+    # # so, we only need to know UTC time and longitude
+    # local_solar_time = UTC_time +
+    #     Dates.Second( round( (4*longitude + equation_of_time[day]) * 60) )
+
+    local_solar_time = utc_time +
+        Dates.Second( round(4 * longitude + equation_of_time) * 60)
+    
+    # TODO: should hour angle be only in integer values? 
+    # minutes_from_start_of_the_day = Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time);
+    hour_angle = 15 * ((Dates.hour(utc_time) * 60 + Dates.minute(utc_time)) /60 - 12)
+    # TODO: hour angle calculation for UTC time
+    # plot(data_df.utc_time, hour_angle, title="Hour angle vs UTC time")
+    # TODO: hour angle calculation for local solar time ??? check if needed
+
+    # TODO: continue to sun declination angle
+    # TODO: continous sun declination angle calculation? (as for now quantified by days)
+    sun_declination_angle = -23.45 * cosd(360 / 365 * (Dates.dayofyear(utc_time) + 10))
+    # plot(sun_declination_angle, title = "Sun declination angle")
+
+    # elevation (altitude) angle
+    # elevation_angle = 90 .+ data_df.latitude .- sun_declination_angle
+    # plot(data_df.utc_time, elevation_angle, title="Elevation angle (deg)")
+
+    # elevation?
+    elevation = asin(
+        sind(sun_declination_angle) * sind(latitude) +
+        cosd(sun_declination_angle) * cosd(latitude) * cosd.(hour_angle)
+    )
+    # plot(elevation, title="Elevation of the sun in rad")
+    # when elevation angle is negative it means that sun is below horizon 
+    # so, we should nullify these elements
+    # elevation_filtered = copy(elevation)
+	if elevation <= 0
+		elevation = 0
+	end
+    # elevation_filtered[elevation_filtered .<=0] .= 0
+	
+    # plot(data_df.utc_time, elevation_filtered, title="elevation angle when sun above horizon")
+
+    # TODO: sunrise and sunset hours
+
+    # sunrise_hour = 12 .- 1 / 15.0 .*
+    #     acosd.(
+    #         (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+    #         (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+    #         )
+    #     .- time_correction_factor / 60
+    # # plot(data_df.utc_time, sunrise_hour, title = "sunrise hour")
+
+    # sunset_hour = 12 .+ 1 / 15.0 .*
+    #     acosd.(
+    #         (-sind.(data_df.latitude) .* sind.(sun_declination_angle) ) ./
+    #         (cosd.(data_df.latitude) .* cosd.(sun_declination_angle) )
+    #         )
+    #     .- time_correction_factor / 60
+
+    # plot(data_df.utc_time, sunset_hour, title = "sunset hour")
+
+    # calculating zenith angle, needed for optical air mass
+    zenith_angle = pi/2 - elevation
+    # plot(data_df.utc_time, zenith_angle, title="Zenith angle of the sun in rad")
+    cos_zenith_angle = cos(zenith_angle)
+
+    # solar radiation consists of direct and diffuse radiation
+    # https://www.pveducation.org/pvcdrom/properties-of-sunlight/air-mass 
+
+    # calculate air mass - how much air light must pass through
+    air_mass_full = 1 / (cos_zenith_angle + 0.50572 * (96.07995 - deg2rad(zenith_angle))^-1.6364 )
+
+    # direct intensity, not actually used
+    # intensity_direct = H_constant .* 0.7 .^ (air_mass_full .^ 0.678) # W/m^2
+    # H_constant * 70% of radiation ^ air_mass_full ^ coefficient to fit the experimental data
+    # plot(data_df.utc_time, intensity_direct, title="Direct intensity at Earth ground, W/m^2")
+
+    # with altitude (from sea level)
+    intensity_direct_altitude = H_constant * ( (1 - 0.14 * altitude / 1000) * 0.7 ^ (air_mass_full ^ 0.678) + 0.14 * altitude / 1000) # W/m^2
+    # plot(data_df.utc_time, intensity_direct_altitude, title="Direct intensity at altitude, W/m^2")
+    # diffuse radiation
+    # intensity_diffuse = intensity_direct_altitude * 0.1
+    # global irradiance
+    intensity_global = intensity_direct_altitude * 1.1
+    # plot(data_df.utc_time, intensity_global, title = "Global irradiance at altitude")
+    # irradiance * cos(zenith_angle) is incident radiation ?
+    s_module_azimuth = intensity_global * sin(elevation)
+    # plot(data_df.utc_time, s_module_azimuth, title="Solar intensity with module azimuth")
+
+    # next - simulate the race
+    return s_module_azimuth
+end
+
+# ╔═╡ 45c19245-4dbb-4047-b0ed-13b27231c667
+function solar_power_income_alloc(time_df, track_df, speed_vector)
+    electrics_efficiency = 0.86
+    solar_panels_efficiency = 0.228
+    panels_area = 4 # m^2
+    # solar_intensity = solar_radiation_pvedication_alloc(time_df, track_df)
+    # power_income = electrics_efficiency .* solar_panels_efficiency .* solar_intensity .* panels_area .* track_df.diff_distance ./ speed_vector # W*s
+    # power_income_wt_h = power_income ./ 3600
+    # power_income(i) = electrics_efficiency * panels_efficiency * solar_rad_h * panels_area * ...
+    # ( dist_diff(i) * 3.6 / ( speed * 3600 ) ); % kWt*h
+    # return power_income_wt_h 
+	return solar_radiation_pvedication_alloc(time_df, track_df) .* electrics_efficiency .* solar_panels_efficiency .* panels_area .* track_df.diff_distance ./ speed_vector ./ 3600
+end
+
+# ╔═╡ cf80712e-bf9a-4fde-a058-c0404011dca2
+function solar_power_income_expanded_alloc(latitude, longitude, altitude, utc_time, diff_distance, speed_vector)
+    electrics_efficiency = 0.86
+    solar_panels_efficiency = 0.228
+    panels_area = 4 # m^2
+    # solar_intensity = solar_radiation_no_broadcasting_arrays_alloc(latitude, longitude, altitude, utc_time)
+    # power_income = electrics_efficiency * solar_panels_efficiency * solar_intensity * panels_area * diff_distance / speed_vector # W*s
+    # power_income_wt_h = power_income / 3600
+    # # power_income(i) = electrics_efficiency * panels_efficiency * solar_rad_h * panels_area * ...
+    # # ( dist_diff(i) * 3.6 / ( speed * 3600 ) ); % kWt*h
+    # return power_income_wt_h 
+	return solar_radiation_no_broadcasting_arrays_alloc(latitude, longitude, altitude, utc_time) * electrics_efficiency * solar_panels_efficiency * panels_area * diff_distance / speed_vector / 3600.0
+end
+
+# ╔═╡ b1c4718b-3829-4b39-a84b-2445d605f08d
+@time reduced_alloc_function_result = solar_power_income_alloc(time_df_no_b, short_track, speed_vec_no_b)
+
+# ╔═╡ ad211fed-2077-4869-bdcb-23c9804db113
+@time broadcasted_function_result_dot_alloc = solar_power_income_expanded_alloc.(
+	time_df_no_b.latitude,
+	time_df_no_b.longitude, 
+	time_df_no_b.altitude, 
+	time_df_no_b.utc_time,
+	short_track.diff_distance,
+	speed_vec_no_b
+)
+
+# ╔═╡ f336bb29-2ac3-41e0-9930-623e8fea3af5
+@md_str " # Trying out faster function in optimization"
+
+# ╔═╡ 65fe49a5-a715-426b-98e0-895996f0ddf8
+function calculate_power_use_accumulated_alloc(mechanical, electrical)
+    power_use = mechanical + electrical;
+    power_use_accumulated = cumsum(power_use);
+    return  power_use_accumulated / 3600;
+end
+
+# ╔═╡ 6038ed31-c1c5-4a3a-8809-9e6a39fd0e5b
+function mechanical_power_calculation_alloc(speed_ms, slope, diff_distance)
+    drag = 0.18
+    frontal_area = 1 # m^2
+    ro = 1.18 # air density
+
+    mass = 390 # kg
+    g = 9.8019 # at start: [41.2646201567207,-95.9244249307473,301.540649414063];
+    # 9.80147 at finish: [43.9660024736000,-121.345052439700,1229.07763671875]
+    friction_1 = 0.0023;
+    friction_2 = 0.000041; # total friction = friction_1 + friction_2*speed
+
+    engine_efficiency = 0.87
+
+    # mechanical force = drag force + friction force + gravitational force
+    # newtons
+    mechanical_force = (
+        drag * frontal_area * speed_ms ^ 2 * ro / 2. +
+        mass * g * (friction_1 + friction_2 * 4 * speed_ms) * cosd(slope) +
+        mass * g * sind(slope)
+        )
+
+    # mechanical power = mechanical force * distance delta / engine efficiency
+    # watts * s
+    mechanical_power = (
+        mechanical_force * diff_distance / engine_efficiency
+        )
+
+    # TODO: get rid of return, or at least make it type-stable
+    # see https://docs.julialang.org/en/v1/manual/faq/#Types,-type-declarations,-and-constructors-1
+    return mechanical_power
+end
+
+# ╔═╡ 69b2fd33-615a-4bf3-8936-8c9ee0651ad1
+@time mechanical_power_calculation(speed_vector, track.slope, track.diff_distance)
+
+# ╔═╡ c4d4fb36-fcd4-4d1c-b5f3-f208ad48fd3f
+@time mechanical_power_calculation_alloc.(speed_vector, track.slope, track.diff_distance)
+
+# ╔═╡ c2dd681e-c318-424d-9038-f66ab9317c52
+@time calculate_travel_time_datetime(speed_vector, track, DateTime(2022,7,1,0,0,0))
+
+# ╔═╡ 3028c7b7-c633-47b9-bb5d-f15101375b4f
+function solar_trip_calculation_bounds_alloc(input_speed, track, start_datetime,
+    start_energy::Float64=5100.)
+    # input speed in m/s
+	# @debug "func solar_trip_calculation_bounds input_speed size is $(size(input_speed, 1)), track size is $(size(track.distance, 1)))"
+
+    # calculating time needed to spend to travel across distance
+    time_df = calculate_travel_time_datetime(input_speed, track, start_datetime)
+
+    #### calculcations
+    # mechanical calculations are now in separate file
+    mechanical_power = mechanical_power_calculation_alloc.(input_speed, track.slope, track.diff_distance)
+
+    # electical losses
+    electrical_power = electrical_power_calculation(track.diff_distance, input_speed)
+    # converting mechanical work to elecctrical power and then power use
+    # power_use = calculate_power_use(mechanical_power, electrical_power)
+    # power_use_accumulated_wt_h = calculate_power_use_accumulated(mechanical_power, electrical_power)
+	power_use_accumulated_wt_h = mechanical_power + electrical_power
+	cumsum!(power_use_accumulated_wt_h, power_use_accumulated_wt_h)
+	power_use_accumulated_wt_h = power_use_accumulated_wt_h / 3600.
+
+    # get solar energy income
+	# @debug "track size is $(size(track.latitude, 1))"
+    solar_power = solar_power_income_expanded_alloc.(
+		track.latitude,
+		track.longitude, 
+		track.altitude, 
+		time_df.utc_time,
+		track.diff_distance,
+		input_speed
+	)
+    solar_power_accumulated = calculate_power_income_accumulated(solar_power)
+    # TODO: night charging with additional solar panels
+
+    # #### plotting
+    # plot(track.distance, power_use, title="Power spent on toute")
+    # plot(track.distance, solar_power, title="Power gained on the route")
+
+    # plot(track.distance, power_use_accumulated_wt_h, title="Power spent on the route, accumulated")
+    # plot(track.distance, solar_power_accumulated, title="Power gained on the route, accumulated")
+
+    # plot(track.distance, solar_power_accumulated - power_use_accumulated_wt_h, title="Power balance w/o battery")
+    # battery_capacity = 5100 # wt, to be used later for physical constraints
+    energy_in_system = start_energy .+ solar_power_accumulated .- power_use_accumulated_wt_h
+    # plot(track.distance, energy_in_system, title="Power balance with battery")
+
+    # TODO: calculate night charging - do it later since it is not critical as of right now
+    # TODO: block overcharging - cost function?
+    # at first do the black-box optimization, then gradient one
+    # will start with Optim
+    # TODO: find an optimal single speed - make a loss function and start optimization process
+    # time_seconds = calculate_travel_time_seconds(input_speed, track)
+	time_seconds = track.diff_distance ./ input_speed
+	cumsum!(time_seconds, time_seconds)
+    # TODO: find an optimal speed vector
+    return power_use_accumulated_wt_h, solar_power_accumulated, energy_in_system, time_df, time_seconds
+end
+
+# ╔═╡ 1cd3cbae-96dd-4af2-ab6f-eb2565e6d6e1
+@time power_use_test_bounds, solar_power_test_bounds, energy_in_system_test_bounds, time_test_bounds, time_s_test_bounds = solar_trip_calculation_bounds(speed_vector, track, DateTime(2022,7,1,0,0,0), 5099.0);
+
+# ╔═╡ 49158b6b-be82-4689-9a7b-4de7e707e08c
+@time power_use_test_alloc, solar_power_test_alloc, energy_in_system_test_alloc, time_test_alloc, time_s_test_alloc = solar_trip_calculation_bounds_alloc(speed_vector, track, DateTime(2022,7,1,0,0,0), 5099.0);
+
+# ╔═╡ b872074b-094c-4d44-8d90-a1cf4908e012
+@time travel_time_to_datetime(time_s_test_bounds, DateTime(2022,7,1,0,0,0))
+
+# ╔═╡ 5051d08b-4a09-4e59-ae81-2caf9e555be4
+@md_str "# Assembling the alloc Frankenstein "
+
+# ╔═╡ 54daafd9-2842-43f4-bde3-eabdd6403767
+function solar_partial_trip_wrapper_alloc(speeds, track, indexes, start_energy, finish_energy, start_datetime)
+	speeds_ms = convert_kmh_to_ms(speeds)
+	speed_vector = set_speeds(speeds_ms, track, indexes)
+	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds_alloc(speed_vector, track, start_datetime, start_energy)
+	cost = last(time_s) + 10 * abs(finish_energy - last(energy_in_system))
+	return cost
+	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
+end
+
+# ╔═╡ 2a00bd6b-a0ce-4b54-bf88-d6cc2b2204c8
+function hierarchical_optimization_alloc(speed, track, chunks_amount, start_energy, finish_energy, start_datetime, iteration, end_index)
+	# 0. if track is non-divisible on chunks_amount, then return (array of speeds)
+	# 1. split the whole track in chunks (chunks division and speed propagation with same logic - divide at the same idexes)
+	# 2. optimize it on chunks (initial speed = speed, use it for all chunks)
+	# 3. save chunks_amount input speeds
+	# 4. simulate it again to get energy levels at start and finish of each chunk
+	# 5. go through resulting speeds and track chunks to optimize them (entering recursion)
+
+	# 0 - exit condition, stub for now
+	# if iteration == 5
+	# 	return speed
+	# end
+
+	# @debug "func hierarchical_optimization speed is $(speed), track_size is $(size(track.distance, 1))"
+	
+	# track is non-divisible, if its size is <= 1, return speed
+	if size(track.distance, 1) == 1
+		return speed
+	end
+
+	# 1 - splitting the track
+	# determine split indexes
+	track_size = size(track.distance, 1)
+	start_index = end_index - track_size + 1
+	split_indexes = calculate_split_indexes(track_size, chunks_amount)
+	# @debug "split indexes are $(split_indexes), chunks are $(chunks_amount)"
+	# actually split the track
+	tracks = split_track_by_indexes(track, split_indexes)
+	# for the case when there are less indexes than chunks
+	chunks_amount = size(split_indexes,1)
+
+	# 2 - set up optimization itself
+	function f(speed)
+		return solar_partial_trip_wrapper_alloc(speed, track, split_indexes, start_energy, finish_energy, start_datetime)
+	end
+	td = TwiceDifferentiable(f, fill(speed, chunks_amount); autodiff = :forward)
+	lower_bound = fill(0.0, chunks_amount)
+	upper_bound = fill(100.0, chunks_amount)
+	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+	line_search = LineSearches.BackTracking();
+	# result = optimize(td, fill(speed, chunks_amount),
+	    #Newton(; linesearch = line_search),
+	result = optimize(td, tdc, fill(speed, chunks_amount) 
+	.+ (rand(chunks_amount) .* 0.5)
+		,
+		IPNewton(),
+	    Optim.Options(
+	        x_tol = 1e-10,
+	        f_tol = 1e-10,
+	        g_tol = 1e-10
+	    )
+	)
+
+	# 3 - save optimized speeds
+	minimized_speeds = abs.(Optim.minimizer(result))
+	
+	# 4 - sumulate again to obtain energies and times around split indexes
+	minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds)
+	minimized_speed_vector = set_speeds(minimized_speeds_ms, track, split_indexes)
+	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds_alloc(minimized_speed_vector, track, start_datetime, start_energy)
+	# println("iteration $(iteration), speed is $(speed) planned finish energy is $(finish_energy)")
+	# println("track from $(start_index) to $(end_index)")
+	# println("start datetime $(start_datetime)")
+	# println("stare energy $(start_energy)")
+	# println("time is $(last(time_s)), cost is $(f(minimized_speeds))")
+	# println("split indexes are $(split_indexes)")
+	# # println("distances are $(track[split_indexes, :])")
+	# # println("minimized speeds are: $(minimized_speeds)")
+	# println("simulated finish energy is $(last(energy_in_system))")
+	# # println("calculated cost is $( last(time_s) + 100 * abs(last(energy_in_system) - finish_energy) + 100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0])) )")
+	# # println("finish energy difference penalty is: $(100 * abs(last(energy_in_system) - finish_energy))")
+	# # println("energy less than 0. penalty is: $(100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])))")
+	# # println("speed less than 0. penalty is: $(100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])))")
+	# # println("speed more than 100. penalty is: $(100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0 / 3.6])))")
+	split_energies = energy_in_system[split_indexes]
+	pushfirst!(split_energies, start_energy)
+	split_times = time[split_indexes, :utc_time]
+	pushfirst!(split_times, start_datetime)
+	# println("split energies are $(split_energies)")
+	# println("")
+	
+	# 5 - go though each track piece and enter function again
+	# hierarchical_optimization(minimized_speeds[1], tracks[1], chunks_amount, start_energy, split_energies[1], start_datetime, iteration + 1)
+	# @debug "split_energies size is $(size(split_energies, 1)), chunks_amount is $(chunks_amount)"
+	result_speeds = []
+	for i=1:chunks_amount
+		result_speeds_chunk = hierarchical_optimization_alloc(minimized_speeds[i], tracks[i], chunks_amount, split_energies[i], split_energies[i+1], split_times[i], iteration + 1 , start_index + split_indexes[i] - 1)
+		append!(result_speeds, result_speeds_chunk)
+	end
+
+	return result_speeds
+end
+
+# ╔═╡ 28f216c0-f5b3-4f22-a5eb-192423b980e9
+@time result_hierarchical_alloc = hierarchical_optimization_alloc(initial_speed, short_track, chunks_amount_hierarchical, start_energy_short, 0., start_datetime_hierarchical, 1, track_size)
+
+# ╔═╡ 3198a48f-36e2-452a-9acd-e478a15057a3
+begin
+	inputs_ms_hier_alloc = abs.(convert_kmh_to_ms(result_hierarchical_alloc))
+	power_use_hier_alloc, solar_power_hier_alloc, energy_in_system_hier_alloc, time_hier_alloc, time_s_hier_alloc = solar_trip_calculation_bounds_alloc(inputs_ms_hier_alloc, short_track, start_datetime_hierarchical, start_energy_short)
+	last(time_s_hier_alloc)
+end
+
+# ╔═╡ a80b460a-efac-4ecc-ad30-3a00e200f31e
+last(time_s_hier_alloc) - last(time_s_hier)
+
+# ╔═╡ bd7d392b-f98f-4e98-9a5d-155d1d6fd199
+begin
+	plot(short_track.distance, short_track.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance (alloc)", right_margin = 15Plots.mm)
+	plot!(twinx(), short_track.distance, result_hierarchical_alloc, color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance (alloc)")
+end
+
+# ╔═╡ 67791160-75c3-476f-b7e0-6d264a9dc1a4
+begin
+	plot(short_track[1000:1050,:].distance, short_track[1000:1050,:].altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance [1000:1050]", right_margin = 15Plots.mm)
+	plot!(twinx(), short_track[1000:1050,:].distance, result_hierarchical_alloc[1000:1050], color=:red, ylabel="speed (km/h)", label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance [1000:1050]")
+end
+
+# ╔═╡ 9e921706-7eda-4574-b8c5-ad368490b4e1
+plot(short_track.distance, [power_use_hier_alloc solar_power_hier_alloc energy_in_system_hier_alloc zeros(track_size)],
+	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance) for short track Hierarchical",
+	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
+	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+)
+
+# ╔═╡ fdec6c16-d095-4914-86bb-b94983b04465
+plot(short_track.distance, result_hierarchical_alloc - result_hierarchical)
+
+# ╔═╡ e13c04ce-bb90-480f-978c-2f02f01d31de
+plot(short_track.distance, power_use_hier_alloc - power_use_hier)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2758,7 +3860,7 @@ version = "1.4.1+0"
 # ╟─9977c5d5-4872-41d4-8e99-1e4034493e4d
 # ╠═422a0d48-40fe-41eb-b214-e21d009c00b2
 # ╟─6a5416d0-39c0-431b-8add-5dbf13a1bda0
-# ╟─bef6c840-8dc7-4839-b2ba-623c6c46c856
+# ╠═bef6c840-8dc7-4839-b2ba-623c6c46c856
 # ╟─54a5bf51-1723-4ce1-8f6b-1fd199c991b5
 # ╠═c7434aee-3089-4098-8c9d-2d13c9df5ee9
 # ╠═8794ae20-fe98-47ab-bd80-681c09edb7d1
@@ -2951,5 +4053,62 @@ version = "1.4.1+0"
 # ╠═8193ba21-d8d2-40e0-af7b-3028d26afafc
 # ╠═98eef687-eff7-4872-8541-85baeb577b77
 # ╠═6e64c5d0-c9cf-4c4b-a9df-1f28225b7eff
+# ╠═e2a35442-6974-4607-bbc0-b12ca32b4594
+# ╠═2a19189a-8da9-4e1a-a76b-6d4a09e0ad0f
+# ╠═9020198b-e68e-4253-a6ed-31a8d76944a6
+# ╠═b2707113-fb5b-4600-bd48-4be882759436
+# ╠═6a9d745e-e8ee-499c-ba72-fc95570ce442
+# ╠═10b601b5-b24e-44e9-8d1a-c14aeba3dcf7
+# ╠═b88cc8dd-39d6-4879-98a2-cccaf6e000b7
+# ╠═2ab21d7e-7416-4057-a53e-8ebde10295e6
+# ╠═84ce8c14-0f67-46a6-9386-818c8003818f
+# ╠═c22bfed6-38cf-454f-93b1-6516e10e3b96
+# ╠═a37676f5-e278-4df8-aa88-4f3ec1e3c414
+# ╠═63775bee-b22e-4f99-a16c-d74ceaa91e65
+# ╠═45a74d26-5ad9-404d-af14-33ae4f863a3d
+# ╠═7f7ab4bd-69d4-498e-b6f1-a01bb5857ce5
+# ╠═3ee9dae1-bccc-41b3-9980-3649683dae3c
+# ╠═cecb4231-6cdf-42dd-81fc-7fb304e4ffc0
+# ╠═b10c3e4b-edbc-474e-8c79-f37d9726439f
+# ╠═a57b759e-9c4b-49c4-9439-4b842131f325
+# ╠═15186cf0-a932-47b6-9f4c-3378b123de04
+# ╠═01382010-99aa-4393-b6e0-7eaefd2b2ace
+# ╠═89b6d6ee-1b73-4e2b-aa06-eda5a40979f7
+# ╠═ff5c50ef-19df-4123-9da2-2efd43229b6f
+# ╠═f46e89ce-dfa7-4eb4-91d4-6f8e97ab50ba
+# ╠═e662491c-5165-4d3f-926f-fac8549e94e0
+# ╠═178b9ad6-7784-4984-9684-3241ba7217dd
+# ╠═564bb277-404c-413f-9e5b-1d56df39040f
+# ╠═5a64f67e-f9f0-4942-a3f9-7c7e468e9225
+# ╠═5b04879a-5029-4439-b4df-c1449fe27834
+# ╠═0d4cccc7-56bf-45c2-8529-16adf8eaecc7
+# ╠═1aff4c3c-f4fa-4cda-9810-f91514dc81a1
+# ╠═cbe4aeeb-ad2a-4607-b010-20b34569773d
+# ╠═daee61c5-6a65-4688-8f1d-7ee6c5a8d884
+# ╠═45c19245-4dbb-4047-b0ed-13b27231c667
+# ╠═cf80712e-bf9a-4fde-a058-c0404011dca2
+# ╠═b1c4718b-3829-4b39-a84b-2445d605f08d
+# ╠═ad211fed-2077-4869-bdcb-23c9804db113
+# ╠═f336bb29-2ac3-41e0-9930-623e8fea3af5
+# ╠═65fe49a5-a715-426b-98e0-895996f0ddf8
+# ╠═6038ed31-c1c5-4a3a-8809-9e6a39fd0e5b
+# ╠═69b2fd33-615a-4bf3-8936-8c9ee0651ad1
+# ╠═c4d4fb36-fcd4-4d1c-b5f3-f208ad48fd3f
+# ╠═c2dd681e-c318-424d-9038-f66ab9317c52
+# ╠═3028c7b7-c633-47b9-bb5d-f15101375b4f
+# ╠═1cd3cbae-96dd-4af2-ab6f-eb2565e6d6e1
+# ╠═49158b6b-be82-4689-9a7b-4de7e707e08c
+# ╠═b872074b-094c-4d44-8d90-a1cf4908e012
+# ╠═5051d08b-4a09-4e59-ae81-2caf9e555be4
+# ╠═54daafd9-2842-43f4-bde3-eabdd6403767
+# ╠═2a00bd6b-a0ce-4b54-bf88-d6cc2b2204c8
+# ╠═28f216c0-f5b3-4f22-a5eb-192423b980e9
+# ╠═3198a48f-36e2-452a-9acd-e478a15057a3
+# ╠═a80b460a-efac-4ecc-ad30-3a00e200f31e
+# ╠═bd7d392b-f98f-4e98-9a5d-155d1d6fd199
+# ╠═67791160-75c3-476f-b7e0-6d264a9dc1a4
+# ╠═9e921706-7eda-4574-b8c5-ad368490b4e1
+# ╠═fdec6c16-d095-4914-86bb-b94983b04465
+# ╠═e13c04ce-bb90-480f-978c-2f02f01d31de
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
