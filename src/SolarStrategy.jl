@@ -148,7 +148,12 @@ chunks_amount_hierarchical = 10
 start_datetime_hierarchical = DateTime(2022, 7, 1, 0, 0, 0)
 
 
-@time result_hierarchical = hierarchical_optimization(
+# @time result_hierarchical = hierarchical_optimization(
+#     initial_speed, short_track, chunks_amount_hierarchical,
+#     start_energy_short, 0., start_datetime_hierarchical, 1, track_size
+# )
+
+@time result_hierarchical = hierarchical_optimization_alloc(
     initial_speed, short_track, chunks_amount_hierarchical,
     start_energy_short, 0., start_datetime_hierarchical, 1, track_size
 )

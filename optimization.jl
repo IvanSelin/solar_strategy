@@ -2213,7 +2213,7 @@ function solar_radiation_no_broadcasting_arrays_alloc(latitude, longitude, altit
     
     # TODO: should hour angle be only in integer values? 
     # minutes_from_start_of_the_day = Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time);
-    hour_angle = 15 * ((Dates.hour(utc_time) * 60 + Dates.minute(utc_time)) /60 - 12)
+    hour_angle = 15 * ((Dates.hour(utc_time) * 60 + Dates.minute(utc_time)) / 60 - 12)
     # TODO: hour angle calculation for UTC time
     # plot(data_df.utc_time, hour_angle, title="Hour angle vs UTC time")
     # TODO: hour angle calculation for local solar time ??? check if needed
