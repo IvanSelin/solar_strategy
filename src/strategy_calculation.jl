@@ -573,20 +573,20 @@ function hierarchical_optimization(
 	minimized_speed_vector = set_speeds(minimized_speeds_ms, track, split_indexes)
 	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds(
         minimized_speed_vector, track, start_datetime, start_energy)
-	println("iteration $(iteration), speed is $(speed) planned finish energy is $(finish_energy)")
-	println("time is $(last(time_s)), cost is $(f(minimized_speeds))")
-	println("minimized speeds are: $(minimized_speeds)")
-	println("simulated finish energy is $(last(energy_in_system))")
-	# println("calculated cost is $( last(time_s) + 100 * abs(last(energy_in_system) - finish_energy) + 100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0])) )")
-	println("finish energy difference penalty is: $(10 * abs(last(energy_in_system) - finish_energy))")
-	# println("energy less than 0. penalty is: $(100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])))")
-	# println("speed less than 0. penalty is: $(100 * sum(abs.(speed_vector[speed_vector .< 0.0])))")
-	# println("speed more than 100. penalty is: $(100 * sum(abs.(speed_vector[speed_vector .> 100.0 / 3.6])))")
+	# println("iteration $(iteration), speed is $(speed) planned finish energy is $(finish_energy)")
+	# println("time is $(last(time_s)), cost is $(f(minimized_speeds))")
+	# println("minimized speeds are: $(minimized_speeds)")
+	# println("simulated finish energy is $(last(energy_in_system))")
+	# # println("calculated cost is $( last(time_s) + 100 * abs(last(energy_in_system) - finish_energy) + 100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .< 0.0])) + 100 * sum(abs.(minimized_speed_vector[minimized_speed_vector .> 100.0])) )")
+	# println("finish energy difference penalty is: $(10 * abs(last(energy_in_system) - finish_energy))")
+	# # println("energy less than 0. penalty is: $(100 * sum(abs.(energy_in_system[energy_in_system .< 0.0])))")
+	# # println("speed less than 0. penalty is: $(100 * sum(abs.(speed_vector[speed_vector .< 0.0])))")
+	# # println("speed more than 100. penalty is: $(100 * sum(abs.(speed_vector[speed_vector .> 100.0 / 3.6])))")
 	split_energies = energy_in_system[split_indexes]
 	pushfirst!(split_energies, start_energy)
 	split_times = time[split_indexes, :utc_time]
 	pushfirst!(split_times, start_datetime)
-	println("split energies are $(split_energies)")
+	# println("split energies are $(split_energies)")
     println("")
 	
 	# 5 - go though each track piece and enter function again
