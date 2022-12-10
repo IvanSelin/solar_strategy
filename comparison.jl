@@ -101,6 +101,16 @@ function get_simulation_results(speeds, track, start_energy)
 	return solar_trip_calculation(inputs_ms, track, start_energy)
 end
 
+# ╔═╡ a08f0ae6-5171-4a5c-9b51-54861574435b
+function make_speed_distance_plot(track, speeds, label_suffix)
+	plot(track.distance, track.altitude, label="altitude", ylabel="altitude", 
+	    title="Speed (km/h) vs distance $(label_suffix)", right_margin = 15Plots.mm
+	)
+	plot!(twinx(), track.distance, speeds, color=:red, ylabel="speed (km/h)",
+	    ylim=[0, 60], label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance $(label_suffix)"
+	)
+end
+
 # ╔═╡ 4453d854-485c-493e-ab3a-15fd003b791f
 @md_str "# Data setup"
 
@@ -165,7 +175,7 @@ first_n_distance_peaks_track = peaks_track[peaks_track.distance .< short_track_d
 simulate_with_results(
 	fill(40.0, size(full_track.distance, 1)),
 	full_track,
-	5100.
+	start_energy
 )
 
 # ╔═╡ 91990610-4c66-4c68-99e3-8a19615e9227
@@ -178,8 +188,11 @@ simulate_with_results(
 simulate_with_results(
 	fill(50.0, size(full_track.distance, 1)),
 	full_track,
-	5100.
+	start_energy
 )
+
+# ╔═╡ 59520274-195f-40de-bb1d-39785e589b9d
+@md_str "Too fast! Not enough energy at finish line!"
 
 # ╔═╡ 036623f0-83ad-4d7e-98c2-4359565e6904
 @md_str "## Optimizing single speed"
@@ -220,7 +233,7 @@ end
 simulate_with_results(
 	fill(first(minimized_inputs_single), size(full_track.distance, 1)),
 	full_track,
-	5100.
+	start_energy
 )
 
 # ╔═╡ 6f59f35d-242f-4820-a6cc-eb00d3855463
@@ -257,23 +270,21 @@ speeds_chunks = propagate_speeds(minimized_inputs_chunks, full_track)
 simulate_with_results(
 	speeds_chunks,
 	full_track,
-	5100.
+	start_energy
 )
 
-# ╔═╡ cd3f117d-1b5b-4e7a-8b9e-e484ce83f4d6
-begin
-	plot(full_track.distance, full_track.altitude, label="altitude", ylabel="altitude", 
-	    title="Speed (km/h) vs distance", right_margin = 15Plots.mm
-	)
-	plot!(twinx(), full_track.distance, speeds_chunks, color=:red, ylabel="speed (km/h)",
-	    ylim=[0, 60], label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance"
-	)
-end
+# ╔═╡ a2f849c7-59bf-4cb9-8a72-58012f842c52
+make_speed_distance_plot(full_track, speeds_chunks, "full chunks")
+
+# ╔═╡ debfd54f-6b8a-41e3-9983-b1dc96b38425
+@md_str "There is some pattern in speed changes.
+
+Let's compare with solar energy income"
 
 # ╔═╡ 4f51f16b-3d1d-40c2-ac29-c473b377af1c
 power_use_chunks, solar_power_chunks, energy_system_chunks, time_chunks, time_s_chunks = get_simulation_results(speeds_chunks,
 	full_track,
-	5100.
+	start_energy
 );
 
 # ╔═╡ 280e781b-d44a-422d-82d7-fef63bf896f5
@@ -298,7 +309,7 @@ begin
 end
 
 # ╔═╡ 5c495a7b-46dc-4d57-a79e-5937877528a8
-@md_str "We are actually riding faster when there is no sun!"
+@md_str "We are actually riding faster when there is less sun!"
 
 # ╔═╡ e3bc35ed-0e1e-405a-8bf7-27aed1052e5d
 @md_str "# Hierarchical full track"
@@ -309,28 +320,14 @@ chunks_amount_hierarchical = 10
 # ╔═╡ f819be34-6c75-4e60-9ade-73e5060784b3
 @time result_hierarchical = hierarchical_optimization_alloc(40., full_track, chunks_amount_hierarchical, start_energy, 0., start_datetime_hierarchical, 1, size(full_track.distance, 1))
 
-# ╔═╡ f879f394-a830-4c78-98c9-51a88f246c19
-begin
-	plot(full_track.distance, full_track.altitude, label="altitude", ylabel="altitude", 
-	    title="Speed (km/h) vs distance", right_margin = 15Plots.mm
-	)
-	plot!(twinx(), full_track.distance, result_hierarchical, color=:red, ylabel="speed (km/h)",
-	    ylim=[0, 60], label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance"
-	)
-end
+# ╔═╡ 7e8a4a2d-d7c0-434e-923f-4537ed67527e
+make_speed_distance_plot(full_track, result_hierarchical, "full hierarchical")
 
-# ╔═╡ 1aa514e8-1da4-4db1-ab7b-3adeabff6ed5
-begin
-	inputs_ms_hier = convert_kmh_to_ms(result_hierarchical)
-	power_use_hier, solar_power_hier, energy_in_system_hier, time_hier, time_s_hier = solar_trip_calculation(inputs_ms_hier, full_track, 5100.)
-	println(last(time_s_hier)) 
-end
-
-# ╔═╡ 966ccde7-9333-42ae-9ecd-f7651ce0a2d2
-plot(full_track.distance, [power_use_hier solar_power_hier energy_in_system_hier zeros(size(full_track,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph",
-	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
-	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+# ╔═╡ 870f1a76-df17-4136-9b50-e7554c4d785d
+simulate_with_results(
+	result_hierarchical,
+	full_track,
+	start_energy
 )
 
 # ╔═╡ 1ad8acb3-4ebc-4f88-b75c-d96065b6b73d
@@ -339,32 +336,11 @@ plot(full_track.distance, [power_use_hier solar_power_hier energy_in_system_hier
 # ╔═╡ bd129534-00fc-4d6b-bd8c-75331759a76b
 @time result_hierarchical_short = hierarchical_optimization_alloc(40., peaks_track, chunks_amount_hierarchical, start_energy, 0., start_datetime_hierarchical, 1, size(peaks_track.distance, 1))
 
-# ╔═╡ 7ed08e1c-5bcd-41a8-9824-d99be804d0c0
-begin
-	plot(peaks_track.distance, peaks_track.altitude, label="altitude", ylabel="altitude", 
-	    title="Speed (km/h) vs distance", right_margin = 15Plots.mm
-	)
-	plot!(twinx(), peaks_track.distance, result_hierarchical_short, color=:red, ylabel="speed (km/h)",
-	    ylim=[0, 60], label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance"
-	)
-end
-
-# ╔═╡ 8383f5ee-d1c0-4252-9127-ce26a757d15d
-begin
-	inputs_ms_hier_short = convert_kmh_to_ms(result_hierarchical_short)
-	power_use_hier_short, solar_power_hier_short, energy_in_system_hier_short, time_hier_short, time_s_hier_short = solar_trip_calculation(inputs_ms_hier_short, peaks_track, 5100.)
-	println(last(time_s_hier_short)) 
-end
-
-# ╔═╡ 5d6dc9dc-b2f6-42f5-8762-87fbcf226438
-plot(peaks_track.distance, [power_use_hier_short solar_power_hier_short energy_in_system_hier_short zeros(size(peaks_track,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph",
-	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
-	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
-)
+# ╔═╡ c3d1523b-9794-44f2-9439-42b197a243df
+make_speed_distance_plot(peaks_track, result_hierarchical_short, "peaks hierarchical")
 
 # ╔═╡ 612b340f-f426-427b-836d-45700dab4353
-simulate_with_results(result_hierarchical_short, peaks_track, 5100.)
+simulate_with_results(result_hierarchical_short, peaks_track, start_energy)
 
 # ╔═╡ 6fad9c45-8c6f-407f-9db3-326de2852559
 
@@ -1617,6 +1593,7 @@ version = "1.4.1+0"
 # ╠═47b5a819-9377-44fc-9842-4802b5378123
 # ╠═3881a9b0-bc97-4bf9-bba3-53238c5a95ce
 # ╠═4cbf6377-972d-40bd-88b6-50869bd822b5
+# ╠═a08f0ae6-5171-4a5c-9b51-54861574435b
 # ╠═4453d854-485c-493e-ab3a-15fd003b791f
 # ╠═19b07aac-6a43-4061-ac34-8b16184ee526
 # ╠═fda99217-b1c7-4de1-aa17-3a47c2177e20
@@ -1641,6 +1618,7 @@ version = "1.4.1+0"
 # ╠═91990610-4c66-4c68-99e3-8a19615e9227
 # ╠═2342f2b0-dda2-497d-8d36-35550e941e89
 # ╠═a454d931-a3c6-46b7-b180-813be1500688
+# ╠═59520274-195f-40de-bb1d-39785e589b9d
 # ╠═036623f0-83ad-4d7e-98c2-4359565e6904
 # ╠═dfd507df-e601-4c20-b32d-d2947d8b4c18
 # ╠═57976af0-199a-4444-ba28-b35d38c21515
@@ -1648,7 +1626,8 @@ version = "1.4.1+0"
 # ╠═4c990e29-c620-4411-bb22-b8f880895323
 # ╠═65033d68-1634-406f-b470-a6709ba35983
 # ╠═30faac31-74d0-43f4-9394-a482c310265f
-# ╠═cd3f117d-1b5b-4e7a-8b9e-e484ce83f4d6
+# ╠═a2f849c7-59bf-4cb9-8a72-58012f842c52
+# ╟─debfd54f-6b8a-41e3-9983-b1dc96b38425
 # ╠═4f51f16b-3d1d-40c2-ac29-c473b377af1c
 # ╠═280e781b-d44a-422d-82d7-fef63bf896f5
 # ╠═6891360e-7dbe-48ec-b65e-1d4220a87dc2
@@ -1657,14 +1636,11 @@ version = "1.4.1+0"
 # ╠═e3bc35ed-0e1e-405a-8bf7-27aed1052e5d
 # ╠═c2192344-d18b-496b-b0b6-d36a1bbe9913
 # ╠═f819be34-6c75-4e60-9ade-73e5060784b3
-# ╠═f879f394-a830-4c78-98c9-51a88f246c19
-# ╠═1aa514e8-1da4-4db1-ab7b-3adeabff6ed5
-# ╠═966ccde7-9333-42ae-9ecd-f7651ce0a2d2
+# ╠═7e8a4a2d-d7c0-434e-923f-4537ed67527e
+# ╠═870f1a76-df17-4136-9b50-e7554c4d785d
 # ╠═1ad8acb3-4ebc-4f88-b75c-d96065b6b73d
 # ╠═bd129534-00fc-4d6b-bd8c-75331759a76b
-# ╠═7ed08e1c-5bcd-41a8-9824-d99be804d0c0
-# ╠═8383f5ee-d1c0-4252-9127-ce26a757d15d
-# ╠═5d6dc9dc-b2f6-42f5-8762-87fbcf226438
+# ╠═c3d1523b-9794-44f2-9439-42b197a243df
 # ╠═612b340f-f426-427b-836d-45700dab4353
 # ╠═6fad9c45-8c6f-407f-9db3-326de2852559
 # ╟─00000000-0000-0000-0000-000000000001
