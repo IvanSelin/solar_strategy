@@ -158,6 +158,32 @@ start_datetime_hierarchical = DateTime(2022, 7, 1, 0, 0, 0)
     start_energy_short, 0., start_datetime_hierarchical, 1, track_size
 )
 
+iter_speeds = []
+push!(iter_speeds, fill(initial_speed, size(short_track.distance, 1)))
+
+@time result_hierarchical = hierarchical_optimization_alloc!(iter_speeds,
+    initial_speed, short_track, chunks_amount_hierarchical,
+    start_energy_short, 0., start_datetime_hierarchical, 2, track_size
+)
+
+# for i=1:size(iter_speeds,1)
+#     plot(short_track.distance, iter_speeds[i], linetype = :steppost,
+#     title="Speed (km/h) on iteration $(i)")
+# end
+
+plot(short_track.distance, iter_speeds[1], linetype = :steppost,
+    title="Speed (km/h) on iteration 1")
+plot(short_track.distance, iter_speeds[2], linetype = :steppost,
+    title="Speed (km/h) on iteration $(2)")
+plot(short_track.distance, iter_speeds[3], linetype = :steppost,
+    title="Speed (km/h) on iteration $(3)")
+plot(short_track.distance, iter_speeds[4], linetype = :steppost,
+    title="Speed (km/h) on iteration $(4)")
+plot(short_track.distance, iter_speeds[5], linetype = :steppost,
+    title="Speed (km/h) on iteration 5")
+plot(short_track.distance, iter_speeds[6], linetype = :steppost,
+    title="Speed (km/h) on iteration 5")
+
 inputs_ms_hier = convert_kmh_to_ms(result_hierarchical)
 power_use_hier, solar_power_hier, energy_in_system_hier, time_hier, time_s_hier = solar_trip_calculation(inputs_ms_hier, short_track, start_energy_short)
 println(last(time_s_hier)) #247523.356
