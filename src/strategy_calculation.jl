@@ -786,3 +786,112 @@ function hierarchical_optimization_alloc!(speed_by_iter, speed, track, chunks_am
 
 	return result_speeds
 end
+
+function iterative_optimization(
+	speed_by_iter, speed, track, chunks_amount, start_energy, finish_energy,
+	start_datetime, end_index
+	)
+	# same approach as optimization_hierarchical, but we are going iter-by-iter
+
+	# and also at the end of every iteration (when all the subroutines end),
+	# perform a run with current inputs (result from current iteration depth),
+	# so that we obtain more accurate time and energy
+
+	# 0. if track is non-divisible on chunks_amount, then return (array of speeds)
+	# 1. split the whole track in chunks (chunks division and speed propagation with same logic - divide at the same idexes)
+	# 2. optimize it on chunks (initial speed = speed, use it for all chunks)
+	# 3. save chunks_amount input speeds
+	# 4. simulate it again to get energy levels at start and finish of each chunk
+	# 5. go through resulting speeds and track chunks to optimize them (entering recursion)
+
+
+	# data set-up for iterative variant
+	split_indexes_array = []
+	start_indexes = []
+	end_indexes = []
+	start_energies = []
+	push!(start_energies, [start_energy])
+	finish_energies = []
+	push!(finish_energies, [finish_energy])
+	start_datetimes = []
+	push!(start_datetimes, [start_datetime])
+	iteration = 1
+	track_sizes = []
+	tracks = []
+	push!(tracks, [track])
+	speeds_by_iter = []
+	push!(speeds_by_iter, [speed])
+	# on every iteration we will perform chunks_amount^(iteration-1) optimizations
+	# TODO: formulate an exit condition
+	while true
+		
+		split_indexes = []
+		# now on iteration X we have to perform optimization 
+		# for every chunk on this iteration
+		for chunk_number in 1:chunks_amount^(iteration - 1)
+			# optimization happens here
+
+			track_iteration_chunk = tracks[iteration][chunk_number]
+			start_energy_chunk = start_energies[iteration][chunk_number]
+			finish_energy_chunk = finish_energies[iteration][chunk_number]
+			start_datetime_chunk = start_datetimes[iteration][chunk_number]
+			speed_chunk = speeds_by_iter[iteration][chunk_number]
+			track_size = size(track_iteration_chunk, 1)
+
+			
+			split_indexes_chunk = calculate_split_indexes(track_size, chunks_amount)
+			push!(split_indexes, split_indexes_chunk)
+
+			tracks_iteration_chunk = split_track_by_indexes(
+				track_iteration_chunk,
+				split_indexes_chunk
+				)
+			# in case if track size is less than chunks_amount 
+			chunks_amount_current = size(split_indexes_chunk, 1)
+
+			function f_iter(input_speed)
+				return solar_partial_trip_wrapper_alloc(
+					input_speed, track_iteration_chunk, split_indexes_chunk,
+					start_energy_chunk, finish_energy_chunk, start_datetime_chunk)
+			end
+
+			td = TwiceDifferentiable(f_iter, fill(speed_chunk, chunks_amount_current); autodiff = :forward)
+			lower_bound = fill(0.0, chunks_amount_current)
+			upper_bound = fill(100.0, chunks_amount_current)
+			tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+			# line_search = LineSearches.BackTracking();
+			# result = optimize(td, fill(speed, chunks_amount),
+				#Newton(; linesearch = line_search),
+			result_chunk = optimize(td, tdc, fill(speed_chunk, chunks_amount_current) 
+			.+ (rand(chunks_amount_current) .* 0.5)
+				,
+				IPNewton(),
+				Optim.Options(
+					x_tol = 1e-10,
+					f_tol = 1e-10,
+					g_tol = 1e-10
+				)
+			)
+
+			minimized_speeds_chunk = Optim.minimizer(result_chunk)
+
+			minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds_chunk)
+			minimized_speed_vector = set_speeds(minimized_speeds_ms,
+				track_iteration_chunk, split_indexes_chunk
+				)
+			# write resulting speeds
+			power_use, solar_power, energy_in_system, time,
+			time_s = solar_trip_calculation_bounds_alloc(minimized_speed_vector,
+				track_iteration_chunk, start_datetime_chunk, start_energy_chunk
+				)
+			
+
+		end
+		push!(split_indexes_array, split_indexes)
+		
+		# TODO: adjust
+
+		iteration += 1
+	end
+
+end
