@@ -826,6 +826,11 @@ function iterative_optimization(
 	while true
 		
 		split_indexes = []
+		iter_speeds = []
+		speeds_vectors = []
+		tracks_on_iter = []
+		start_energies_iter = []
+		finish_energies_iter = []
 		# now on iteration X we have to perform optimization 
 		# for every chunk on this iteration
 		for chunk_number in 1:chunks_amount^(iteration - 1)
@@ -842,12 +847,17 @@ function iterative_optimization(
 			split_indexes_chunk = calculate_split_indexes(track_size, chunks_amount)
 			push!(split_indexes, split_indexes_chunk)
 
+			# why do i need this?
+			# tracks on this exact iteration and chunk, will be used for future iterations
 			tracks_iteration_chunk = split_track_by_indexes(
 				track_iteration_chunk,
 				split_indexes_chunk
 				)
+			# TODO: check if we need to wrap in array
+			push!(tracks_on_iter, tracks_iteration_chunk)
 			# in case if track size is less than chunks_amount 
 			chunks_amount_current = size(split_indexes_chunk, 1)
+			push!(chunks_to_divide, chunks_amount_current)
 
 			function f_iter(input_speed)
 				return solar_partial_trip_wrapper_alloc(
@@ -879,14 +889,56 @@ function iterative_optimization(
 			minimized_speed_vector = set_speeds(minimized_speeds_ms,
 				track_iteration_chunk, split_indexes_chunk
 				)
+			push!(speeds_vectors, minimized_speed_vector)
+			append!(iter_speeds, minimized_speed_vector)
+			# now we have speeds for certain part of the track
+			# gotta save 'em to later calculate whole trip for iteration
 			# write resulting speeds
-			power_use, solar_power, energy_in_system, time,
-			time_s = solar_trip_calculation_bounds_alloc(minimized_speed_vector,
-				track_iteration_chunk, start_datetime_chunk, start_energy_chunk
-				)
+			# power_use, solar_power, energy_in_system, time,
+			# time_s = solar_trip_calculation_bounds_alloc(minimized_speed_vector,
+			# 	track_iteration_chunk, start_datetime_chunk, start_energy_chunk
+			# 	)
+			# save 
+
+			# # no, we shouldn't really be doing that
+			# split_energies = energy_in_system[split_indexes_chunk]
+			# pushfirst!(split_energies, start_energy_chunk)
+			# split_times = time[split_indexes_chunk, :utc_time]
+			# pushfirst!(split_times, start_datetime_chunk)
+
+			# somewhere here goes pushing tracks_iteration_chunk for future iterations
 			
 
 		end
+		# calculating the run after the iteration
+		power_use, solar_power, energy_in_system, time,
+		time_s = solar_trip_calculation_bounds_alloc(iter_speeds,
+			track, start_datetime, start_energy
+			)
+
+		# now we have to prepare data for next iteration
+		# smaller tracks with different energies and start times
+		# for each subtrack: start_e, finish_e, start_datetime
+		for i in eachindex(split_indexes)
+			# TODO: rework this code piece since we have 1 sim at the end of iteration
+			# so, we will only need to add to start energy once?
+			split_energies = energy_in_system[split_indexes[i]]
+			pushfirst!(split_energies, start_energy[iteration][i])
+			split_times = time[split_indexes[i], :utc_time]
+			pushfirst!(split_times, start_datetimes[iteration][i])
+			# for j in chunks_to_divide
+
+			# end
+		end
+		push!(tracks, tracks_on_iter)
+		# code below just as an example
+		# for chunk_number in 1:chunks_amount^(iteration - 1)
+		# 	split_energies = energy_in_system[split_indexes_chunk]
+		# 	pushfirst!(split_energies, start_energy_chunk)
+		# 	split_times = time[split_indexes_chunk, :utc_time]
+		# 	pushfirst!(split_times, start_datetime_chunk)
+		# end
+
 		push!(split_indexes_array, split_indexes)
 		
 		# TODO: adjust
