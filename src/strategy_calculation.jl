@@ -842,14 +842,16 @@ function iterative_optimization_new(track, scaling_coef)
 	# array of arrays. why? 1st level for iterations, 2nd level for substasks on interation
 	subtasks_splits_general = []
 	push!(subtasks_splits_general, calculate_split_bounds_segments(1,track_size, 1) )
-	variables_splits_iteration = []
+	# variables_splits_iteration = []
 	# will be initialized in loop
 	# subtasks_splits_segments =  [ calculate_split_bounds_segments(track_size, scaling_coef) ]
 	iteration = 1;
 	# 1. exit loop check
-	while iteration <= 2
-		amount_of_subtasks = scaling_coef^(iteration - 1) # also amount of variables from prev. iteration
-		amount_of_variables = scaling_coef^iteration
+	is_track_divisible_further = true
+	# while iteration <= 2
+	while is_track_divisible_further
+		# amount_of_subtasks = scaling_coef^(iteration - 1) # also amount of variables from prev. iteration
+		# amount_of_variables = scaling_coef^iteration
 		println("Iteration $iteration")
 
 		# iteration_subtasks = subtasks_by_iteration[iteration]
@@ -877,6 +879,8 @@ function iterative_optimization_new(track, scaling_coef)
 
 		# new array for collecting next-level split
 		variables_split_iteration = []
+		is_track_divisible_further = false
+		# is_there_single_subtask_where_track_is_divisible = false
 		for subtask_index in eachindex(subtasks_splits_iteration)
 			println("Subtask $subtask_index")
 			subtask_splits = subtasks_splits_iteration[subtask_index]
@@ -885,20 +889,35 @@ function iterative_optimization_new(track, scaling_coef)
 			finish_segment = subtask_splits[2]
 			println("Analyzing subtask from $start_segment to $finish_segment")
 
-			# split each task on parts
-			# make a new function to split between indexes
-			# splcalculate_split_indexes(start_index, end_index, scaling_coef)
-			subtask_variables_split = calculate_split_bounds_segments(
-				start_segment, finish_segment, scaling_coef)
+			
 
-			# collecting the variables split for the next iteration
-			append!(variables_split_iteration, subtask_variables_split)
-			# exit codition here when we can no longer split?
-			# new splits only here
+			# check if track is divisible further
+			if (finish_segment - start_segment + 1) >= scaling_coef
+				# is_there_single_subtask_where_track_is_divisible = true
+				is_track_divisible_further = true
+
+				# split each task on parts
+				# make a new function to split between indexes
+				# splcalculate_split_indexes(start_index, end_index, scaling_coef)
+				subtask_variables_split = calculate_split_bounds_segments(
+					start_segment, finish_segment, scaling_coef)
+
+				# collecting the variables split for the next iteration
+				append!(variables_split_iteration, subtask_variables_split)
+				# exit codition here when we can no longer split?
+				# new splits only here
+			else
+				push!(variables_split_iteration, subtask_splits)
+				# subtask_variables_split
+			end
+
+
+			# perform optimization
 
 			# 3. each subtask comes with its own chunks (variables)
 			# 4. solve optimization problem for every subtask with its chunks (variables)
 		end
+		# is_track_divisible_further = !is_there_single_subtask_where_track_is_divisible
 		push!(subtasks_splits_general, variables_split_iteration)
 		println()
 		# 5. tie everything together (collect speeds to one array)
