@@ -893,14 +893,21 @@ function iterative_optimization_new(track, scaling_coef)
 
 			# check if track is divisible further
 			if (finish_segment - start_segment + 1) >= scaling_coef
-				# is_there_single_subtask_where_track_is_divisible = true
-				is_track_divisible_further = true
 
 				# split each task on parts
 				# make a new function to split between indexes
 				# splcalculate_split_indexes(start_index, end_index, scaling_coef)
 				subtask_variables_split = calculate_split_bounds_segments(
 					start_segment, finish_segment, scaling_coef)
+
+				# TODO : check here if could be divided further
+				for variable_index in eachindex(subtask_variables_split)
+					if (subtask_variables_split[variable_index][2] - 
+						subtask_variables_split[variable_index][1] + 1) >= scaling_coef
+						# is_there_single_subtask_where_track_is_divisible = true
+						is_track_divisible_further = true
+					end
+				end
 
 				# collecting the variables split for the next iteration
 				append!(variables_split_iteration, subtask_variables_split)
