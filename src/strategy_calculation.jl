@@ -371,6 +371,42 @@ function calculate_split_indexes(size_to_distribute, chunks_amount)
 	return chunks_indexes
 end
 
+function calculate_split_indexes(start_index, end_index, chunks_amount)
+	return start_index .-1 .+ calculate_split_indexes(end_index - start_index + 1, chunks_amount)
+end
+
+function calculate_split_bounds_segments(start_point, end_point, chunks_amount)
+	# участки - segments, sections 
+	length_in_segments = end_point - start_point + 1;
+
+	splitted_segments_length = calculate_split_indexes(length_in_segments, chunks_amount)
+	segments_bounds = []
+	segments_bounds_array = zeros(size(splitted_segments_length, 1), 2)
+
+	push!(segments_bounds, (1, splitted_segments_length[1]))
+	for i=2:length(splitted_segments_length)
+		push!(segments_bounds, (splitted_segments_length[i-1] + 1, splitted_segments_length[i]))
+	end
+	# return array of tuples?
+	return segments_bounds
+end
+
+function calculate_split_bounds_points(start_point, end_point, chunks_amount)
+	# участки - segments, sections 
+	length_in_points = end_point - start_point + 1;
+
+	splitted_segments_length = calculate_split_indexes(length_in_points, chunks_amount)
+	points_bounds = []
+	segments_bounds_array = zeros(size(splitted_segments_length, 1), 2)
+
+	push!(points_bounds, (1, splitted_segments_length[1]))
+	for i=2:length(splitted_segments_length)
+		push!(points_bounds, (splitted_segments_length[i-1], splitted_segments_length[i]))
+	end
+	# return array of tuples?
+	return points_bounds
+end
+
 function split_track_by_indexes(track, indexes)
 	current_index = 1
 	results = []
@@ -787,6 +823,94 @@ function hierarchical_optimization_alloc!(speed_by_iter, speed, track, chunks_am
 	return result_speeds
 end
 
+function iterative_optimization_new(track, scaling_coef)
+	# general algorithm:
+	# 0. data setup
+	# 1. exit loop check
+	# 2. 	split the track into subtasks
+	# 3. 		each subtask comes with its own chunks (variables)
+	# 4. 		solve optimization problem for every subtask with its chunks (variables)
+	# 5. 	tie everything together (collect speeds to one array)
+	# 6. 	make full simulation with said speeds
+	# 7. 	prepare data for next iteration. should be subtask's chunks as subtasks
+	# 8. 	go to 2:
+	# 9. final calculations?
+
+	# 0. data setup
+	track_size = size(track,1)
+	# initial splitting not needed
+	# array of arrays. why? 1st level for iterations, 2nd level for substasks on interation
+	subtasks_splits_general = []
+	push!(subtasks_splits_general, calculate_split_bounds_segments(1,track_size, 1) )
+	variables_splits_iteration = []
+	# will be initialized in loop
+	# subtasks_splits_segments =  [ calculate_split_bounds_segments(track_size, scaling_coef) ]
+	iteration = 1;
+	# 1. exit loop check
+	while iteration <= 2
+		amount_of_subtasks = scaling_coef^(iteration - 1) # also amount of variables from prev. iteration
+		amount_of_variables = scaling_coef^iteration
+		println("Iteration $iteration")
+
+		# iteration_subtasks = subtasks_by_iteration[iteration]
+		subtasks_splits_iteration = subtasks_splits_general[iteration]
+		
+		# 2. split the track into subtasks
+		# or grab the result of previous division for subtasks
+		# подумать где у меня точки, где участки, а где трассы по результатам деления
+		# и ещё подумать как получаются подзадачи и их переменные на разных итерациях
+		# № итерации, подзадачи, количество переменных
+		# 1			1			scale
+		# 2			scale		scale^2
+		# ...
+		# n			scale^(n-1)	scale^n - но не совсем, где как места хватит
+
+		# по идее достаточно делить трассу, когда определяемся с участками для подзадач
+		# потом в конце итерации после всех оптимизаций склеивать единый массив из точек разделения
+		# и на следующей итерации использовать уже его
+
+		# # generates separate track dataframes
+		# tracks_iteration_chunk = split_track_by_indexes(
+		# 		track_iteration_chunk,
+		# 		split_indexes_chunk
+		# 		)
+
+		# new array for collecting next-level split
+		variables_split_iteration = []
+		for subtask_index in eachindex(subtasks_splits_iteration)
+			println("Subtask $subtask_index")
+			subtask_splits = subtasks_splits_iteration[subtask_index]
+			println(subtask_splits)
+			start_segment = subtask_splits[1]
+			finish_segment = subtask_splits[2]
+			println("Analyzing subtask from $start_segment to $finish_segment")
+
+			# split each task on parts
+			# make a new function to split between indexes
+			# splcalculate_split_indexes(start_index, end_index, scaling_coef)
+			subtask_variables_split = calculate_split_bounds_segments(
+				start_segment, finish_segment, scaling_coef)
+
+			# collecting the variables split for the next iteration
+			append!(variables_split_iteration, subtask_variables_split)
+			# exit codition here when we can no longer split?
+			# new splits only here
+
+			# 3. each subtask comes with its own chunks (variables)
+			# 4. solve optimization problem for every subtask with its chunks (variables)
+		end
+		push!(subtasks_splits_general, variables_split_iteration)
+		println()
+		# 5. tie everything together (collect speeds to one array)
+		# 6. make full simulation with said speeds
+		# 7. 	prepare data for next iteration. should be subtask's chunks as subtasks
+		iteration += 1;
+	end # 8. 	go to 2:
+	# 9. final calculations?
+	println("Calc done")
+
+end
+
 function iterative_optimization(
 	speed_by_iter, speed, track, chunks_amount, start_energy, finish_energy,
 	start_datetime, end_index
@@ -821,9 +945,27 @@ function iterative_optimization(
 	push!(tracks, [track])
 	speeds_by_iter = []
 	push!(speeds_by_iter, [speed])
+	# should we store reduced data (only for variables/chunks), or full propagated array
+	# say, we have total track length of 5, and on 1st iteration should we only store "speed",
+	# or "speed-speed-speed-speed-speed"
+	# i thnink it's better to store the latter
+	# or maybe both?
+
+	# general algorithm:
+	# 1. exit loop check
+	# 2. 	split the track into subtasks
+	# 3. 		each subtask comes with its own chunks (variables)
+	# 4. 		solve optimization problem for every subtask with its chunks (variables)
+	# 5. 	tie everything together (collect speeds to one array)
+	# 6. 	make full simulation with said speeds
+	# 7. 	prepare data for next iteration. should be subtask's chunks as subtasks
+	# 8. 	go to 2:
+	# 9. final calculations?
+
 	# on every iteration we will perform chunks_amount^(iteration-1) optimizations
 	# TODO: formulate an exit condition
-	while true
+	while iteration <= 2
+		println("Iteration $iteration")
 		
 		split_indexes = []
 		iter_speeds = []
@@ -831,16 +973,23 @@ function iterative_optimization(
 		tracks_on_iter = []
 		start_energies_iter = []
 		finish_energies_iter = []
+		chunks_to_divide = []
+		start_indexes_iter = []
+		end_indexes_iter = []
 		# now on iteration X we have to perform optimization 
 		# for every chunk on this iteration
-		for chunk_number in 1:chunks_amount^(iteration - 1)
+		# TODO: it will fail on later stages. or not?
+		for subtask in 1:chunks_amount^(iteration - 1)
 			# optimization happens here
 
-			track_iteration_chunk = tracks[iteration][chunk_number]
-			start_energy_chunk = start_energies[iteration][chunk_number]
-			finish_energy_chunk = finish_energies[iteration][chunk_number]
-			start_datetime_chunk = start_datetimes[iteration][chunk_number]
-			speed_chunk = speeds_by_iter[iteration][chunk_number]
+			println("Subtask $subtask")
+			# chunk_number -> subtask
+			# TODO: change variable names
+			track_iteration_chunk = tracks[iteration][subtask]
+			start_energy_chunk = start_energies[iteration][subtask]
+			finish_energy_chunk = finish_energies[iteration][subtask]
+			start_datetime_chunk = start_datetimes[iteration][subtask]
+			speed_chunk = speeds_by_iter[iteration][subtask]
 			track_size = size(track_iteration_chunk, 1)
 
 			
@@ -865,32 +1014,32 @@ function iterative_optimization(
 					start_energy_chunk, finish_energy_chunk, start_datetime_chunk)
 			end
 
-			td = TwiceDifferentiable(f_iter, fill(speed_chunk, chunks_amount_current); autodiff = :forward)
-			lower_bound = fill(0.0, chunks_amount_current)
-			upper_bound = fill(100.0, chunks_amount_current)
-			tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
-			# line_search = LineSearches.BackTracking();
-			# result = optimize(td, fill(speed, chunks_amount),
-				#Newton(; linesearch = line_search),
-			result_chunk = optimize(td, tdc, fill(speed_chunk, chunks_amount_current) 
-			.+ (rand(chunks_amount_current) .* 0.5)
-				,
-				IPNewton(),
-				Optim.Options(
-					x_tol = 1e-10,
-					f_tol = 1e-10,
-					g_tol = 1e-10
-				)
-			)
+			# td = TwiceDifferentiable(f_iter, fill(speed_chunk, chunks_amount_current); autodiff = :forward)
+			# lower_bound = fill(0.0, chunks_amount_current)
+			# upper_bound = fill(100.0, chunks_amount_current)
+			# tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+			# # line_search = LineSearches.BackTracking();
+			# # result = optimize(td, fill(speed, chunks_amount),
+			# 	#Newton(; linesearch = line_search),
+			# result_chunk = optimize(td, tdc, fill(speed_chunk, chunks_amount_current) 
+			# .+ (rand(chunks_amount_current) .* 0.5)
+			# 	,
+			# 	IPNewton(),
+			# 	Optim.Options(
+			# 		x_tol = 1e-10,
+			# 		f_tol = 1e-10,
+			# 		g_tol = 1e-10
+			# 	)
+			# )
 
-			minimized_speeds_chunk = Optim.minimizer(result_chunk)
+			# minimized_speeds_chunk = Optim.minimizer(result_chunk)
 
-			minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds_chunk)
-			minimized_speed_vector = set_speeds(minimized_speeds_ms,
-				track_iteration_chunk, split_indexes_chunk
-				)
-			push!(speeds_vectors, minimized_speed_vector)
-			append!(iter_speeds, minimized_speed_vector)
+			# minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds_chunk)
+			# minimized_speed_vector = set_speeds(minimized_speeds_ms,
+			# 	track_iteration_chunk, split_indexes_chunk
+			# 	)
+			# push!(speeds_vectors, minimized_speed_vector)
+			# append!(iter_speeds, minimized_speed_vector)
 			# now we have speeds for certain part of the track
 			# gotta save 'em to later calculate whole trip for iteration
 			# write resulting speeds
@@ -910,6 +1059,9 @@ function iterative_optimization(
 			
 
 		end
+
+		println()
+
 		# calculating the run after the iteration
 		power_use, solar_power, energy_in_system, time,
 		time_s = solar_trip_calculation_bounds_alloc(iter_speeds,
@@ -922,14 +1074,33 @@ function iterative_optimization(
 		for i in eachindex(split_indexes)
 			# TODO: rework this code piece since we have 1 sim at the end of iteration
 			# so, we will only need to add to start energy once?
+			indexes_ith_chunk = split_indexes[i]
+			# think of start and end index in order to split track
+
+			# split indexes are local, not absolute
+			# so an addition of start_index is needed
+
+
 			split_energies = energy_in_system[split_indexes[i]]
 			pushfirst!(split_energies, start_energy[iteration][i])
 			split_times = time[split_indexes[i], :utc_time]
 			pushfirst!(split_times, start_datetimes[iteration][i])
-			# for j in chunks_to_divide
+			# for each chunk we have chunks_amount tracks
+			for j in chunks_to_divide
 
-			# end
+			end
 		end
+
+		# going the easy way
+		# as simple as possible
+		# loop through every big chunk we have 
+		# we can loop through split_indexes since it is array of arrays
+		for chunk_number in 1:chunks_amount^(iteration - 1)
+
+			# and extract energy and time for every small chunk
+			# and store it for next iteration
+		end
+
 		push!(tracks, tracks_on_iter)
 		# code below just as an example
 		# for chunk_number in 1:chunks_amount^(iteration - 1)

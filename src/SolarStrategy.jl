@@ -241,5 +241,9 @@ plot(short_track.distance, [power_use_hier solar_power_hier energy_in_system_hie
 
 # https://juliahub.com/ui/Packages/LightGraphs/Xm08G/1.3.5?t=0 for graphs
 
-
+# also see:
+# https://github.com/JuliaSmoothOptimizers/ADNLPModels.jl - from https://github.com/JuliaSmoothOptimizers 
+# https://jump.dev - for constrained problems
+# https://github.com/JuliaOpt/NLopt.jl - an interface to NLopt, later grew to
+# https://github.com/SciML/Optimization.jl - invoke NLopt from here
 end # module
