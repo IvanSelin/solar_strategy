@@ -379,11 +379,11 @@ function calculate_split_bounds_segments(start_point, end_point, chunks_amount)
 	# участки - segments, sections 
 	length_in_segments = end_point - start_point + 1;
 
-	splitted_segments_length = calculate_split_indexes(length_in_segments, chunks_amount)
+	splitted_segments_length = calculate_split_indexes(length_in_segments, chunks_amount) .+ start_point .- 1
 	segments_bounds = []
-	segments_bounds_array = zeros(size(splitted_segments_length, 1), 2)
+	# segments_bounds_array = zeros(size(splitted_segments_length, 1), 2)
 
-	push!(segments_bounds, (1, splitted_segments_length[1]))
+	push!(segments_bounds, (start_point, splitted_segments_length[1]))
 	for i=2:length(splitted_segments_length)
 		push!(segments_bounds, (splitted_segments_length[i-1] + 1, splitted_segments_length[i]))
 	end
