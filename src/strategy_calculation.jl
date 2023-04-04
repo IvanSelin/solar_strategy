@@ -290,7 +290,8 @@ function solar_trip_division(speed, track, divide_at)
     return solar_trip_cost(convert_kmh_to_ms(speed), track)
 end
 
-function set_speeds(speeds, track, divide_at)
+function set_speeds_293(speeds, track, divide_at)
+	println("set speeds line 293")
 	output_speeds = fill(last(speeds), size(track.distance, 1))
 	for i=1:size(divide_at,1)-1
 		if i==1
@@ -510,6 +511,14 @@ function set_speeds(speeds, track, divide_at)
 		else
 			output_speeds[divide_at[i-1]:divide_at[i]] .= speeds[i]
 		end
+	end
+	return output_speeds
+end
+
+function set_speeds_segments(speeds, track_len, segments)
+	output_speeds = fill(last(speeds), track_len)
+	for i=1:size(segments, 1)
+		output_speeds[segments[i][1]:segments[i][2]] .= speeds[i]
 	end
 	return output_speeds
 end
