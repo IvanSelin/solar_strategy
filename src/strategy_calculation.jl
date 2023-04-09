@@ -149,7 +149,10 @@ function minimize_single_speed(speed::Float64, track)
     # alert();
     minimized_inputs = Optim.minimizer(result)
     minimized_result = Optim.minimum(result)
+	println("minimized speed input is $minimized_inputs kmh")
+	println("minimized result time is $minimized_result seconds")
     show_results_wrapper(first(minimized_inputs), track);
+	return minimized_inputs;
 end
 
 function minimize_5_chunks(track)
@@ -504,6 +507,7 @@ function solar_trip_calculation_bounds_alloc(input_speed, track, start_datetime,
 end
 
 function set_speeds(speeds, track, divide_at)
+	println("set speed line 507")
 	output_speeds = fill(last(speeds), size(track.distance, 1))
 	for i=1:size(divide_at,1)-1
 		if i==1
@@ -519,6 +523,16 @@ function set_speeds_segments(speeds, track_len, segments)
 	output_speeds = fill(last(speeds), track_len)
 	for i=1:size(segments, 1)
 		output_speeds[segments[i][1]:segments[i][2]] .= speeds[i]
+	end
+	return output_speeds
+end
+
+function set_speeds_segments(speeds, segments)
+	track_len = last(segments)[2] - first(segments)[1] + 1
+	first_index = first(segments)[1]
+	output_speeds = fill(last(speeds), track_len)
+	for i=1:size(segments, 1)
+		output_speeds[segments[i][1] - first_index + 1 : segments[i][2] - first_index + 1] .= speeds[i]
 	end
 	return output_speeds
 end
@@ -546,6 +560,16 @@ function solar_partial_trip_wrapper_alloc(speeds, track, indexes, start_energy, 
 	speed_vector = set_speeds(speeds_ms, track, indexes)
 	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds_alloc(speed_vector, track, start_datetime, start_energy)
 	cost = last(time_s) + 10 * abs(finish_energy - last(energy_in_system))
+	return cost
+	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
+end
+
+function solar_partial_trip_wrapper_iter(speeds, track, segments, start_energy, finish_energy, start_datetime)
+	speeds_ms = convert_kmh_to_ms(speeds)
+	speed_vector = set_speeds_segments(speeds_ms, size(track.distance,1), segments)
+	power_use, solar_power, energy_in_system, time, time_s = 
+		solar_trip_calculation_bounds_alloc(speed_vector, track, start_datetime, start_energy)
+	cost = last(time_s) +  (finish_energy - last(energy_in_system))^2
 	return cost
 	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 end
@@ -854,6 +878,12 @@ function iterative_optimization_new(track, scaling_coef)
 	# variables_splits_iteration = []
 	# will be initialized in loop
 	# subtasks_splits_segments =  [ calculate_split_bounds_segments(track_size, scaling_coef) ]
+
+	# there should be as many speeds, as variables on last iteration
+	speeds_general = []
+	push!(speeds_general, [ [43.97116943001747] ] )
+	# push!(speeds_general, minimize_single_speed(50., track) )
+
 	iteration = 1;
 	# 1. exit loop check
 	is_track_divisible_further = true
@@ -865,6 +895,7 @@ function iterative_optimization_new(track, scaling_coef)
 
 		# iteration_subtasks = subtasks_by_iteration[iteration]
 		subtasks_splits_iteration = subtasks_splits_general[iteration]
+		speeds_iteration = speeds_general[iteration]
 		
 		# 2. split the track into subtasks
 		# or grab the result of previous division for subtasks
@@ -898,7 +929,7 @@ function iterative_optimization_new(track, scaling_coef)
 			finish_segment = subtask_splits[2]
 			println("Analyzing subtask from $start_segment to $finish_segment")
 
-			
+			segments_amount = min(scaling_coef, finish_segment - start_segment + 1)
 
 			# check if track is divisible further
 			if (finish_segment - start_segment + 1) >= scaling_coef
@@ -924,11 +955,51 @@ function iterative_optimization_new(track, scaling_coef)
 				# new splits only here
 			else
 				push!(variables_split_iteration, subtask_splits)
-				# subtask_variables_split
+				# subtask_variables_split TODO here
 			end
 
-
 			# perform optimization
+
+			# optimize
+			# here or only if segments were changed?
+			# it is better to optimize everytime,
+			# since we are improving accuracy every iteration
+			
+			# TODO: get needed parametes for optimization
+
+			speed_from_prev_iter = speeds_iteration[subtask_index]
+			# TODO: how to calculate amount of speeds?
+			input_speeds = fill(speed_from_prev_iter, segments_amount)
+
+			track_subtask = [start_segment:finish_segment,:]
+
+			function f_iter(input_speeds)
+				return solar_partial_trip_wrapper_iter(
+					input_speeds, track_subtask, subtask_variables_split,
+					start_energy_subtask, finish_energy_subtask, start_datetime_subtask)
+			end
+
+			td = TwiceDifferentiable(f_iter, fill(speed, chunks_amount); autodiff = :forward)
+			lower_bound = fill(0.0, chunks_amount)
+			upper_bound = fill(100.0, chunks_amount)
+			tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+			# line_search = LineSearches.BackTracking();
+			# result = optimize(td, fill(speed, chunks_amount),
+				#Newton(; linesearch = line_search),
+			result = optimize(td, tdc, fill(speed, chunks_amount) 
+			.+ (rand(chunks_amount) .* 0.5)
+				,
+				IPNewton(),
+				Optim.Options(
+					x_tol = 1e-10,
+					f_tol = 1e-10,
+					g_tol = 1e-10
+				)
+			)
+			minimized_speeds = Optim.minimizer(result)
+
+			# TODO: check optimization procedure in compliance with article
+			# TODO: save result somewhere
 
 			# 3. each subtask comes with its own chunks (variables)
 			# 4. solve optimization problem for every subtask with its chunks (variables)
