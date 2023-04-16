@@ -873,12 +873,12 @@ function hierarchical_optimization_alloc!(speed_by_iter, speed, track, chunks_am
 	return result_speeds
 end
 
-struct TrackSegment
+@proto struct TrackSegment
 	from::Integer
 	to::Integer
 end
 
-mutable struct SubtaskProblem
+@proto mutable struct SubtaskProblem
 	track::DataFrame
 	start_energy::AbstractFloat
 	finish_energy::AbstractFloat
@@ -890,16 +890,16 @@ mutable struct SubtaskProblem
 	# result_speeds::Vector{AbstractFloat}
 end
 
-mutable struct SubtaskVariable
+@proto mutable struct SubtaskVariable
 	segment::TrackSegment
 	speed::AbstractFloat
 end
 
-struct SubtaskSolution
+@proto struct SubtaskSolution
 	speeds::Vector{AbstractFloat}
 end
 
-mutable struct Iteration
+@proto mutable struct Iteration
 	subtasks::Vector{SubtaskProblem}
 	number::Integer
 end
@@ -941,7 +941,7 @@ function iterative_optimization_new(track, scaling_coef, start_energy)
 		start_energy,
 		0.,
 		calculate_split_bounds_segments_typed(1, track_size, 1),
-		[],
+		calculate_split_bounds_segments_typed(1, track_size, scaling_coef),
 		43.97116943001747,
 		DateTime(2022,7,1,0,0,0)
 	);
@@ -1011,6 +1011,7 @@ function iterative_optimization_new(track, scaling_coef, start_energy)
 
 			next_iteration = Iteration([], iteration_num + 1)
 			push!(iterations, next_iteration)
+			
 
 			# check if track is divisible further
 			if (finish_segment - start_segment + 1) >= scaling_coef
@@ -1121,11 +1122,11 @@ function iterative_optimization_new(track, scaling_coef, start_energy)
 
 		for subtask in iteration.subtasks
 			for variable_segment in subtask.variables_segments
-				if (variable_segment.from == 1) {
+				if variable_segment.from == 1
 					segment_from = 1
-				} else {
+				else
 					segment_from = variable_segment.from - 1
-				}
+				end
 				new_subtask = SubtaskProblem(
 					subtask.track[variable_segment.from:variable_segment.to, :],
 					energy_iteration[segment_from],
