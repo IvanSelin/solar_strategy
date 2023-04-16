@@ -17,7 +17,7 @@ function get_track_data(path_to_data)
     return track
 end
 
-function get_track_data_points_and_segments(path_to_data)
+function get_track_and_segments(path_to_data)
     track_csv = CSV.read(path_to_data, DataFrame)
     
     ####### preprocessing of DataFrame
@@ -27,23 +27,7 @@ function get_track_data_points_and_segments(path_to_data)
     # select everything except sin column
     points_df = select(track_csv, Not(:sin))
 
-    # now we need to form a DataFrame that will contain
-    # info for both points and segments between points
-
-    # we need to store .from and .to info, as well as coordinates
-
-    # or maybe it is beter to have 2 separate DataFrames?
-
-    segments_df = DataFrame(
-        from = 1:size(track_csv.distance,1) - 1,
-        to = 2:size(track_csv.distance,1),
-        diff_distance = diff(track_csv.distance),
-        diff_altitude = diff(track_csv.altitude)
-    )
-
-    segments_df.slope = atand.(segments_df.diff_altitude ./ segments_df.diff_distance)
-
-    return points_df, segments_df
+    return points_df, get_segments_for_track(points_df)
 end
 
 function keep_extremum_only(track)
@@ -102,4 +86,46 @@ function keep_extremum_only_peaks(track)
     slice_df.slope = atand.(slice_df.diff_altitude ./ slice_df.diff_distance)
 
     return slice_df
+end
+
+function keep_extremum_only_peaks_segments(track)
+    # from Peaks
+    # pks, vals = findmaxima(array)
+    # pks, vals = findminima(array)
+    # also https://juliapackages.com/p/findpeaks
+
+    # track_copy = copy(track)
+    max_altitude_peaks_indexes, max_altitude_peaks = findmaxima(track.altitude)
+    min_altitude_peaks_indexes, min_altitude_peaks = findminima(track.altitude)
+    peaks_indexes = []
+    append!(peaks_indexes, max_altitude_peaks_indexes)
+    append!(peaks_indexes, min_altitude_peaks_indexes)
+    sort!(peaks_indexes)
+
+    # add 1st and last point
+    if first(peaks_indexes) != 1
+        pushfirst!(peaks_indexes, 1)
+    end
+    if last(peaks_indexes) != size(track.distance, 1)
+        push!(peaks_indexes, size(track.distance, 1))
+    end
+    track_peaks = track[peaks_indexes,:]
+
+    # and make new segments
+    # maybe in separate function, since this logic is used in get track data
+
+    return track_peaks, get_segments_for_track(track_peaks)
+end
+
+function get_segments_for_track(track)
+    segments_df = DataFrame(
+        from = 1:size(track.distance,1) - 1,
+        to = 2:size(track.distance,1),
+        diff_distance = diff(track.distance),
+        diff_altitude = diff(track.altitude)
+    )
+
+    segments_df.slope = atand.(segments_df.diff_altitude ./ segments_df.diff_distance)
+
+    return segments_df
 end

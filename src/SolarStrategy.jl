@@ -46,7 +46,8 @@ start with stub, develop proper models later
 
 # preparing the track data
 track = get_track_data("data/data_australia.csv")
-
+track, segments = get_track_and_segments("data/data_australia.csv")
+track_peaks, segments_peaks = keep_extremum_only_peaks_segments(track)
 # TODO: track preprocessing
 plot(track.distance, track.altitude, title="Track raw data")
 # track_test = keep_extremum_only(track)
