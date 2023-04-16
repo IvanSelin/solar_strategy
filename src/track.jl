@@ -17,6 +17,35 @@ function get_track_data(path_to_data)
     return track
 end
 
+function get_track_data_points_and_segments(path_to_data)
+    track_csv = CSV.read(path_to_data, DataFrame)
+    
+    ####### preprocessing of DataFrame
+    # meters from km
+    track_csv.distance = track_csv.distance * 1000
+
+    # select everything except sin column
+    points_df = select(track_csv, Not(:sin))
+
+    # now we need to form a DataFrame that will contain
+    # info for both points and segments between points
+
+    # we need to store .from and .to info, as well as coordinates
+
+    # or maybe it is beter to have 2 separate DataFrames?
+
+    segments_df = DataFrame(
+        from = 1:size(track_csv.distance,1) - 1,
+        to = 2:size(track_csv.distance,1),
+        diff_distance = diff(track_csv.distance),
+        diff_altitude = diff(track_csv.altitude)
+    )
+
+    segments_df.slope = atand.(segments_df.diff_altitude ./ segments_df.diff_distance)
+
+    return points_df, segments_df
+end
+
 function keep_extremum_only(track)
     track_copy = copy(track)
 
