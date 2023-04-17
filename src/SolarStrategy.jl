@@ -45,15 +45,12 @@ start with stub, develop proper models later
 =#
 
 # preparing the track data
-track = get_track_data("data/data_australia.csv")
+# track = get_track_data("data/data_australia.csv")
 track, segments = get_track_and_segments("data/data_australia.csv")
-track_peaks, segments_peaks = keep_extremum_only_peaks_segments(track)
-# TODO: track preprocessing
 plot(track.distance, track.altitude, title="Track raw data")
-# track_test = keep_extremum_only(track)
-# plot(track_test.distance, track_test.altitude, title="track extremum only data")
-track_test_peaks = keep_extremum_only_peaks(track)
-plot(track_test_peaks.distance, track_test_peaks.altitude, title="Track extremum only data built w/ Peaks.jl")
+# TODO: track preprocessing
+track_peaks, segments_peaks = keep_extremum_only_peaks_segments(track)
+plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data built w/ Peaks.jl")
 
 # TODO: slope angle preprocessing
 
