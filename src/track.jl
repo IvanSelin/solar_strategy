@@ -129,3 +129,11 @@ function get_segments_for_track(track)
 
     return segments_df
 end
+
+function get_track_interval(track, from_point, to_point)
+    return track[from_point : to_point, :]
+end
+
+function get_segments_interval(segments, from_point, to_point)
+    return segments[from_point : to_point - 1, :]
+end

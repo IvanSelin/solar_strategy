@@ -878,25 +878,47 @@ end
 	to::Integer
 end
 
+@proto mutable struct Subtask
+	boundaries::Boundaries
+	variables::Vector{SubtaskVariable}
+	problem::SubtaskProblem
+	solution::SubtaskSolution
+end
+
+@proto mutable struct Boundaries
+	from::Integer
+	to::Integer
+	size::Integer
+	# points::DataFrame # maybe better another sub-struct or arrays?
+	# segments::DataFrame
+	# there is no sense in placing points(track) and segments here, 
+	# since they will need another indexing
+	# it is better to just use indexes
+
+	# overloaded constructor will only work without @proto macro
+	SubtaskTrack(from, to) = new(
+		from,
+		to,
+		to - from
+	)
+end
+
 @proto mutable struct SubtaskProblem
-	track::DataFrame
 	start_energy::AbstractFloat
 	finish_energy::AbstractFloat
-	subtask_segment::TrackSegment
-	variables::Vector{SubtaskVariable}
-	# variables_segments::Vector{TrackSegment}
-	input_speed::AbstractFloat
+	initial_speed::AbstractFloat
 	start_datetime::DateTime
-	# result_speeds::Vector{AbstractFloat}
 end
 
 @proto mutable struct SubtaskVariable
-	segment::TrackSegment
+	boundaries::Boundaries
 	speed::AbstractFloat
 end
 
 @proto struct SubtaskSolution
-	speeds::Vector{AbstractFloat}
+	speeds::Vector{AbstractFloat} # n-1 speeds (for segments)
+	energies::Vector{AbstractFloat} # n energies (for points)
+	times::Vector{AbstractFloat} # n times (for points)
 end
 
 @proto mutable struct Iteration
@@ -904,7 +926,7 @@ end
 	number::Integer
 end
 
-function iterative_optimization_new(track, scaling_coef, start_energy)
+function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 	# general algorithm:
 	# 0. data setup
 	# 1. exit loop check
