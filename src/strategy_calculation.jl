@@ -412,6 +412,25 @@ function calculate_split_bounds_segments_typed(start_point, end_point, chunks_am
 	return segments_bounds
 end
 
+function calculate_boundaries(start_point, end_point, segments_amount)::Vector{Boundaries}
+	# участки - segments, sections 
+	length_in_segments = end_point - start_point;
+	length_in_points = end_point - start_point + 1;
+
+	# calculates split points (without start)
+	split_points = calculate_split_indexes(length_in_segments, segments_amount) .+ start_point
+	# so, we are adding start
+	pushfirst!(split_points, start_point)
+
+	boundaries_array::Vector{Boundaries} = []
+	for i=2:length(split_points)
+		segment = Boundaries(split_points[i-1], split_points[i], split_points[i] - split_points[i-1]);
+		push!(boundaries_array, segment)
+	end
+	# return array of tuples?
+	return boundaries_array
+end
+
 function calculate_split_bounds_points(start_point, end_point, chunks_amount)
 	# участки - segments, sections 
 	length_in_points = end_point - start_point + 1;
@@ -879,8 +898,8 @@ end
 end
 
 @proto mutable struct Subtask
-	boundaries::Boundaries
-	variables::Vector{SubtaskVariable}
+	subtask_boundaries::Boundaries
+	variables_boundaries::Vector{Boundaries}
 	problem::SubtaskProblem
 	solution::SubtaskSolution
 end
@@ -896,7 +915,7 @@ end
 	# it is better to just use indexes
 
 	# overloaded constructor will only work without @proto macro
-	SubtaskTrack(from, to) = new(
+		Boundaries(from, to) = new(
 		from,
 		to,
 		to - from
@@ -958,15 +977,23 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 	start_energies_general = []
 	push!(start_energies_general, [ [start_energy] ])
 
-	zero_subtask = SubtaskProblem(
-		track,
-		start_energy,
-		0.,
-		calculate_split_bounds_segments_typed(1, track_size, 1),
-		calculate_split_bounds_segments_typed(1, track_size, scaling_coef),
-		43.97116943001747,
-		DateTime(2022,7,1,0,0,0)
-	);
+	zero_subtask = Subtask(
+		Boundaries(1, track_size, track_size - 1),
+		# calculate_boundaries(1, track_size, scaling_coef),
+		[],
+		SubtaskProblem(
+			start_energy,
+			0.,
+			43.97116943001747,
+			DateTime(2022,7,1,0,0,0)
+		),
+		SubtaskSolution(
+			[],
+			[],
+			[]
+		)
+	)
+
 	iteration_1 = Iteration(
 		[ zero_subtask ],
 		1
@@ -982,12 +1009,6 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 	while is_track_divisible_further
 		# amount_of_subtasks = scaling_coef^(iteration - 1) # also amount of variables from prev. iteration
 		# amount_of_variables = scaling_coef^iteration
-		println("Iteration $iteration_num")
-
-		# iteration_subtasks = subtasks_by_iteration[iteration]
-		subtasks_splits_iteration = subtasks_splits_general[iteration_num]
-		speeds_iteration = speeds_general[iteration_num]
-		start_energies_iteration = start_energies_general[iteration_num]
 
 		iteration = iterations[iteration_num]
 		println("Iteration $(iteration.number)")
@@ -1012,76 +1033,69 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 		# 		split_indexes_chunk
 		# 		)
 
-		# new array for collecting next-level split
-		variables_split_iteration = []
-		variables_segments_iteration = []
 		is_track_divisible_further = false
 		# is_there_single_subtask_where_track_is_divisible = false
-		# for subtask_index in eachindex(iteration.subtasks)
-		for subtask_index in eachindex(subtasks_splits_iteration)
-			println("Subtask $subtask_index")
-			subtask_splits = subtasks_splits_iteration[subtask_index]
-			println(subtask_splits)
-			start_segment = subtask_splits[1]
-			finish_segment = subtask_splits[2]
-			println("Analyzing subtask from $start_segment to $finish_segment")
-
+		for subtask_index in eachindex(iteration.subtasks)
+		# for subtask_index in eachindex(subtasks_splits_iteration)
+			# println("Subtask $subtask_index")
 			subtask = iteration.subtasks[subtask_index]
-			println("Analyzing subtask from $(subtask.subtask_segment.from) to $(subtask.subtask_segment.to)")
+			# println("Analyzing subtask from $(subtask.subtask_boundaries.from) to $(subtask.subtask_boundaries.to)")
 
-			segments_amount = min(scaling_coef, finish_segment - start_segment + 1)
+			# split each task on parts
+			subtask.variables_boundaries = calculate_boundaries(
+				subtask.subtask_boundaries.from,
+				subtask.subtask_boundaries.to,
+				scaling_coef
+			)
 
-			next_iteration = Iteration([], iteration_num + 1)
-			push!(iterations, next_iteration)
-			
-
-			# check if track is divisible further
-			if (finish_segment - start_segment + 1) >= scaling_coef
-
-				# split each task on parts
-				# make a new function to split between indexes
-				# splcalculate_split_indexes(start_index, end_index, scaling_coef)
-				subtask_variables_split = calculate_split_bounds_segments(
-					start_segment, finish_segment, scaling_coef)
-
-				subtask_variables_segments = calculate_split_bounds_segments_typed(
-					subtask.start_segment,
-					subtask.finish_segment,
-					scaling_coef
-				)
-
-				# append!(subtask.variables_segments, subtask_variables_segments)
-				# fill it later straight with results
-
-				# TODO : check here if could be divided further
-				for variable_index in eachindex(subtask_variables_split)
-					if (subtask_variables_split[variable_index][2] - 
-						subtask_variables_split[variable_index][1] + 1) >= scaling_coef
-						# is_there_single_subtask_where_track_is_divisible = true
-						is_track_divisible_further = true
-					end
-				end
-
-				for variable_segment in subtask_variables_segments
-					if (variable_segment.to - variable_segment.from + 1) >= scaling_coef
-						# is_there_single_subtask_where_track_is_divisible = true
-						is_track_divisible_further = true
-					end
-				end
-
-
-				# collecting the variables split for the next iteration
-				append!(variables_split_iteration, subtask_variables_split)
-				# append!(variables_segments_iteration, subtask_variables_segments)
-				# exit codition here when we can no longer split?
-				# new splits only here
-			else
-				push!(variables_split_iteration, subtask_splits)
-				# push!(variables_segments_iteration, subtask.subtask_segment)
-				subtask_variables_split = subtask_splits
-
-				# use the same subtask on next iter?
+			if (subtask.subtask_boundaries.size) >= scaling_coef
+				# at least one subtask can be divided, so, there should be next iteration
+				is_track_divisible_further = true
 			end
+
+			# # check if track is divisible further
+			# if (subtask.subtask_boundaries.size) >= scaling_coef
+			# 	is_track_divisible_further = true
+
+			# 	# split each task on parts
+			# 	subtask.variables_boundaries = calculate_boundaries(
+			# 		subtask.subtask_boundaries.from,
+			# 		subtask.subtask_boundaries.to,
+			# 		scaling_coef
+			# 	)
+
+			# 	# append!(subtask.variables_segments, subtask_variables_segments)
+			# 	# fill it later straight with results
+
+			# 	# TODO : check here if could be divided further
+			# 	for variable_index in eachindex(subtask_variables_split)
+			# 		if (subtask_variables_split[variable_index][2] - 
+			# 			subtask_variables_split[variable_index][1] + 1) >= scaling_coef
+			# 			# is_there_single_subtask_where_track_is_divisible = true
+			# 			is_track_divisible_further = true
+			# 		end
+			# 	end
+
+			# 	for variable_segment in subtask_variables_segments
+			# 		if (variable_segment.to - variable_segment.from + 1) >= scaling_coef
+			# 			# is_there_single_subtask_where_track_is_divisible = true
+			# 			is_track_divisible_further = true
+			# 		end
+			# 	end
+
+
+			# 	# collecting the variables split for the next iteration
+			# 	append!(variables_split_iteration, subtask_variables_split)
+			# 	# append!(variables_segments_iteration, subtask_variables_segments)
+			# 	# exit codition here when we can no longer split?
+			# 	# new splits only here
+			# else
+			# 	push!(variables_split_iteration, subtask_splits)
+			# 	# push!(variables_segments_iteration, subtask.subtask_segment)
+			# 	subtask_variables_split = subtask_splits
+
+			# 	# use the same subtask on next iter?
+			# end
 
 			# perform optimization
 
@@ -1094,38 +1108,41 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 
 			#######################
 
-			speed_from_prev_iter = speeds_iteration[subtask_index]
-			# TODO: how to calculate amount of speeds?
-			input_speeds = fill(speed_from_prev_iter, segments_amount)
+			
+			# # TODO: how to calculate amount of speeds?
+			# input_speeds = fill(subtask.problem.initial_speed, length(subtask.variables_boundaries))
 
-			track_subtask = [start_segment:finish_segment,:]
-			start_energy_subtask = start_energies_iteration[subtask_index]
-			# finish_energy_subtask = 
-			# start_datetime_subtask = 
-			function f_iter(input_speeds)
-				return solar_partial_trip_wrapper_iter(
-					input_speeds, track_subtask, subtask_variables_split,
-					start_energy_subtask, finish_energy_subtask, start_datetime_subtask)
-			end
+			# track_subtask = [subtask.subtask_boundaries.from:subtask.subtask_boundaries.to,:]
+			# # finish_energy_subtask = 
+			# # start_datetime_subtask = 
+		
+			# # TODO: stopped here, check how variables_boundaries used inside the function
+			# function f_iter(input_speeds)
+			# 	return solar_partial_trip_wrapper_iter(
+			# 		input_speeds, track_subtask, subtask.variables_boundaries,
+			# 		subtask.problem.start_energy, subtask.problem.finish_energy,
+			# 		subtask.problem.start_datetime
+			# 	)
+			# end
 
-			td = TwiceDifferentiable(f_iter, fill(speed, chunks_amount); autodiff = :forward)
-			lower_bound = fill(0.0, chunks_amount)
-			upper_bound = fill(100.0, chunks_amount)
-			tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
-			# line_search = LineSearches.BackTracking();
-			# result = optimize(td, fill(speed, chunks_amount),
-				#Newton(; linesearch = line_search),
-			result = optimize(td, tdc, fill(speed, chunks_amount) 
-			.+ (rand(chunks_amount) .* 0.5)
-				,
-				IPNewton(),
-				Optim.Options(
-					x_tol = 1e-10,
-					f_tol = 1e-10,
-					g_tol = 1e-10
-				)
-			)
-			minimized_speeds = Optim.minimizer(result)
+			# td = TwiceDifferentiable(f_iter, fill(speed, chunks_amount); autodiff = :forward)
+			# lower_bound = fill(0.0, chunks_amount)
+			# upper_bound = fill(100.0, chunks_amount)
+			# tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+			# # line_search = LineSearches.BackTracking();
+			# # result = optimize(td, fill(speed, chunks_amount),
+			# 	#Newton(; linesearch = line_search),
+			# result = optimize(td, tdc, fill(speed, chunks_amount) 
+			# .+ (rand(chunks_amount) .* 0.5)
+			# 	,
+			# 	IPNewton(),
+			# 	Optim.Options(
+			# 		x_tol = 1e-10,
+			# 		f_tol = 1e-10,
+			# 		g_tol = 1e-10
+			# 	)
+			# )
+			# minimized_speeds = Optim.minimizer(result)
 
 			# TODO: check optimization procedure in compliance with article
 			# TODO: save result somewhere - in subtask struct
@@ -1135,37 +1152,46 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 			# 4. solve optimization problem for every subtask with its chunks (variables)
 		end
 		# is_track_divisible_further = !is_there_single_subtask_where_track_is_divisible
-		push!(subtasks_splits_general, variables_split_iteration)
+		# push!(subtasks_splits_general, variables_split_iteration)
 
 		println()
 		# 5. tie everything together (collect speeds to one array)
 		# 6. make full simulation with said speeds
 		# 7. 	prepare data for next iteration. should be subtask's chunks as subtasks
 
-		for subtask in iteration.subtasks
-			for variable_segment in subtask.variables_segments
-				if variable_segment.from == 1
-					segment_from = 1
-				else
-					segment_from = variable_segment.from - 1
+		if is_track_divisible_further
+			iteration_num += 1;
+			next_iteration = Iteration(
+				[],
+				iteration_num
+			)
+			for subtask in iteration.subtasks
+				for variable_boundaries in subtask.variables_boundaries
+					new_subtask = Subtask(
+						variable_boundaries,
+						[],
+						SubtaskProblem(
+							0.,
+							0.,
+							0.,
+							DateTime(2022,1,1,0,0,0)
+						),
+						SubtaskSolution(
+							[],
+							[],
+							[]
+						)
+					)
+					push!(next_iteration.subtasks, new_subtask)
 				end
-				new_subtask = SubtaskProblem(
-					subtask.track[variable_segment.from:variable_segment.to, :],
-					energy_iteration[segment_from],
-					energy_iteration[variable_segment.to],
-					variable_segment,
-					[],
-					subtask.result_speeds
-				)
-				# so, no proper data for next iter subtask problem
-				# we should get the optimization result first!
 			end
-		end
 
-		iteration_num += 1;
+			push!(iterations, next_iteration)
+		end
 	end # 8. 	go to 2:
 	# 9. final calculations?
 	println("Calc done")
+	return iterations
 
 end
 
