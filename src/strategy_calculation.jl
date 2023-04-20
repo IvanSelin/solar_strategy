@@ -892,19 +892,12 @@ function hierarchical_optimization_alloc!(speed_by_iter, speed, track, chunks_am
 	return result_speeds
 end
 
-@proto struct TrackSegment
+struct TrackSegment
 	from::Integer
 	to::Integer
 end
 
-@proto mutable struct Subtask
-	subtask_boundaries::Boundaries
-	variables_boundaries::Vector{Boundaries}
-	problem::SubtaskProblem
-	solution::SubtaskSolution
-end
-
-@proto mutable struct Boundaries
+mutable struct Boundaries
 	from::Integer
 	to::Integer
 	size::Integer
@@ -915,12 +908,10 @@ end
 	# it is better to just use indexes
 
 	# overloaded constructor will only work without @proto macro
-		Boundaries(from, to) = new(
-		from,
-		to,
-		to - from
-	)
+	Boundaries(from, to) = new(from, to, to - from)
+	Boundaries(from, to, size) = new(from, to, size)
 end
+
 
 @proto mutable struct SubtaskProblem
 	start_energy::AbstractFloat
@@ -929,7 +920,7 @@ end
 	start_datetime::DateTime
 end
 
-@proto mutable struct SubtaskVariable
+mutable struct SubtaskVariable
 	boundaries::Boundaries
 	speed::AbstractFloat
 end
@@ -940,8 +931,15 @@ end
 	times::Vector{AbstractFloat} # n times (for points)
 end
 
-@proto mutable struct Iteration
-	subtasks::Vector{SubtaskProblem}
+mutable struct Subtask
+	subtask_boundaries::Boundaries
+	variables_boundaries::Vector{Boundaries}
+	problem::SubtaskProblem
+	solution::SubtaskSolution
+end
+
+mutable struct Iteration
+	subtasks::Vector{Subtask}
 	number::Integer
 end
 
