@@ -117,6 +117,12 @@ function keep_extremum_only_peaks_segments(track)
     return track_peaks, get_segments_for_track(track_peaks)
 end
 
+function get_mean_data(series)
+    shifted = circshift(series,1)
+    mean = (series .+ shifted) ./ 2
+    return mean[2:end]
+end
+
 function get_segments_for_track(track)
     segments_df = DataFrame(
         from = 1:size(track.distance,1) - 1,
@@ -126,6 +132,10 @@ function get_segments_for_track(track)
     )
 
     segments_df.slope = atand.(segments_df.diff_altitude ./ segments_df.diff_distance)
+
+    segments_df.latitude = get_mean_data(track.latitude)
+    segments_df.longitude = get_mean_data(track.longitude)
+    segments_df.altitude = get_mean_data(track.altitude)
 
     return segments_df
 end

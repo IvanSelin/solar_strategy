@@ -395,23 +395,6 @@ function calculate_split_bounds_segments(start_point, end_point, chunks_amount)
 	return segments_bounds
 end
 
-function calculate_split_bounds_segments_typed(start_point, end_point, chunks_amount)::Vector{TrackSegment}
-	# участки - segments, sections 
-	length_in_segments = end_point - start_point + 1;
-
-	splitted_segments_length = calculate_split_indexes(length_in_segments, chunks_amount) .+ start_point .- 1
-	segments_bounds::Vector{TrackSegment} = []
-	# segments_bounds_array = zeros(size(splitted_segments_length, 1), 2)
-
-	push!(segments_bounds, TrackSegment(start_point, splitted_segments_length[1]))
-	for i=2:length(splitted_segments_length)
-		segment = TrackSegment(splitted_segments_length[i-1] + 1, splitted_segments_length[i]);
-		push!(segments_bounds, segment)
-	end
-	# return array of tuples?
-	return segments_bounds
-end
-
 function calculate_boundaries(start_point, end_point, segments_amount)::Vector{Boundaries}
 	# участки - segments, sections 
 	length_in_segments = end_point - start_point;
@@ -892,10 +875,6 @@ function hierarchical_optimization_alloc!(speed_by_iter, speed, track, chunks_am
 	return result_speeds
 end
 
-struct TrackSegment
-	from::Integer
-	to::Integer
-end
 
 mutable struct Boundaries
 	from::Integer
