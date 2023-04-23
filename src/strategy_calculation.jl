@@ -2,6 +2,54 @@ using DataFrames
 
 include("utils.jl")
 
+
+mutable struct Boundaries
+	from::Integer
+	to::Integer
+	size::Integer
+	# points::DataFrame # maybe better another sub-struct or arrays?
+	# segments::DataFrame
+	# there is no sense in placing points(track) and segments here, 
+	# since they will need another indexing
+	# it is better to just use indexes
+
+	# overloaded constructor will only work without @proto macro
+	Boundaries(from, to) = new(from, to, to - from)
+	Boundaries(from, to, size) = new(from, to, size)
+end
+
+
+@proto mutable struct SubtaskProblem
+	start_energy::AbstractFloat
+	finish_energy::AbstractFloat
+	initial_speed::AbstractFloat
+	start_datetime::DateTime
+end
+
+mutable struct SubtaskVariable
+	boundaries::Boundaries
+	speed::AbstractFloat
+end
+
+@proto struct IterationSolution
+	speeds::Vector{AbstractFloat} # n-1 speeds (for segments)
+	energies::Vector{AbstractFloat} # n energies (for points)
+	times::Vector{AbstractFloat} # n times (for points)
+end
+
+mutable struct Subtask
+	subtask_boundaries::Boundaries
+	variables_boundaries::Vector{Boundaries}
+	problem::SubtaskProblem
+	solution::Vector{AbstractFloat} # n-1 speeds (for segments)
+end
+
+@proto mutable struct Iteration
+	subtasks::Vector{Subtask}
+	number::Integer
+	solution::IterationSolution
+end
+
 function solar_trip_calculation(input_speed, track, 
     start_energy::Float64=5100.)
     # input speed in m/s
@@ -525,6 +573,43 @@ function solar_trip_calculation_bounds_alloc(input_speed, track, start_datetime,
     return power_use_accumulated_wt_h, solar_power_accumulated, energy_in_system, time_df, time_seconds
 end
 
+"Returns arrays of segments size (so, for task from 13 to 16th point, it will yield a size of 3)"
+function solar_trip_boundaries(input_speed, segments, start_datetime)
+    # input speed in m/s
+	# @debug "func solar_trip_calculation_bounds input_speed size is $(size(input_speed, 1)), track size is $(size(track.distance, 1)))"
+
+    # calculating time needed to spend to travel across distance
+    time_df = calculate_travel_time_datetime(input_speed, segments, start_datetime)
+
+    #### calculcations
+    # mechanical calculations are now in separate file
+    mechanical_power = mechanical_power_calculation_alloc.(input_speed, segments.slope, segments.diff_distance)
+
+    # electical losses
+    electrical_power = electrical_power_calculation(segments.diff_distance, input_speed)
+    # converting mechanical work to elecctrical power and then power use
+    # power_use = calculate_power_use(mechanical_power, electrical_power)
+    power_use_accumulated_wt_h = mechanical_power + electrical_power
+	cumsum!(power_use_accumulated_wt_h, power_use_accumulated_wt_h)
+	power_use_accumulated_wt_h = power_use_accumulated_wt_h / 3600.
+
+    # get solar energy income
+	# @debug "track size is $(size(track.latitude, 1))"
+    solar_power = solar_power_income_alloc.(
+		segments.latitude,
+		segments.longitude, 
+		segments.altitude, 
+		time_df.utc_time,
+		segments.diff_distance,
+		input_speed
+	)
+    solar_power_accumulated = calculate_power_income_accumulated(solar_power)
+
+    # TODO: calculate night charging - do it later since it is not critical as of right now
+    time_seconds = calculate_travel_time_seconds(input_speed, segments)
+    return power_use_accumulated_wt_h, solar_power_accumulated, time_seconds
+end
+
 function set_speeds(speeds, track, divide_at)
 	println("set speed line 507")
 	output_speeds = fill(last(speeds), size(track.distance, 1))
@@ -601,11 +686,18 @@ function solar_partial_trip_wrapper_alloc(speeds, track, indexes, start_energy, 
 	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 end
 
-function solar_partial_trip_wrapper_iter(speeds, track, variables_boundaries, start_energy, finish_energy, start_datetime)
+function solar_partial_trip_wrapper_iter(speeds, segments, variables_boundaries, start_energy, finish_energy, start_datetime)
 	speeds_ms = convert_kmh_to_ms(speeds)
 	speed_vector = set_speeds_boundaries(speeds_ms, variables_boundaries)
-	power_use, solar_power, energy_in_system, time, time_s = 
-		solar_trip_calculation_bounds_alloc(speed_vector, track, start_datetime, start_energy)
+	power_use, solar_power, time_s = solar_trip_boundaries(
+		speed_vector, segments, start_datetime
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system = []
+	push!(energy_in_system, start_energy)
+	total_energy = start_energy .+ solar_power .- power_use
+	append!(energy_in_system, total_energy)
+
 	cost = last(time_s) +  (finish_energy - last(energy_in_system))^2
 	return cost
 	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
@@ -893,53 +985,6 @@ function hierarchical_optimization_alloc!(speed_by_iter, speed, track, chunks_am
 	return result_speeds
 end
 
-
-mutable struct Boundaries
-	from::Integer
-	to::Integer
-	size::Integer
-	# points::DataFrame # maybe better another sub-struct or arrays?
-	# segments::DataFrame
-	# there is no sense in placing points(track) and segments here, 
-	# since they will need another indexing
-	# it is better to just use indexes
-
-	# overloaded constructor will only work without @proto macro
-	Boundaries(from, to) = new(from, to, to - from)
-	Boundaries(from, to, size) = new(from, to, size)
-end
-
-
-@proto mutable struct SubtaskProblem
-	start_energy::AbstractFloat
-	finish_energy::AbstractFloat
-	initial_speed::AbstractFloat
-	start_datetime::DateTime
-end
-
-mutable struct SubtaskVariable
-	boundaries::Boundaries
-	speed::AbstractFloat
-end
-
-@proto struct SubtaskSolution
-	speeds::Vector{AbstractFloat} # n-1 speeds (for segments)
-	energies::Vector{AbstractFloat} # n energies (for points)
-	times::Vector{AbstractFloat} # n times (for points)
-end
-
-mutable struct Subtask
-	subtask_boundaries::Boundaries
-	variables_boundaries::Vector{Boundaries}
-	problem::SubtaskProblem
-	solution::SubtaskSolution
-end
-
-mutable struct Iteration
-	subtasks::Vector{Subtask}
-	number::Integer
-end
-
 function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 	# general algorithm:
 	# 0. data setup
@@ -973,7 +1018,7 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 	push!(start_energies_general, [ [start_energy] ])
 
 	zero_subtask = Subtask(
-		Boundaries(1, track_size, track_size - 1),
+		Boundaries(1, track_size),
 		# calculate_boundaries(1, track_size, scaling_coef),
 		[],
 		SubtaskProblem(
@@ -982,16 +1027,17 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 			43.97116943001747,
 			DateTime(2022,7,1,0,0,0)
 		),
-		SubtaskSolution(
-			[],
-			[],
-			[]
-		)
+		[]
 	)
 
 	iteration_1 = Iteration(
 		[ zero_subtask ],
-		1
+		1,
+		IterationSolution(
+			[],
+			[],
+			[]
+		)
 	);
 
 	iterations::Vector{Iteration} = []
@@ -1105,20 +1151,23 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 
 			
 			# TODO: how to calculate amount of speeds?
-			input_speeds = fill(
+			vars_amount = size(subtask.variables_boundaries, 1)
+
+			prev_iter_speeds = fill(
 				subtask.problem.initial_speed, 
-				length(subtask.variables_boundaries)
+				vars_amount
 			)
 
 			# track_subtask = [subtask.subtask_boundaries.from:subtask.subtask_boundaries.to,:]
-			subtask_track = get_track_interval(
-				track,
-				subtask.subtask_boundaries.from,
-				subtask.subtask_boundaries.to
-			)
+			# subtask_track = get_track_interval(
+			# 	track,
+			# 	subtask.subtask_boundaries.from,
+			# 	subtask.subtask_boundaries.to
+			# )
 			subtask_segments = get_segments_interval(
 				segments,
-
+				subtask.subtask_boundaries.from,
+				subtask.subtask_boundaries.to
 			)
 			# finish_energy_subtask = 
 			# start_datetime_subtask = 
@@ -1126,30 +1175,32 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 			# TODO: stopped here, check how variables_boundaries used inside the function
 			function f_iter(input_speeds)
 				return solar_partial_trip_wrapper_iter(
-					input_speeds, track_subtask, subtask.variables_boundaries,
+					input_speeds, subtask_segments, subtask.variables_boundaries,
 					subtask.problem.start_energy, subtask.problem.finish_energy,
 					subtask.problem.start_datetime
 				)
 			end
 
-			td = TwiceDifferentiable(f_iter, fill(speed, chunks_amount); autodiff = :forward)
-			lower_bound = fill(0.0, chunks_amount)
-			upper_bound = fill(100.0, chunks_amount)
+			td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)
+			lower_bound = fill(0.0, vars_amount)
+			upper_bound = fill(100.0, vars_amount)
 			tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
 			# line_search = LineSearches.BackTracking();
-			# result = optimize(td, fill(speed, chunks_amount),
+			# result = optimize(td, fill(speed, vars_amount),
 				#Newton(; linesearch = line_search),
-			result = optimize(td, tdc, fill(speed, chunks_amount) 
-			.+ (rand(chunks_amount) .* 0.5)
-				,
-				IPNewton(),
-				Optim.Options(
-					x_tol = 1e-10,
-					f_tol = 1e-10,
-					g_tol = 1e-10
-				)
-			)
-			minimized_speeds = Optim.minimizer(result)
+			# result = optimize(td, tdc, prev_iter_speeds 
+			# .+ (rand(vars_amount) .* 0.5)
+			# 	,
+			# 	IPNewton(),
+			# 	Optim.Options(
+			# 		x_tol = 1e-10,
+			# 		f_tol = 1e-10,
+			# 		g_tol = 1e-10
+			# 	)
+			# )
+			# minimized_speeds = Optim.minimizer(result)
+
+			# subtask.solution = minimized_speeds
 
 			# TODO: check optimization procedure in compliance with article
 			# TODO: save result somewhere - in subtask struct
@@ -1170,7 +1221,12 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 			iteration_num += 1;
 			next_iteration = Iteration(
 				[],
-				iteration_num
+				iteration_num,
+				IterationSolution(
+					[],
+					[],
+					[]
+				)
 			)
 			for subtask in iteration.subtasks
 				for variable_boundaries in subtask.variables_boundaries
@@ -1183,11 +1239,7 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 							0.,
 							DateTime(2022,1,1,0,0,0)
 						),
-						SubtaskSolution(
-							[],
-							[],
-							[]
-						)
+						[]
 					)
 					push!(next_iteration.subtasks, new_subtask)
 				end
