@@ -141,9 +141,9 @@ function get_segments_for_track(track)
 end
 
 function get_track_interval(track, from_point, to_point)
-    return track[from_point : to_point, :]
+    return @view track[from_point : to_point, :]
 end
 
 function get_segments_interval(segments, from_point, to_point)
-    return segments[from_point : to_point - 1, :]
+    return @view segments[from_point : to_point - 1, :]
 end

@@ -538,9 +538,27 @@ function set_speeds(speeds, track, divide_at)
 	return output_speeds
 end
 
+function set_speeds_boundaries(speeds, variables_boundaries::Vector{Boundaries})
+	if size(speeds,1) != size(variables_boundaries,1)
+		throw(BoundsError("Input speeds and segments info mismatch!"))
+	end
+	output_speeds = []
+
+	for i in eachindex(variables_boundaries)
+		append!(
+			output_speeds,
+			fill(
+				speeds[i],
+				variables_boundaries[i].size
+				)
+			)
+	end
+	return output_speeds
+end
+
 function set_speeds_segments(speeds, track_len, segments)
 	output_speeds = fill(last(speeds), track_len)
-	for i=1:size(segments, 1)
+	for i in eachindex(segments)
 		output_speeds[segments[i][1]:segments[i][2]] .= speeds[i]
 	end
 	return output_speeds
@@ -550,7 +568,7 @@ function set_speeds_segments(speeds, segments)
 	track_len = last(segments)[2] - first(segments)[1] + 1
 	first_index = first(segments)[1]
 	output_speeds = fill(last(speeds), track_len)
-	for i=1:size(segments, 1)
+	for i in eachindex(segments)
 		output_speeds[segments[i][1] - first_index + 1 : segments[i][2] - first_index + 1] .= speeds[i]
 	end
 	return output_speeds
@@ -583,9 +601,9 @@ function solar_partial_trip_wrapper_alloc(speeds, track, indexes, start_energy, 
 	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 end
 
-function solar_partial_trip_wrapper_iter(speeds, track, segments, start_energy, finish_energy, start_datetime)
+function solar_partial_trip_wrapper_iter(speeds, track, variables_boundaries, start_energy, finish_energy, start_datetime)
 	speeds_ms = convert_kmh_to_ms(speeds)
-	speed_vector = set_speeds_segments(speeds_ms, size(track.distance,1), segments)
+	speed_vector = set_speeds_boundaries(speeds_ms, variables_boundaries)
 	power_use, solar_power, energy_in_system, time, time_s = 
 		solar_trip_calculation_bounds_alloc(speed_vector, track, start_datetime, start_energy)
 	cost = last(time_s) +  (finish_energy - last(energy_in_system))^2
@@ -1086,40 +1104,52 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 			#######################
 
 			
-			# # TODO: how to calculate amount of speeds?
-			# input_speeds = fill(subtask.problem.initial_speed, length(subtask.variables_boundaries))
+			# TODO: how to calculate amount of speeds?
+			input_speeds = fill(
+				subtask.problem.initial_speed, 
+				length(subtask.variables_boundaries)
+			)
 
 			# track_subtask = [subtask.subtask_boundaries.from:subtask.subtask_boundaries.to,:]
-			# # finish_energy_subtask = 
-			# # start_datetime_subtask = 
-		
-			# # TODO: stopped here, check how variables_boundaries used inside the function
-			# function f_iter(input_speeds)
-			# 	return solar_partial_trip_wrapper_iter(
-			# 		input_speeds, track_subtask, subtask.variables_boundaries,
-			# 		subtask.problem.start_energy, subtask.problem.finish_energy,
-			# 		subtask.problem.start_datetime
-			# 	)
-			# end
+			subtask_track = get_track_interval(
+				track,
+				subtask.subtask_boundaries.from,
+				subtask.subtask_boundaries.to
+			)
+			subtask_segments = get_segments_interval(
+				segments,
 
-			# td = TwiceDifferentiable(f_iter, fill(speed, chunks_amount); autodiff = :forward)
-			# lower_bound = fill(0.0, chunks_amount)
-			# upper_bound = fill(100.0, chunks_amount)
-			# tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
-			# # line_search = LineSearches.BackTracking();
-			# # result = optimize(td, fill(speed, chunks_amount),
-			# 	#Newton(; linesearch = line_search),
-			# result = optimize(td, tdc, fill(speed, chunks_amount) 
-			# .+ (rand(chunks_amount) .* 0.5)
-			# 	,
-			# 	IPNewton(),
-			# 	Optim.Options(
-			# 		x_tol = 1e-10,
-			# 		f_tol = 1e-10,
-			# 		g_tol = 1e-10
-			# 	)
-			# )
-			# minimized_speeds = Optim.minimizer(result)
+			)
+			# finish_energy_subtask = 
+			# start_datetime_subtask = 
+		
+			# TODO: stopped here, check how variables_boundaries used inside the function
+			function f_iter(input_speeds)
+				return solar_partial_trip_wrapper_iter(
+					input_speeds, track_subtask, subtask.variables_boundaries,
+					subtask.problem.start_energy, subtask.problem.finish_energy,
+					subtask.problem.start_datetime
+				)
+			end
+
+			td = TwiceDifferentiable(f_iter, fill(speed, chunks_amount); autodiff = :forward)
+			lower_bound = fill(0.0, chunks_amount)
+			upper_bound = fill(100.0, chunks_amount)
+			tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+			# line_search = LineSearches.BackTracking();
+			# result = optimize(td, fill(speed, chunks_amount),
+				#Newton(; linesearch = line_search),
+			result = optimize(td, tdc, fill(speed, chunks_amount) 
+			.+ (rand(chunks_amount) .* 0.5)
+				,
+				IPNewton(),
+				Optim.Options(
+					x_tol = 1e-10,
+					f_tol = 1e-10,
+					g_tol = 1e-10
+				)
+			)
+			minimized_speeds = Optim.minimizer(result)
 
 			# TODO: check optimization procedure in compliance with article
 			# TODO: save result somewhere - in subtask struct
