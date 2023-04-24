@@ -19,7 +19,7 @@ mutable struct Boundaries
 end
 
 
-@proto mutable struct SubtaskProblem
+mutable struct SubtaskProblem
 	start_energy::AbstractFloat
 	finish_energy::AbstractFloat
 	initial_speed::AbstractFloat
@@ -31,7 +31,7 @@ mutable struct SubtaskVariable
 	speed::AbstractFloat
 end
 
-@proto struct IterationSolution
+struct IterationSolution
 	speeds::Vector{AbstractFloat} # n-1 speeds (for segments)
 	energies::Vector{AbstractFloat} # n energies (for points)
 	seconds::Vector{AbstractFloat} # n-1 times (for segments)
@@ -45,7 +45,7 @@ mutable struct Subtask
 	solution::Vector{AbstractFloat} # n-1 speeds (for segments)
 end
 
-@proto mutable struct Iteration
+mutable struct Iteration
 	subtasks::Vector{Subtask}
 	number::Integer
 	solution::IterationSolution
@@ -1000,13 +1000,6 @@ function iterative_optimization_new(track, segments, scaling_coef,
 
 	# 0. data setup
 	track_size = size(track,1)
-	# initial splitting not needed
-	# array of arrays. why? 1st level for iterations, 2nd level for substasks on interation
-	subtasks_splits_general = []
-	push!(subtasks_splits_general, calculate_split_bounds_segments(1,track_size, 1) )
-	# variables_splits_iteration = []
-	# will be initialized in loop
-	# subtasks_splits_segments =  [ calculate_split_bounds_segments(track_size, scaling_coef) ]
 
 	# there should be as many speeds, as variables on last iteration
 	speeds_general = []
@@ -1048,9 +1041,7 @@ function iterative_optimization_new(track, segments, scaling_coef,
 	# 1. exit loop check
 	is_track_divisible_further = true
 	# while iteration_num <= 2
-	while is_track_divisible_further && iteration_num <= 2
-		# amount_of_subtasks = scaling_coef^(iteration - 1) # also amount of variables from prev. iteration
-		# amount_of_variables = scaling_coef^iteration
+	while is_track_divisible_further # && iteration_num <= 2
 
 		iteration = iterations[iteration_num]
 		println("Iteration $(iteration.number)")
@@ -1069,11 +1060,6 @@ function iterative_optimization_new(track, segments, scaling_coef,
 		# потом в конце итерации после всех оптимизаций склеивать единый массив из точек разделения
 		# и на следующей итерации использовать уже его
 
-		# # generates separate track dataframes
-		# tracks_iteration_chunk = split_track_by_indexes(
-		# 		track_iteration_chunk,
-		# 		split_indexes_chunk
-		# 		)
 
 		is_track_divisible_further = false
 		# is_there_single_subtask_where_track_is_divisible = false
@@ -1096,62 +1082,8 @@ function iterative_optimization_new(track, segments, scaling_coef,
 				is_track_divisible_further = true
 			end
 
-			# # check if track is divisible further
-			# if (subtask.subtask_boundaries.size) >= scaling_coef
-			# 	is_track_divisible_further = true
-
-			# 	# split each task on parts
-			# 	subtask.variables_boundaries = calculate_boundaries(
-			# 		subtask.subtask_boundaries.from,
-			# 		subtask.subtask_boundaries.to,
-			# 		scaling_coef
-			# 	)
-
-			# 	# append!(subtask.variables_segments, subtask_variables_segments)
-			# 	# fill it later straight with results
-
-			# 	# TODO : check here if could be divided further
-			# 	for variable_index in eachindex(subtask_variables_split)
-			# 		if (subtask_variables_split[variable_index][2] - 
-			# 			subtask_variables_split[variable_index][1] + 1) >= scaling_coef
-			# 			# is_there_single_subtask_where_track_is_divisible = true
-			# 			is_track_divisible_further = true
-			# 		end
-			# 	end
-
-			# 	for variable_segment in subtask_variables_segments
-			# 		if (variable_segment.to - variable_segment.from + 1) >= scaling_coef
-			# 			# is_there_single_subtask_where_track_is_divisible = true
-			# 			is_track_divisible_further = true
-			# 		end
-			# 	end
-
-
-			# 	# collecting the variables split for the next iteration
-			# 	append!(variables_split_iteration, subtask_variables_split)
-			# 	# append!(variables_segments_iteration, subtask_variables_segments)
-			# 	# exit codition here when we can no longer split?
-			# 	# new splits only here
-			# else
-			# 	push!(variables_split_iteration, subtask_splits)
-			# 	# push!(variables_segments_iteration, subtask.subtask_segment)
-			# 	subtask_variables_split = subtask_splits
-
-			# 	# use the same subtask on next iter?
-			# end
-
-			# perform optimization
-
-			# optimize
-			# here or only if segments were changed?
-			# it is better to optimize everytime,
-			# since we are improving accuracy every iteration
-			
-			# TODO: get needed parametes for optimization
-
 			#######################
 
-			
 			# TODO: how to calculate amount of speeds?
 			vars_amount = size(subtask.variables_boundaries, 1)
 
@@ -1160,12 +1092,6 @@ function iterative_optimization_new(track, segments, scaling_coef,
 				vars_amount
 			)
 
-			# track_subtask = [subtask.subtask_boundaries.from:subtask.subtask_boundaries.to,:]
-			# subtask_track = get_track_interval(
-			# 	track,
-			# 	subtask.subtask_boundaries.from,
-			# 	subtask.subtask_boundaries.to
-			# )
 			subtask_segments = get_segments_interval(
 				segments,
 				subtask.subtask_boundaries.from,
