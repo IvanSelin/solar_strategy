@@ -1141,12 +1141,12 @@ function iterative_optimization_new(track, segments, scaling_coef,
 		iteration_speeds = []
 		for subtask in iteration.subtasks
 			speed_vector = set_speeds_boundaries(subtask.solution, subtask.variables_boundaries)
-			append!(iteration_speeds, convert_kmh_to_ms(speed_vector))
+			append!(iteration_speeds, speed_vector)
 		end
 
 		# 6. make full simulation with said speeds
 		power_use, solar_power, time_seconds = solar_trip_boundaries(
-			iteration_speeds,
+			convert_kmh_to_ms(iteration_speeds),
 			segments,
 			start_datetime
 		)
