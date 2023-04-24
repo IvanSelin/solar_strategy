@@ -52,6 +52,64 @@ plot(track.distance, track.altitude, title="Track raw data")
 track_peaks, segments_peaks = keep_extremum_only_peaks_segments(track)
 plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data built w/ Peaks.jl")
 
+@time res = iterative_optimization_new(track, segments, 5, 5100., DateTime(2022,7,1,0,0,0));
+# 41 sec for two iterations
+@time res_peaks = iterative_optimization_new(
+    track_peaks, segments_peaks, 5, 5100., DateTime(2022,7,1,0,0,0));
+# 13 secs for 2 iterations
+# 126 seconds full
+res = res_peaks;
+
+# iter_prev=res[end-1];
+# iter_last=res[end];
+# subtasks_prev = iter_prev.subtasks;
+# subtasks_last = iter_last.subtasks;
+
+# segments_size_prev = map((x) -> x.subtask_boundaries.size, subtasks_prev);
+# segments_size_last = map((x) -> x.subtask_boundaries.size, subtasks_last);
+
+# linetypes_test = [ :stepmid]
+
+# plot(segments_size_prev, line=linetypes_test)
+# plot(segments_size_last, line=linetypes_test)
+
+# # graphs looks ok, we can continue to optimization
+
+plot(res[1].solution.speeds*3.6, line=:stepmid, title="iteration 1 speeds")
+plot(res[2].solution.speeds*3.6, line=:stepmid, title="iteration 2 speeds")
+plot(res[3].solution.speeds*3.6, line=:stepmid, title="iteration 3 speeds")
+plot(res[4].solution.speeds*3.6, line=:stepmid, title="iteration 4 speeds")
+plot(res[5].solution.speeds*3.6, line=:stepmid, title="iteration 5 speeds")
+plot(res[6].solution.speeds*3.6, line=:stepmid, title="iteration 6 speeds")
+plot(res[7].solution.speeds*3.6, line=:stepmid, title="iteration 7 speeds")
+plot(res[8].solution.speeds*3.6, line=:stepmid, title="iteration 8 speeds")
+
+plot(res[1].solution.energies, line=:stepmid, title="iteration 1 energies")
+plot(res[2].solution.energies, line=:stepmid, title="iteration 2 energies")
+plot(res[3].solution.energies, line=:stepmid, title="iteration 3 energies")
+plot(res[4].solution.energies, line=:stepmid, title="iteration 4 energies")
+plot(res[5].solution.energies, line=:stepmid, title="iteration 5 energies")
+plot(res[6].solution.energies, line=:stepmid, title="iteration 6 energies")
+plot(res[7].solution.energies, line=:stepmid, title="iteration 7 energies")
+plot(res[8].solution.energies, line=:stepmid, title="iteration 8 energies")
+
+
+
+power_use, solar_power, time_seconds = solar_trip_boundaries(
+    res[1].solution.speeds,
+    segments,
+    DateTime(2022,7,1,0,0,0)
+);
+plot(power_use, title="power use")
+plot(solar_power, title="solar income")
+
+power_use1, solar_power1, energy_in_system1, time1, time_s1 = solar_trip_calculation_bounds_alloc(
+    res[1].solution.speeds, segments, DateTime(2022,7,1,0,0,0), 5100.
+);
+plot(power_use1, title="power use1")
+plot(solar_power1, title="solar income1")
+plot(energy_in_system1, title="energy in system1")
+
 # TODO: slope angle preprocessing
 
 # # few big chunks, LBFGS, 645 seconds, negative speeds, consider revising or constraints, 3886 seconds
