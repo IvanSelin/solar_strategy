@@ -34,7 +34,8 @@ end
 @proto struct IterationSolution
 	speeds::Vector{AbstractFloat} # n-1 speeds (for segments)
 	energies::Vector{AbstractFloat} # n energies (for points)
-	times::Vector{AbstractFloat} # n times (for points)
+	seconds::Vector{AbstractFloat} # n-1 times (for segments)
+	times::Vector{DateTime} # n times (for points)
 end
 
 mutable struct Subtask
@@ -693,12 +694,9 @@ function solar_partial_trip_wrapper_iter(speeds, segments, variables_boundaries,
 		speed_vector, segments, start_datetime
 	)
 	# track points, not segments, that's why it is size is +1 
-	energy_in_system = []
-	push!(energy_in_system, start_energy)
-	total_energy = start_energy .+ solar_power .- power_use
-	append!(energy_in_system, total_energy)
+	energy_in_system = start_energy .+ solar_power .- power_use
 
-	cost = last(time_s) +  (finish_energy - last(energy_in_system))^2
+	cost = last(time_s) +  10 * (finish_energy - last(energy_in_system))^2
 	return cost
 	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 end
@@ -985,7 +983,9 @@ function hierarchical_optimization_alloc!(speed_by_iter, speed, track, chunks_am
 	return result_speeds
 end
 
-function iterative_optimization_new(track, segments, scaling_coef, start_energy)
+function iterative_optimization_new(track, segments, scaling_coef,
+		start_energy, start_datetime=DateTime(2022,7,1,0,0,0)
+	)
 	# general algorithm:
 	# 0. data setup
 	# 1. exit loop check
@@ -1025,7 +1025,7 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 			start_energy,
 			0.,
 			43.97116943001747,
-			DateTime(2022,7,1,0,0,0)
+			start_datetime
 		),
 		[]
 	)
@@ -1034,6 +1034,7 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 		[ zero_subtask ],
 		1,
 		IterationSolution(
+			[],
 			[],
 			[],
 			[]
@@ -1046,8 +1047,8 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 	iteration_num = 1;
 	# 1. exit loop check
 	is_track_divisible_further = true
-	# while iteration <= 2
-	while is_track_divisible_further
+	# while iteration_num <= 2
+	while is_track_divisible_further && iteration_num <= 2
 		# amount_of_subtasks = scaling_coef^(iteration - 1) # also amount of variables from prev. iteration
 		# amount_of_variables = scaling_coef^iteration
 
@@ -1082,6 +1083,7 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 			subtask = iteration.subtasks[subtask_index]
 			# println("Analyzing subtask from $(subtask.subtask_boundaries.from) to $(subtask.subtask_boundaries.to)")
 
+			# 3. each subtask comes with its own chunks (variables)			
 			# split each task on parts
 			subtask.variables_boundaries = calculate_boundaries(
 				subtask.subtask_boundaries.from,
@@ -1169,10 +1171,8 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 				subtask.subtask_boundaries.from,
 				subtask.subtask_boundaries.to
 			)
-			# finish_energy_subtask = 
-			# start_datetime_subtask = 
-		
-			# TODO: stopped here, check how variables_boundaries used inside the function
+
+			# 4. solve optimization problem for every subtask with its chunks (variables)
 			function f_iter(input_speeds)
 				return solar_partial_trip_wrapper_iter(
 					input_speeds, subtask_segments, subtask.variables_boundaries,
@@ -1188,33 +1188,58 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 			# line_search = LineSearches.BackTracking();
 			# result = optimize(td, fill(speed, vars_amount),
 				#Newton(; linesearch = line_search),
-			# result = optimize(td, tdc, prev_iter_speeds 
-			# .+ (rand(vars_amount) .* 0.5)
-			# 	,
-			# 	IPNewton(),
-			# 	Optim.Options(
-			# 		x_tol = 1e-10,
-			# 		f_tol = 1e-10,
-			# 		g_tol = 1e-10
-			# 	)
-			# )
-			# minimized_speeds = Optim.minimizer(result)
+			result = optimize(td, tdc, prev_iter_speeds 
+			.+ (rand(vars_amount) .* 0.5)
+				,
+				IPNewton(),
+				Optim.Options(
+					x_tol = 1e-10,
+					f_tol = 1e-10,
+					g_tol = 1e-10
+				)
+			)
+			minimized_speeds = Optim.minimizer(result)
 
-			# subtask.solution = minimized_speeds
+			subtask.solution = minimized_speeds
 
 			# TODO: check optimization procedure in compliance with article
 			# TODO: save result somewhere - in subtask struct
 			# OR, in subtaskResult struct
 
-			# 3. each subtask comes with its own chunks (variables)
-			# 4. solve optimization problem for every subtask with its chunks (variables)
 		end
 		# is_track_divisible_further = !is_there_single_subtask_where_track_is_divisible
 		# push!(subtasks_splits_general, variables_split_iteration)
 
 		println()
 		# 5. tie everything together (collect speeds to one array)
+		iteration_speeds = []
+		for subtask in iteration.subtasks
+			speed_vector = set_speeds_boundaries(subtask.solution, subtask.variables_boundaries)
+			append!(iteration_speeds, convert_kmh_to_ms(speed_vector))
+		end
+
 		# 6. make full simulation with said speeds
+		power_use, solar_power, time_seconds = solar_trip_boundaries(
+			iteration_speeds,
+			segments,
+			start_datetime
+		)
+
+		println("solar sum $(sum(solar_power))")
+		println("use sum $(sum(power_use))")
+
+		energy_in_system = []
+		push!(energy_in_system, start_energy)
+		total_energy = start_energy .+ solar_power .- power_use
+		append!(energy_in_system, total_energy)
+
+		times = travel_time_to_datetime(time_seconds, start_datetime)
+		iteration.solution = IterationSolution(
+			iteration_speeds,
+			energy_in_system,
+			time_seconds,
+			times
+		)
 		# 7. 	prepare data for next iteration. should be subtask's chunks as subtasks
 
 		if is_track_divisible_further
@@ -1223,6 +1248,7 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 				[],
 				iteration_num,
 				IterationSolution(
+					[],
 					[],
 					[],
 					[]
@@ -1234,10 +1260,10 @@ function iterative_optimization_new(track, segments, scaling_coef, start_energy)
 						variable_boundaries,
 						[],
 						SubtaskProblem(
-							0.,
-							0.,
-							0.,
-							DateTime(2022,1,1,0,0,0)
+							energy_in_system[variable_boundaries.from],
+							energy_in_system[variable_boundaries.to],
+							iteration_speeds[variable_boundaries.from],
+							times[variable_boundaries.from]
 						),
 						[]
 					)
