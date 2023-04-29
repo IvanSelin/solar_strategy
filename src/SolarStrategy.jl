@@ -52,9 +52,9 @@ plot(track.distance, track.altitude, title="Track raw data")
 track_peaks, segments_peaks = keep_extremum_only_peaks_segments(track)
 plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data built w/ Peaks.jl")
 
-@time res = iterative_optimization_new(track, segments, 5, 5100., DateTime(2022,7,1,0,0,0));
+@time res = iterative_optimization(track, segments, 5, 5100., DateTime(2022,7,1,0,0,0));
 # 41 sec for two iterations
-@time res = iterative_optimization_new(
+@time res = iterative_optimization(
     track_peaks, segments_peaks,
     10,
     45000.,
