@@ -696,7 +696,14 @@ function solar_partial_trip_wrapper_iter(speeds, segments, variables_boundaries,
 	# track points, not segments, that's why it is size is +1 
 	energy_in_system = start_energy .+ solar_power .- power_use
 
-	cost = last(time_s) +  10 * (finish_energy - last(energy_in_system))^2
+	energy_capacity = 5100.
+
+	cost = sum(segments.diff_distance ./ speed_vector) + 100 * (finish_energy - last(energy_in_system))^2;
+
+	# cost = last(time_s) + (
+	# 	10000 * (finish_energy - last(energy_in_system))^2 +
+	# 	100 * max(0, maximum(energy_in_system) - energy_capacity)
+	# )
 	return cost
 	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 end
@@ -1063,7 +1070,7 @@ function iterative_optimization_new(track, segments, scaling_coef,
 
 		is_track_divisible_further = false
 		# is_there_single_subtask_where_track_is_divisible = false
-		for subtask_index in eachindex(iteration.subtasks)
+		Threads.@threads for subtask_index in eachindex(iteration.subtasks)
 		# for subtask_index in eachindex(subtasks_splits_iteration)
 			# println("Subtask $subtask_index")
 			subtask = iteration.subtasks[subtask_index]
@@ -1115,13 +1122,13 @@ function iterative_optimization_new(track, segments, scaling_coef,
 			# result = optimize(td, fill(speed, vars_amount),
 				#Newton(; linesearch = line_search),
 			result = optimize(td, tdc, prev_iter_speeds 
-			.+ (rand(vars_amount) .* 0.5)
+			# .+ rand(vars_amount) .- 0.5
 				,
 				IPNewton(),
 				Optim.Options(
-					x_tol = 1e-10,
-					f_tol = 1e-10,
-					g_tol = 1e-10
+					x_tol = 1e-12,
+					f_tol = 1e-12,
+					g_tol = 1e-12
 				)
 			)
 			minimized_speeds = Optim.minimizer(result)

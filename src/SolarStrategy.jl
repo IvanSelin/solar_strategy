@@ -55,10 +55,13 @@ plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data
 @time res = iterative_optimization_new(track, segments, 5, 5100., DateTime(2022,7,1,0,0,0));
 # 41 sec for two iterations
 @time res = iterative_optimization_new(
-    track_peaks, segments_peaks, 5, 5100., DateTime(2022,7,1,0,0,0));
+    track_peaks, segments_peaks,
+    10,
+    45000.,
+    DateTime(2022,7,1,0,0,0)
+);
 # 13 secs for 2 iterations
 # 126 seconds full
-res = res_peaks;
 
 # iter_prev=res[end-1];
 # iter_last=res[end];
@@ -93,6 +96,7 @@ for r in res
 end
 
 for r in res
+    println(minimum(r.solution.energies))
     display(
         plot(
             track_peaks.distance,
@@ -103,16 +107,7 @@ for r in res
     )
 end
 
-
-plot(res[1].solution.energies, line=:stepmid, title="iteration 1 energies")
-plot(res[2].solution.energies, line=:stepmid, title="iteration 2 energies")
-plot(res[3].solution.energies, line=:stepmid, title="iteration 3 energies")
-plot(res[4].solution.energies, line=:stepmid, title="iteration 4 energies")
-plot(res[5].solution.energies, line=:stepmid, title="iteration 5 energies")
-plot(res[6].solution.energies, line=:stepmid, title="iteration 6 energies")
-plot(res[7].solution.energies, line=:stepmid, title="iteration 7 energies")
-plot(res[8].solution.energies, line=:stepmid, title="iteration 8 energies")
-
+# TODO: somehow ensure that we are NOT running out of energy
 
 
 # TODO: slope angle preprocessing
