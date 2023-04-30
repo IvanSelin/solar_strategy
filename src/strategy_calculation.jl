@@ -22,7 +22,7 @@ end
 mutable struct SubtaskProblem
 	start_energy::AbstractFloat
 	finish_energy::AbstractFloat
-	initial_speed::AbstractFloat
+	initial_speeds::Vector{AbstractFloat}
 	start_datetime::DateTime
 end
 
@@ -990,7 +990,30 @@ function hierarchical_optimization_alloc!(speed_by_iter, speed, track, chunks_am
 	return result_speeds
 end
 
-function iterative_optimization(track, segments, scaling_coef,
+function fill_array(source_array, desired_size)
+	source_size = size(source_array, 1)
+	elements_left_to_repeat = mod(desired_size, source_size)
+	# is_spreadable_evenly = elements_left_to_repeat == 0
+	full_repeats = div(desired_size, source_size)
+	output_array = []
+	for elem in source_array
+		append!(output_array, fill(elem, full_repeats))
+		if elements_left_to_repeat > 0
+			push!(output_array, elem)
+			elements_left_to_repeat -= 1
+		end
+	end
+	return Float64.(output_array)
+end
+
+function deflate_array(source_array, desired_size)
+	# TODO: write how to extract 
+	1.0//2
+	return "zalupa"
+end
+
+function iterative_optimization(track, segments, scaling_coef_subtasks,
+		scaling_coef_subtask_input_speeds,
 		start_energy, start_datetime=DateTime(2022,7,1,0,0,0)
 	)
 	# general algorithm:
@@ -1007,6 +1030,7 @@ function iterative_optimization(track, segments, scaling_coef,
 
 	# 0. data setup
 	track_size = size(track,1)
+	scaling_coef_variables = scaling_coef_subtasks * scaling_coef_subtask_input_speeds
 
 	# there should be as many speeds, as variables on last iteration
 	speeds_general = []
@@ -1024,7 +1048,7 @@ function iterative_optimization(track, segments, scaling_coef,
 		SubtaskProblem(
 			start_energy,
 			0.,
-			43.97116943001747,
+			[43.97116943001747],
 			start_datetime
 		),
 		[]
@@ -1071,6 +1095,7 @@ function iterative_optimization(track, segments, scaling_coef,
 		is_track_divisible_further = false
 		# is_there_single_subtask_where_track_is_divisible = false
 		Threads.@threads for subtask_index in eachindex(iteration.subtasks)
+		# for subtask_index in eachindex(iteration.subtasks)
 		# for subtask_index in eachindex(subtasks_splits_iteration)
 			# println("Subtask $subtask_index")
 			subtask = iteration.subtasks[subtask_index]
@@ -1081,10 +1106,10 @@ function iterative_optimization(track, segments, scaling_coef,
 			subtask.variables_boundaries = calculate_boundaries(
 				subtask.subtask_boundaries.from,
 				subtask.subtask_boundaries.to,
-				scaling_coef
+				scaling_coef_variables
 			)
 
-			if (subtask.subtask_boundaries.size) >= scaling_coef
+			if (subtask.subtask_boundaries.size) >= scaling_coef_variables
 				# at least one subtask can be divided, so, there should be next iteration
 				is_track_divisible_further = true
 			end
@@ -1094,10 +1119,17 @@ function iterative_optimization(track, segments, scaling_coef,
 			# TODO: how to calculate amount of speeds?
 			vars_amount = size(subtask.variables_boundaries, 1)
 
-			prev_iter_speeds = fill(
-				subtask.problem.initial_speed, 
+			# TODO: change here
+			# write a function that repeats array values to get another array of bigger size
+			prev_iter_speeds = fill_array(
+				subtask.problem.initial_speeds, 
 				vars_amount
 			)
+
+			# prev_iter_speeds = fill(
+			# 	first(subtask.problem.initial_speeds), 
+			# 	vars_amount
+			# )
 
 			subtask_segments = get_segments_interval(
 				segments,
@@ -1175,6 +1207,9 @@ function iterative_optimization(track, segments, scaling_coef,
 		)
 		# 7. 	prepare data for next iteration. should be subtask's chunks as subtasks
 
+		# TODO: re-split on new subtasks
+		# we can't use variables boundaries anymore
+
 		if is_track_divisible_further
 			iteration_num += 1;
 			next_iteration = Iteration(
@@ -1188,15 +1223,33 @@ function iterative_optimization(track, segments, scaling_coef,
 				)
 			)
 			for subtask in iteration.subtasks
-				for variable_boundaries in subtask.variables_boundaries
+				new_subtasks_boundaries = calculate_boundaries(
+					subtask.subtask_boundaries.from,
+					subtask.subtask_boundaries.to,
+					scaling_coef_subtasks
+				)
+				solution_index_counter = 0
+				for new_subtask_index in eachindex(new_subtasks_boundaries)
+					new_subtask_boundaries = new_subtasks_boundaries[new_subtask_index]
+					variables_boundaries = calculate_boundaries(
+						new_subtask_boundaries.from,
+						new_subtask_boundaries.to,
+						scaling_coef_subtask_input_speeds
+					)
+					# println(subtask.solution)
+					# TODO: make proper speed selecting function
+					input_speeds_subtask = subtask.solution[ solution_index_counter + 1 : solution_index_counter + length(variables_boundaries)]
+					solution_index_counter += length(variables_boundaries)
+					# input_speeds_subtask = subtask.solution[(variables_index-1)*scaling_coef_subtask_input_speeds+1:variables_index*scaling_coef_subtask_input_speeds]
+					# println(input_speeds_subtask)
 					new_subtask = Subtask(
-						variable_boundaries,
+						new_subtask_boundaries,
 						[],
 						SubtaskProblem(
-							energy_in_system[variable_boundaries.from],
-							energy_in_system[variable_boundaries.to],
-							iteration_speeds[variable_boundaries.from],
-							times[variable_boundaries.from]
+							energy_in_system[new_subtask_boundaries.from],
+							energy_in_system[new_subtask_boundaries.to],
+							input_speeds_subtask,
+							times[new_subtask_boundaries.from]
 						),
 						[]
 					)

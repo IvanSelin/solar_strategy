@@ -56,8 +56,9 @@ plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data
 # 41 sec for two iterations
 @time res = iterative_optimization(
     track_peaks, segments_peaks,
-    10,
-    45000.,
+    5,
+    5,
+    5100.,
     DateTime(2022,7,1,0,0,0)
 );
 # 13 secs for 2 iterations
