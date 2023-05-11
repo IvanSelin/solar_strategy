@@ -14,521 +14,216 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ e8a9ead5-161e-4f6f-8f9c-3f61e979ef00
+# ╔═╡ 29237f00-e924-11ed-2feb-db9b4c88debb
 begin
 	using DataFrames
-	# also consider using JuliaDB and Query
 	using CSV
 	using Plots # default
 	using PlotlyBase
 	# using PlotlySave
-	using PlutoUI
 	using TimeZones
 	using Dates
 	using Optim
+	using LineSearches
+	using PlutoUI
 	using Peaks
-	using Metrics
+	# using Alert
+	# selecting a Plots backend
+	# plotly(ticks=:native)
 end
 
-# ╔═╡ dd8724db-31dd-497f-a8b2-7e8656c3aa59
+# ╔═╡ 06286695-13b1-47e8-8620-7acaab9caa37
 begin
-	include("src//energy_draw.jl")
-	include("src//time.jl")
-	include("src//solar_radiation.jl")
-	include("src//track.jl")
-	include("src//utils.jl")
-	include("src//strategy_calculation.jl")
+	include("src/energy_draw.jl")
+	include("src/time.jl")
+	include("src/solar_radiation.jl")
+	include("src/track.jl")
+	include("src/utils.jl")
+	include("src/strategy_calculation.jl")
 end
 
-# ╔═╡ a7ee0e00-55f8-11ed-195c-73103633e4f3
-md""" # Track preprocessing """
-
-# ╔═╡ f97311ee-5f9b-4bed-a125-6c28a0aba50d
-track_raw = get_track_data("data//data_australia.csv")
-
-# ╔═╡ 5e80012e-6d22-4191-b03b-4c977e726eb5
-plot(track_raw.distance, track_raw.altitude, title="Raw track data")
-
-# ╔═╡ 84cb2782-1b35-482a-9355-0f2cf5d22483
-track_peaks = keep_extremum_only_peaks(track_raw)
-
-# ╔═╡ 3b685aeb-1f99-428d-8311-7c86be4577db
-plot(track_peaks.distance, track_peaks.altitude, title="Track data only at extremum points")
-
-# ╔═╡ 9da21138-5f0f-4e72-ab6c-9859d4db08ca
-md""" ## Let's take a closer look"""
-
-# ╔═╡ 5554c1aa-0264-40e9-a603-eee94eecf2d2
-plot(track_raw[ (track_raw.distance .> 1000) .& (track_raw.distance .< 5000) , :distance], track_raw[ (track_raw.distance .> 1000) .& (track_raw.distance .< 5000), :altitude], title="Raw track data 1000 to 5000m", xlim= [1000, 5000])
-
-# ╔═╡ b87b55b2-3ed6-4cbd-9727-c565663dfe1e
-plot(track_peaks[ (track_peaks.distance .> 1000) .& (track_peaks.distance .< 5000), :distance], track_peaks[(track_peaks.distance .> 1000) .& (track_peaks.distance .< 5000), :altitude], title="Track data only at extremum points 1000 to 5000m", xlim=[1000, 5000])
-
-# ╔═╡ 738a95cd-8e5f-4476-82c1-53952fb4168c
-md""" Track in indeed simplified
-
-But does it affect the simulation that much?"""
-
-# ╔═╡ 9f216093-ad1e-42a8-afea-4d9482956603
-md""" ### Optimizing raw track """
-
-# ╔═╡ 6fb1fb1f-1127-4585-bf93-3cd3810a2769
-@time result_raw = optimize(x -> solar_trip_wrapper(x, track_raw), [40.] )
-
-# ╔═╡ 45819c7d-be27-4abf-a663-2837f68c4d92
-minimized_inputs_raw = Optim.minimizer(result_raw)
-
-# ╔═╡ 23811c64-fadc-42f5-a8d5-2ec7fb780e27
+# ╔═╡ bfdbfe71-e7d0-4e06-b07d-3c589dac4584
 begin
-	inputs_ms = convert_kmh_to_ms(minimized_inputs_raw)
-	speed_vector_raw = propagate_speeds(inputs_ms, track_raw)
-	power_use_raw, solar_power_raw, energy_in_system_raw, time_raw, time_s_raw = solar_trip_calculation(speed_vector_raw, track_raw)
-	last(time_s_raw)
+	track_full, segments_full = get_track_and_segments("data/data_australia.csv")
+	track, segments = keep_extremum_only_peaks_segments(track_full)
+	plot(track.distance, track.altitude, title="Track extremum only data built w/ Peaks.jl")
 end
 
-# ╔═╡ b2f67788-351c-48c3-89e3-a14ba837da7b
-begin
-	plot(track_raw.distance, track_raw.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
-	plot!(twinx(), track_raw.distance, speed_vector_raw * 3.6, color=:red, ylabel="speed (km/h)", ylim=[0, 60], label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
-end
+# ╔═╡ c56eb344-364f-4f56-9ca0-ffe00e5d54dd
+distance_segments_sum = cumsum(segments.diff_distance)
 
-# ╔═╡ 9fc932d8-6c41-4af2-9024-c313a010e323
-plot(track_raw.distance, [power_use_raw solar_power_raw energy_in_system_raw zeros(size(track_raw,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
-	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
-	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+# ╔═╡ 7e946de1-90c5-42a8-8d08-8e306a458f24
+@bind variables_num confirm(NumberField(1:50000, default=1))
+
+# ╔═╡ bca49108-52e9-4c24-a5b7-561c22175bfd
+variable_boundaries = calculate_boundaries(
+    1,
+    size(track, 1),
+    variables_num
 )
 
-# ╔═╡ bba5f2b1-f73b-4b2f-9c8d-6736a20860dd
-md""" ### Optimizing track consisting only from peaks """
-
-# ╔═╡ 483c7caa-e919-4863-9c73-2209184cf47a
-@time result_peaks = optimize(x -> solar_trip_wrapper(x, track_peaks), [40.] )
-
-# ╔═╡ 954c00a9-055a-4831-b8d1-0009ca35f19e
-Optim.minimum(result_raw)
-
-# ╔═╡ 740d0e37-8538-4e7e-9933-d686fc34f3ed
-Optim.minimum(result_peaks)
-
-# ╔═╡ 1516a095-8d66-402a-8bbb-ef793939a4fd
-md""" cost difference is $(Optim.minimum(result_peaks) - Optim.minimum(result_raw))"""
-
-# ╔═╡ 6964deca-f0f0-40c7-b21e-4389a973a226
-md""" ### Simulating on peaks track with speed from optimizing on raw track"""
-
-# ╔═╡ fa33e044-ff8c-4535-84f1-8f5e4e25ccc2
-minimized_inputs_peaks = Optim.minimizer(result_peaks)
-# minimized_inputs_peaks = minimized_inputs_raw
-
-# ╔═╡ f205e0d8-2564-4bf2-87c4-345a75935b9d
-begin
-	inputs_ms_raw = convert_kmh_to_ms(minimized_inputs_raw)
-	speed_vector_peaks = propagate_speeds(inputs_ms_raw, track_peaks)
-	power_use_peaks, solar_power_peaks, energy_in_system_peaks, time_peaks, time_s_peaks = solar_trip_calculation(speed_vector_peaks, track_peaks)
-	last(time_s_peaks)
+# ╔═╡ e30edad1-eeff-4f85-a9d9-068279c9a224
+function f_wrap(input_speeds)
+    cost,_,_,_,_ = solar_partial_trip_wrapper_iter_full(
+        input_speeds, segments, variable_boundaries,
+        5100.,
+		0.,
+        DateTime(2022,7,1,0,0,0)
+    )
+	return cost
 end
 
-# ╔═╡ 3bbd23fa-8421-4e79-b786-58a0a34dd761
+# ╔═╡ 75dedd49-2e98-442f-8a16-21b558fd9ef4
+init_speeds = fill(44., variables_num)
+
+# ╔═╡ 42d3c72b-9420-4c78-943d-8f4faeffb873
 begin
-	plot(track_peaks.distance, track_peaks.altitude, label="altitude", ylabel="altitude", title="Speed (km/h) vs distance", right_margin = 15Plots.mm)
-	plot!(twinx(), track_peaks.distance, speed_vector_peaks * 3.6, color=:red, ylabel="speed (km/h)", ylim=[0, 60], label="speed (km/h)", ymirror = true, title="Speed (km/h) vs distance")
+	td = TwiceDifferentiable(f_wrap, init_speeds; autodiff = :forward)
+	lower_bound = fill(0.0, variables_num)
+	upper_bound = fill(100.0, variables_num)
+	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
 end
 
-# ╔═╡ bc1fcad1-6f06-4f93-b616-9023d0a382a4
-plot(track_peaks.distance, [power_use_peaks solar_power_peaks energy_in_system_peaks zeros(size(track_peaks,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
-	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
-	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+# ╔═╡ 297cf407-1bd8-4922-bc2b-116819104251
+@time result = optimize(td, tdc, init_speeds 
+# .+ rand(vars_amount) .- 0.5
+    ,
+    IPNewton(),
+    Optim.Options(
+        x_tol = 1e-3,
+        f_tol = 1e-3,
+        g_tol = 1e-3
+    )
 )
 
-# ╔═╡ 30bee5a3-dd36-46d1-9b47-aa5e38a093d8
-minimum(energy_in_system_raw)
+# ╔═╡ a6af61cb-e6cb-4055-be95-8ee87ea19bac
+minimized_speeds = Optim.minimizer(result)
 
-# ╔═╡ 67e632e4-2975-42a6-98c7-48a8d51a914a
-minimum(energy_in_system_peaks)
+# ╔═╡ 4183843f-f87b-4c33-a158-73d7dd434fa9
+cost, speed_vector, energy_in_system, solar_power, power_use, time_s = solar_partial_trip_wrapper_iter_full(
+	minimized_speeds,
+	segments,
+	variable_boundaries,
+	5100.,
+	0.,
+	DateTime(2022,7,1,0,0,0)
+);
 
-# ╔═╡ cc155214-dc25-4e08-a055-1fc977a58396
-md""" # TODO:
+# ╔═╡ 738d31d8-a047-42e1-ac24-e3b9043f836b
+total_time = last(time_s)
 
-Calculate how much different are results
-1. compare energies at peak points
-2. make an interpolation
-3. compare only final values
-"""
+# ╔═╡ 8d228438-c0ba-4ec7-b47f-ca9ec3340438
+lowest_energy = minimum(energy_in_system)
 
-# ╔═╡ 8ed7ac6f-f4cd-42d3-ac47-f1cee701a4f6
-md""" Getting peaks indexes"""
+# ╔═╡ c0106090-faa6-41a1-89b0-56243016bf4f
+last_energy = last(energy_in_system)
 
-# ╔═╡ 50eb4d80-790d-45a3-9c71-6553336d8eb4
-begin
-	md""" Getting peaks indexes"""
-	max_altitude_peaks_indexes, max_altitude_peaks = findmaxima(track_raw.altitude)
-    min_altitude_peaks_indexes, min_altitude_peaks = findminima(track_raw.altitude)
-    peaks_indexes = []
-    append!(peaks_indexes, max_altitude_peaks_indexes)
-    append!(peaks_indexes, min_altitude_peaks_indexes)
-    sort!(peaks_indexes)
-end
+# ╔═╡ 74483421-b600-4891-836d-3d18865c8481
+cost
 
-# ╔═╡ 9247695e-d46b-461f-9091-44f2b5e89d92
-power_use_raw_at_peaks = power_use_raw[peaks_indexes]
-
-# ╔═╡ 0e4eb22f-0319-4070-8497-af0b7c2dfb70
-mse(power_use_peaks, power_use_raw_at_peaks)
-
-# ╔═╡ c0592665-2891-4057-8883-5802ab886e9e
-r2_score(power_use_peaks, power_use_raw_at_peaks)
-
-# ╔═╡ 64d2ea28-82e6-42f4-a50b-61ff7b651744
-adjusted_r2_score(power_use_peaks, power_use_raw_at_peaks, 1)
-
-# ╔═╡ d61aab46-78aa-45b9-94ba-9902355044f8
-plot(track_peaks.distance, power_use_peaks-power_use_raw_at_peaks)
-
-# ╔═╡ c4c6e3ea-1389-4a33-8c69-07c86a446764
-md""" ## Power use is kinda OK
-
-But peaks model wastes a little bit less energy through the distance"""
-
-# ╔═╡ 6ce8d5de-f6f7-4e4c-877c-053fd604e7cb
-solar_power_raw_at_peaks = solar_power_raw[peaks_indexes]
-
-# ╔═╡ c676ea74-7e39-47dd-8e62-b740eb7f176d
-mse(solar_power_peaks, solar_power_raw_at_peaks)
-
-# ╔═╡ dcd260c8-0024-4582-af1f-cef95944a709
-r2_score(solar_power_peaks, solar_power_raw_at_peaks)
-
-# ╔═╡ 54a2a471-37a6-4344-9591-f3ca0aadafc0
-plot(track_peaks.distance, solar_power_peaks-solar_power_raw_at_peaks)
-
-# ╔═╡ cf21aa5a-bedc-43b1-9bf2-0db9c0990d1f
-md""" ## Power gain is OK """
-
-# ╔═╡ 4a9daa07-e1d0-4221-82ae-cf3aee70f77f
-energy_in_system_raw_at_peaks = energy_in_system_raw[peaks_indexes]
-
-# ╔═╡ dced5964-da29-44e4-a17b-96435de9fe5a
-mse(energy_in_system_peaks, energy_in_system_raw_at_peaks)
-
-# ╔═╡ eb6e439b-1d2c-4ee9-bed2-f743b59436d4
-r2_score(energy_in_system_peaks, energy_in_system_raw_at_peaks)
-
-# ╔═╡ 8e4dd08d-b0b9-4488-bc43-c8cd84fa3144
-plot(track_peaks.distance, energy_in_system_peaks-energy_in_system_raw_at_peaks)
-
-# ╔═╡ 678ced14-6bfc-47bd-be48-2c987a20d020
-md""" ## Energy in system is OK """
-
-# ╔═╡ 4b39d507-0cff-47a4-aab4-d828edae167f
-time_s_raw_at_peaks = time_s_raw[peaks_indexes]
-
-# ╔═╡ 65aafdc2-44cf-49bf-8d59-7a4c5a620344
-mse(time_s_peaks, time_s_raw_at_peaks)
-
-# ╔═╡ 7773ab00-a68a-4e7b-97c7-7a98374181ae
-r2_score(time_s_peaks, time_s_raw_at_peaks)
-
-# ╔═╡ 52b3d3f1-7bb8-48d2-9c3a-129bb0ff72d8
-md""" ## Time difference is $(last(time_s_peaks) - last(time_s_raw))"""
-
-# ╔═╡ 50ec284d-4484-4e6f-8bef-8a0ee4cf0a10
-md""" # But what if we try to use peaks model for optimization and use its result on raw track?
-
-And compare it to simulation on raw track """
-
-# ╔═╡ 87c84923-398d-41fb-8f26-785c4503333c
-md"""simulation time of optimization on peaks track, and using this single speed on raw track"""
-
-# ╔═╡ 602794dc-8a03-499d-aa1c-c1b6ba7a432e
-begin
-	inputs_ms_peaks = convert_kmh_to_ms(minimized_inputs_peaks)
-	speed_vector_peaks_at_raw = propagate_speeds(inputs_ms_peaks, track_raw)
-	power_use_peaks_at_raw, solar_power_peaks_at_raw, energy_in_system_peaks_at_raw, time_peaks_at_raw, time_s_peaks_at_raw = solar_trip_calculation(speed_vector_peaks_at_raw, track_raw)
-	last(time_s_peaks_at_raw)
-end
-
-# ╔═╡ 921d508e-2efe-42a0-8043-abf365d59ff8
-md""" using raw(optim) on raw(simul) is $(last(time_s_raw))
-
-using peaks(optim) on raw(simul) is $(last(time_s_peaks_at_raw))"""
-
-# ╔═╡ 1c2f866f-92c2-46e7-a8b0-b622ea220401
-md""" ## Time difference is $(last(time_s_peaks_at_raw) - last(time_s_raw))
-
-Using peaks track leads to overly-optimistic results"""
-
-# ╔═╡ 4fcf509e-9d69-4e54-806b-4d9251b76b3a
-md""" What about power constraints?"""
-
-# ╔═╡ a66eef8c-2cbd-467d-a5a9-13df9748fc03
-plot(track_raw.distance, [power_use_peaks_at_raw solar_power_peaks_at_raw energy_in_system_peaks_at_raw zeros(size(track_raw,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
-	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, size=(1200, 500),
-	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
-)
-
-# ╔═╡ b0986021-e5cf-409a-ae73-04a028ee5098
-minimum(energy_in_system_peaks_at_raw)
-
-# ╔═╡ 43193df9-4065-40ed-91a8-ffc5f600e4d5
-md""" looks like energy drops below minimum level
-
-overly-optimistic model"""
-
-# ╔═╡ e6fd5c95-7006-4450-869b-4b79b8df7016
-solar_trip_wrapper(speed_vector_peaks_at_raw, track_raw)
-
-# ╔═╡ d2e18269-07d8-4769-8806-4c6a07cb72e2
-md""" ### Stats comparison  """
-
-# ╔═╡ 38fc024c-6978-4ead-a4af-fd0d714d4f48
-mse(power_use_peaks_at_raw, power_use_raw)
-
-# ╔═╡ 1f68f942-2e0e-486a-889e-a3f81257c1f8
-r2_score(power_use_peaks_at_raw, power_use_raw)
-
-# ╔═╡ 2c2a0224-4213-4421-87e1-b89641c92339
-plot(track_raw.distance, power_use_peaks_at_raw-power_use_raw, )
-
-# ╔═╡ b9e6ecba-b7fb-4a35-9d80-05aa65862141
-md"""looks almost straight, maybe it is not that straight?"""
-
-# ╔═╡ 357be2e9-ed10-41f0-ab0a-96a83af6c4ff
-plot(track_raw.distance[1:100], power_use_peaks_at_raw[1:100] .- power_use_raw[1:100])
-
-# ╔═╡ ce2b73a6-2053-4337-b28d-909623ad3236
-indexes_to_show = (track_raw.distance .> 500) .& (track_raw.distance .< 1000)
-
-# ╔═╡ 8951bb1b-f878-4b32-b900-6a38b93c9008
+# ╔═╡ 7f1d8487-001b-40ba-b19a-bc6374621578
 plot(
-	track_raw.distance[indexes_to_show], power_use_peaks_at_raw[indexes_to_show] .- power_use_raw[indexes_to_show], title="Power use difference")
-
-# ╔═╡ 0b3783cf-8af7-42a9-9ad0-618aff3302ba
-plot(track_raw.distance[indexes_to_show], track_raw.altitude[indexes_to_show], title="raw track")
-
-# ╔═╡ d437b7ee-a62e-4270-a7b1-193aaf560869
-inexes_to_show_peaks = (track_peaks.distance .> 500) .& (track_peaks.distance .< 1000)
-
-# ╔═╡ b2681cbd-64e7-40df-87ad-24be0adbe042
-plot(track_peaks.distance[ inexes_to_show_peaks], track_peaks.altitude[inexes_to_show_peaks], title="peaks track")
-
-# ╔═╡ e8f82bc4-a269-43b2-a40a-12c7304b2d02
-md""" done with tracks, solar power income"""
-
-# ╔═╡ 6249f8ce-dc83-4662-821c-7470639bb8e8
-plot(track_raw.distance, solar_power_peaks_at_raw-solar_power_raw, title="solar power income difference")
-
-# ╔═╡ a6dcb927-e35b-44af-ae70-0241a8c6a0e8
-plot(track_raw.distance, energy_in_system_peaks_at_raw-energy_in_system_raw, title="energy in system difference")
-
-# ╔═╡ 6cd37256-5781-46e7-b67e-8724ab64edcf
-plot(track_raw.distance, time_s_peaks_at_raw - time_s_raw)
-
-# ╔═╡ f69c1192-7bd3-4d17-b9dd-ec634ef1ea29
-last(time_s_peaks_at_raw)-last(time_s_raw)
-
-# ╔═╡ 4350e7f7-824d-4eba-9a0c-0fdcf80d5431
-mse(solar_power_peaks_at_raw, solar_power_raw)
-
-# ╔═╡ 8464be7f-b0a8-403c-af1d-8009617c56a8
-md""" # Trying out flat track"""
-
-# ╔═╡ eed29dd7-feb4-4233-b118-234ed0c704f8
-track_flat = copy(track_raw)
-
-# ╔═╡ 80270ef2-e711-4756-a639-0fd352f034e5
-begin
-	track_flat.altitude .= 0.
-	track_flat.diff_altitude .= 0.
-	track_flat.slope .= 0
-end
-
-# ╔═╡ 293b01e2-82c5-4bb7-a3bd-9c126e7d3b30
-plot(track_flat.distance, track_flat.altitude, title="flat track")
-
-# ╔═╡ 1b4a755f-f6e5-4097-8bc2-05dd4a2d7642
-@time result_flat = optimize(x -> solar_trip_wrapper(x, track_flat), [40.] )
-
-# ╔═╡ 26342aab-9798-45fa-9700-603f66c7449a
-minimized_inputs_flat = Optim.minimizer(result_flat)
-
-# ╔═╡ af339667-3f7e-4e72-8a8a-bf87787db0e9
-begin
-	inputs_ms_flat = convert_kmh_to_ms(minimized_inputs_flat)
-	speed_vector_flat = propagate_speeds(inputs_ms_flat, track_flat)
-	power_use_flat, solar_power_flat, energy_in_system_flat, time_flat, time_s_flat = solar_trip_calculation(speed_vector_flat, track_raw)
-	last(time_s_flat)
-end
-
-# ╔═╡ 36aad8d4-e241-4294-a362-22f11947bed7
-plot(track_raw.distance, [power_use_flat solar_power_flat energy_in_system_flat zeros(size(track_raw,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
-	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
-	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+	distance_segments_sum,
+	energy_in_system,
+	title="Energy with $(variables_num) vars, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy,digits=2))"
 )
 
-# ╔═╡ d1a19c6f-2b8b-4600-9fd5-fdff94d8530b
-md""" # Trying out Alla's version of optimization"""
+# ╔═╡ cfe7d92e-9fc1-4f2f-8a99-f0e8738d0786
+plot(
+	distance_segments_sum,
+	speed_vector*3.6,
+	line=:stepmid,
+	title="Speed plot with $(variables_num) vars, total time $(round(total_time, digits=3)) sec"
+)
 
-# ╔═╡ 039bd76e-37c5-4f90-a7dd-01f3f95d6ab9
-@time result_flat_1_piece = optimize(x -> solar_trip_wrapper(x, track_1_piece), [40.] )
+# ╔═╡ fdf00bb3-735c-4418-8664-98a481cf2cf1
+@show minimized_speeds
 
-# ╔═╡ c91c7f93-78e9-463b-9d15-419c564d6983
-minimized_inputs_flat_1 = Optim.minimizer(result_flat_1_piece)
+# ╔═╡ aa03a987-75ce-4375-984c-26bf8f28d8ff
+maximum(minimized_speeds)
 
-# ╔═╡ 5e65228b-01ae-44a9-919f-fe4bf1dac4a2
-function set_speeds(speeds, track, divide_at)
-	# if size(speeds, 1) == 1
-	# 	return fill(first(speeds), size(track.distance, 1))
-	# end
-	# output_speeds = zeros(size(track.distance, 1))
-	output_speeds = fill(last(speeds), size(track.distance, 1))
-	for i=1:size(divide_at,1)-1
-		if i==1
-			output_speeds[1:divide_at[1]] .= speeds[1]
-		else
-			output_speeds[divide_at[i]:divide_at[i+1]] .= speeds[i]
-		end
-	end
-	return output_speeds
+# ╔═╡ 1d9bfa34-eac6-463d-afaa-e009fb3c5dd4
+size(segments,1)
+
+# ╔═╡ 54365347-345f-4a01-8ef0-33e0a8636ce5
+@bind variables_track_len confirm(NumberField(1:size(segments,1), default=1))
+
+# ╔═╡ 31106dc6-d9a7-4520-bc7c-9a3f475b5020
+segments_clean = segments[1:variables_track_len,:]
+
+# ╔═╡ a1b59724-021d-42e0-93b7-50735665a10a
+start_energy_clean = 5100. * track.distance[variables_track_len] / last(track.distance)
+
+# ╔═╡ 0d46eece-4371-4e86-96de-02f27217b8b6
+function f_wrap_clean_track(input_speeds)
+	power_use_clean, solar_power_clean, time_s_clean = solar_trip_boundaries(
+		input_speeds, segments_clean, DateTime(2022,7,1,0,0,0)
+	)
+	energy_in_system_clean = start_energy_clean .+ solar_power_clean .- power_use_clean
+
+	# cost = sum(segments_clean.diff_distance ./ input_speeds) + 100 * (0. - last(energy_in_system_clean))^2;
+	cost = sum(segments_clean.diff_distance ./ input_speeds) + 100 * abs(minimum(energy_in_system_clean)) + 100 * (0. - last(energy_in_system_clean))^2;
+	return cost
 end
 
-# ╔═╡ de0f00f3-09f9-49ee-bfca-4ffc65cd4956
-function solar_trip_division(speed, track, divide_at)
-	# input_speed = set_speeds(speed, track, divide_at)
-	# return solar_trip_cost(convert_kmh_to_ms(input_speed), track)
-	return solar_trip_cost(convert_kmh_to_ms(speed), track)
-end
+# ╔═╡ 3f67539e-4638-4c20-999a-9524d3af5fb1
+init_speeds_clean = fill(43.0/3.6, variables_track_len)
 
-# ╔═╡ c5c7105a-36e5-47c8-a94f-ab10a8a7a040
-function flatten_track(track_raw, divide_indexes)
-	if size(divide_indexes,1) == 0
-		return track_raw
-	end
-	track = track_raw[divide_indexes,:]
-	distance = copy(track.distance)
-	altitude = copy(track.altitude)
-	pushfirst!(distance,track_raw[1,:distance])
-	pushfirst!(altitude,track_raw[1,:altitude])
-	track.diff_distance = diff(distance)
-	track.diff_altitude = diff(altitude)
-	track.slope = atand.(track.diff_altitude ./ track.diff_distance)
-	return track
-end
-
-# ╔═╡ 5225be03-34ac-4e5f-b1e8-fb91ff20f690
-track_1_piece = flatten_track(track_raw, [ size(track_raw.distance,1) ])
-
-# ╔═╡ 12bc33af-eba4-4eae-87e3-e95bace47c3d
+# ╔═╡ 62a8b78a-9b97-4057-b92a-8732eb71a578
 begin
-	inputs_ms_flat_1 = convert_kmh_to_ms(minimized_inputs_flat_1)
-	speed_vector_flat_1 = propagate_speeds(inputs_ms_flat_1, track_1_piece)
-	power_use_flat_1, solar_power_flat_1, energy_in_system_flat_1, time_flat_1, time_s_flat_1 = solar_trip_calculation(speed_vector_flat_1, track_raw)
-	last(time_s_flat_1)
+	td_clean = TwiceDifferentiable(f_wrap_clean_track, init_speeds_clean; autodiff = :forward)
+	lower_bound_clean = fill(0.0, variables_track_len)
+	upper_bound_clean = fill(50.0, variables_track_len)
+	tdc_clean = TwiceDifferentiableConstraints(lower_bound_clean, upper_bound_clean)
 end
 
-# ╔═╡ a2fecfe2-4d42-47f6-b6ff-a185a0601945
-power_use_flat_1
-
-# ╔═╡ 6d8c0302-f26d-40fc-a858-c5093b82ca10
-plot(track_raw.distance, [power_use_flat_1 solar_power_flat_1 energy_in_system_flat_1 zeros(size(track_raw,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
-	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
-	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+# ╔═╡ 2e6ae1e8-faf8-4827-9c7a-01889c7c6a19
+@time res_clean = optimize(td_clean, tdc_clean, init_speeds_clean 
+# .+ rand(vars_amount) .- 0.5
+    ,
+    IPNewton(),
+    Optim.Options(
+        x_tol = 1e-6,
+        f_tol = 1e-6,
+        g_tol = 1e-6
+    )
 )
 
-# ╔═╡ c13d78d6-d78a-4cc8-89cf-dd8cc1dc5779
-zero_energy_1 = minimum(abs.(energy_in_system_flat_1))
+# ╔═╡ 7831ba8c-fa38-4b49-be17-b09d2d97aa7e
+speeds2 = Optim.minimizer(res_clean)
 
-# ╔═╡ db5753e5-a105-4d49-a6ab-7e94a5e097b3
-zero_index_1 = argmin(abs.(energy_in_system_flat_1))
-
-# ╔═╡ af4f6c48-d7e3-445e-a3d1-25634cf75e92
-track_raw[zero_index_1,:]
-
-# ╔═╡ a41cf01b-14ff-48c4-8927-9020d9a90cf9
-energy_in_system_flat_1[zero_index_1]
-
-# ╔═╡ 4ca481f3-767e-4c20-9bda-51defd812a7e
-function recursive_optimization(speed, track, track_raw, divide_at, iteration, run_until)
-	# println(speed)
- #    show(track)
- #    show(track_raw)
- #    println(divide_at)
- #    println(iteration)
-	
-    track = flatten_track(track_raw, divide_at);
-    # println("flat track")
-    # show(track)
-	@time result = optimize(x -> solar_trip_division(x, track, divide_at), speed)
-
-	minimized = Optim.minimizer(result)
-	println(minimized)
-	inputs = convert_kmh_to_ms(minimized)
-	speed_vec = set_speeds(inputs, track_raw, divide_at)
-	power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div = solar_trip_calculation(speed_vec, track_raw)
-
-	println(last(time_s_div))
-
-	zero_index_div = argmin(abs.(energy_in_system_div))
-
-	new_divide = copy(divide_at)
-	push!(new_divide, zero_index_div)
-	sort!(new_divide)
-	new_divide_index = findfirst(x -> x==zero_index_div, new_divide)
-	println(new_divide)
-
-	new_track = flatten_track(track_raw, new_divide)
-
-	if iteration == run_until
-		return power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div;
-	end
-	
-	new_speed = copy(minimized)
-	insert!(new_speed, new_divide_index, 40.)
-	recursive_optimization(new_speed, new_track, track_raw, new_divide, iteration + 1, run_until)
-	
-	return power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div;
-	
+# ╔═╡ 6a6a183c-0813-421f-b222-fbf17e5204a8
+begin
+	power_use2, solar_power2, time_s2 = solar_trip_boundaries(
+		speeds2, segments_clean, DateTime(2022,7,1,0,0,0)
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system2 = start_energy_clean .+ solar_power2 .- power_use2
+	lowest_energy2 = minimum(energy_in_system2)
+	last_energy2 = last(energy_in_system2)
 end
 
-# ╔═╡ 18e668df-3434-44b5-897d-40de1792dc46
-size(track_raw,1)
-
-# ╔═╡ 8d5a843b-7afa-4dc5-87f4-a0ee32a79838
-flatten_track(track_raw, [size(track_raw,1)])
-
-# ╔═╡ c9678e4d-b355-494b-9105-4e115cf997d4
-flatten_track(track_raw, [zero_index_1, size(track_raw,1)])
-
-# ╔═╡ 40010f9a-7075-412b-b25b-4d40a6490253
-set_speeds([20.], track_raw, [size(track_raw,1)])
-
-# ╔═╡ e3ad1ef7-0e5b-40f2-8c16-4eb6908207d7
-set_speeds([20., 30.], track_raw, [zero_index_1, size(track_raw,1)])
-
-# ╔═╡ 572c3c0f-46c0-4156-9e8c-5c487721fe76
-plot(set_speeds([20., 30.], track_raw, [zero_index_1, size(track_raw,1)]))
-
-# ╔═╡ 72f9f8c9-8c5b-4127-829e-a1496500f27f
-@bind exit_iteration confirm(NumberField(1:100, default=1))
-
-# ╔═╡ e305544f-5bf5-4cb6-b694-2f502c0ba3d1
-power_use_div, solar_power_div, energy_in_system_div, time_div, time_s_div = recursive_optimization([40.], track_raw, track_raw, [size(track_raw, 1)], 1, exit_iteration);
-
-# ╔═╡ 1dbba344-5e08-4c44-b153-398101334e65
-plot(track_raw.distance, [power_use_div solar_power_div energy_in_system_div zeros(size(track_raw,1))],
-	    label=["Energy use" "Energy income" "Energy in system" "Failure threshold"], title="Energy graph (distance)",
-	    xlabel="Distance (m)", ylabel="Energy (W*h)", lw=3, #size=(1200, 500),
-	    color=[:blue :green :cyan :red] # ,ylims=[-10000, 40000]
+# ╔═╡ d7d5fa0b-c77a-40d6-a799-9c7f899a12e9
+plot(
+	distance_segments_sum[1:variables_track_len,:],
+	energy_in_system2,
+	title="Energy $(variables_track_len) vars, short track, lowest $(round(lowest_energy2, digits=2)), last $(round(last_energy2,digits=2))"
 )
 
-# ╔═╡ d3ac9b97-27b7-4de2-9139-fa80105a1951
-md""" #### Not really optimizing
+# ╔═╡ 90d3bef0-4e12-4c21-95f0-c98c8c506e23
+plot(
+	distance_segments_sum[1:variables_track_len,:],
+	speeds2*3.6,
+	line=:stepmid,
+	title="Speed with $(variables_track_len) vars, total time $(round(last(time_s2), digits=3)) sec"
+)
 
-process stops when energy runs out at the same part of the track"""
+# ╔═╡ e95b171f-6373-4a9b-ac74-8164f727d754
+plot(
+	distance_segments_sum[1:variables_track_len,:],
+	segments_clean.altitude,
+	title="Altitude(distance)"
+)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -536,7 +231,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-Metrics = "cb9f3049-315b-4f05-b90c-a8adaec4da78"
+LineSearches = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Peaks = "18e31ff7-3703-566c-8e60-38913d67486b"
 PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
@@ -545,15 +240,15 @@ PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 
 [compat]
-CSV = "~0.10.7"
-DataFrames = "~1.4.2"
-Metrics = "~0.1.2"
-Optim = "~1.7.3"
-Peaks = "~0.4.1"
+CSV = "~0.10.9"
+DataFrames = "~1.5.0"
+LineSearches = "~7.2.0"
+Optim = "~1.7.5"
+Peaks = "~0.4.3"
 PlotlyBase = "~0.8.19"
-Plots = "~1.35.5"
-PlutoUI = "~0.7.48"
-TimeZones = "~1.9.0"
+Plots = "~1.38.11"
+PlutoUI = "~0.7.51"
+TimeZones = "~1.9.1"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -562,7 +257,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "ada87576b567076133e89f17cb80edd688850ba8"
+project_hash = "d3535e776092fdcb787972093595731b8547e0bf"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -570,15 +265,21 @@ git-tree-sha1 = "8eaf9f1b4921132a4cff3f36a1d9ba923b14a481"
 uuid = "6e696c72-6542-2067-7265-42206c756150"
 version = "1.1.4"
 
+[[deps.Adapt]]
+deps = ["LinearAlgebra", "Requires"]
+git-tree-sha1 = "cc37d689f599e8df4f464b2fa3870ff7db7492ef"
+uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+version = "3.6.1"
+
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
 version = "1.1.1"
 
-[[deps.ArrayInterfaceCore]]
-deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
-git-tree-sha1 = "e6cba4aadba7e8a7574ab2ba2fcfb307b4c4b02a"
-uuid = "30b0a656-2188-435a-8636-2ec0e6a096e2"
-version = "0.1.23"
+[[deps.ArrayInterface]]
+deps = ["Adapt", "LinearAlgebra", "Requires", "SnoopPrecompile", "SparseArrays", "SuiteSparse"]
+git-tree-sha1 = "38911c7737e123b28182d89027f4216cfc8a9da7"
+uuid = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
+version = "7.4.3"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -587,9 +288,9 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.BitFlags]]
-git-tree-sha1 = "84259bb6172806304b9101094a7cc4bc6f56dbc6"
+git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
-version = "0.1.5"
+version = "0.1.7"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -598,10 +299,10 @@ uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
 version = "1.0.8+0"
 
 [[deps.CSV]]
-deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings"]
-git-tree-sha1 = "c5fd7cd27ac4aed0acf4b73948f0110ff2a854b2"
+deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "SnoopPrecompile", "Tables", "Unicode", "WeakRefStrings", "WorkerUtilities"]
+git-tree-sha1 = "c700cce799b51c9045473de751e9319bdd1c6e94"
 uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
-version = "0.10.7"
+version = "0.10.9"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -611,27 +312,27 @@ version = "1.16.1+1"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "e7ff6cadf743c098e08fca25c91103ee4303c9bb"
+git-tree-sha1 = "c6d890a52d2c4d55d326439580c3b8d0875a77d9"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.15.6"
+version = "1.15.7"
 
 [[deps.ChangesOfVariables]]
-deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
-git-tree-sha1 = "38f7a08f19d8810338d4f5085211c7dfa5d5bdd8"
+deps = ["LinearAlgebra", "Test"]
+git-tree-sha1 = "f84967c4497e0e1955f9a582c232b02847c5f589"
 uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
-version = "0.1.4"
+version = "0.1.7"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
-git-tree-sha1 = "ded953804d019afa9a3f98981d99b33e3db7b6da"
+git-tree-sha1 = "9c209fb7536406834aa938fb149964b985de6c83"
 uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
-version = "0.7.0"
+version = "0.7.1"
 
 [[deps.ColorSchemes]]
-deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Random"]
-git-tree-sha1 = "1fd869cc3875b57347f7027521f561cf46d1fcd8"
+deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
+git-tree-sha1 = "be6ab11021cd29f0344d5c4357b163af05a48cba"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.19.0"
+version = "3.21.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
@@ -641,15 +342,15 @@ version = "0.11.4"
 
 [[deps.ColorVectorSpace]]
 deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "SpecialFunctions", "Statistics", "TensorCore"]
-git-tree-sha1 = "d08c20eef1f2cbc6e60fd3612ac4340b89fea322"
+git-tree-sha1 = "600cc5508d66b78aae350f7accdb58763ac18589"
 uuid = "c3611d14-8923-5661-9e6a-0046d554d3a4"
-version = "0.9.9"
+version = "0.9.10"
 
 [[deps.Colors]]
 deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
-git-tree-sha1 = "417b0ed7b8b838aa6ca0a87aadf1bb9eb111ce40"
+git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
-version = "0.12.8"
+version = "0.12.10"
 
 [[deps.CommonSubexpressions]]
 deps = ["MacroTools", "Test"]
@@ -659,20 +360,26 @@ version = "0.3.0"
 
 [[deps.Compat]]
 deps = ["Dates", "LinearAlgebra", "UUIDs"]
-git-tree-sha1 = "3ca828fe1b75fa84b021a7860bd039eaea84d2f2"
+git-tree-sha1 = "7a60c856b9fa189eb34f5f8a6f6b5529b7942957"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.3.0"
+version = "4.6.1"
 
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 version = "0.5.2+0"
 
+[[deps.ConcurrentUtilities]]
+deps = ["Serialization", "Sockets"]
+git-tree-sha1 = "b306df2650947e9eb100ec125ff8c65ca2053d30"
+uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
+version = "2.1.1"
+
 [[deps.ConstructionBase]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "fb21ddd70a051d882a1686a5a550990bbe371a95"
+git-tree-sha1 = "89a9db8d28102b094992472d333674bd1a83ce2a"
 uuid = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
-version = "1.4.1"
+version = "1.5.1"
 
 [[deps.Contour]]
 git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
@@ -685,15 +392,15 @@ uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 version = "4.1.1"
 
 [[deps.DataAPI]]
-git-tree-sha1 = "46d2680e618f8abd007bce0c3026cb0c4a8f2032"
+git-tree-sha1 = "e8119c1a33d267e16108be441a287a6981ba1630"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
-version = "1.12.0"
+version = "1.14.0"
 
 [[deps.DataFrames]]
-deps = ["Compat", "DataAPI", "Future", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SnoopPrecompile", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
-git-tree-sha1 = "5b93f1b47eec9b7194814e40542752418546679f"
+deps = ["Compat", "DataAPI", "Future", "InlineStrings", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SentinelArrays", "SnoopPrecompile", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
+git-tree-sha1 = "aa51303df86f8626a962fccb878430cdb0a97eee"
 uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-version = "1.4.2"
+version = "1.5.0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -722,9 +429,9 @@ version = "1.1.0"
 
 [[deps.DiffRules]]
 deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
-git-tree-sha1 = "8b7a4d23e22f5d44883671da70865ca98f2ebf9d"
+git-tree-sha1 = "a4ad7ef19d2cdc2eff57abbbe68032b1cd0bd8f8"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
-version = "1.12.0"
+version = "1.13.0"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -732,9 +439,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
-git-tree-sha1 = "c36550cb29cbe373e95b3f40486b9a4148f89ffd"
+git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
-version = "0.9.2"
+version = "0.9.3"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
@@ -748,9 +455,9 @@ uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
 version = "2.4.8+0"
 
 [[deps.ExprTools]]
-git-tree-sha1 = "56559bbef6ca5ea0c0818fa5c90320398a6fbf8d"
+git-tree-sha1 = "c1d06d129da9f55715c6c212866f5b1bddc5fa00"
 uuid = "e2ba6199-217a-4e67-a87a-7c52f15ade04"
-version = "0.1.8"
+version = "0.1.9"
 
 [[deps.FFMPEG]]
 deps = ["FFMPEG_jll"]
@@ -775,15 +482,15 @@ uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
-git-tree-sha1 = "802bfc139833d2ba893dd9e62ba1767c88d708ae"
+git-tree-sha1 = "fc86b4fd3eff76c3ce4f5e96e2fdfa6282722885"
 uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
-version = "0.13.5"
+version = "1.0.0"
 
 [[deps.FiniteDiff]]
-deps = ["ArrayInterfaceCore", "LinearAlgebra", "Requires", "Setfield", "SparseArrays", "StaticArrays"]
-git-tree-sha1 = "5a2cff9b6b77b33b89f3d97a4d367747adce647e"
+deps = ["ArrayInterface", "LinearAlgebra", "Requires", "Setfield", "SparseArrays", "StaticArrays"]
+git-tree-sha1 = "03fcb1c42ec905d15b305359603888ec3e65f886"
 uuid = "6a86dc24-6348-571c-b903-95158fe2bd41"
-version = "2.15.0"
+version = "2.19.0"
 
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
@@ -805,9 +512,9 @@ version = "0.4.2"
 
 [[deps.ForwardDiff]]
 deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions", "StaticArrays"]
-git-tree-sha1 = "187198a4ed8ccd7b5d99c41b69c679269ea2b2d4"
+git-tree-sha1 = "00e252f4d706b3d55a8863432e742bf5717b498d"
 uuid = "f6369f11-7733-5829-9624-2563aa707210"
-version = "0.10.32"
+version = "0.10.35"
 
 [[deps.FreeType2_jll]]
 deps = ["Artifacts", "Bzip2_jll", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
@@ -832,16 +539,16 @@ uuid = "0656b61e-2033-5cc2-a64a-77c0f6c09b89"
 version = "3.3.8+0"
 
 [[deps.GR]]
-deps = ["Base64", "DelimitedFiles", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Preferences", "Printf", "Random", "Serialization", "Sockets", "Test", "UUIDs"]
-git-tree-sha1 = "00a9d4abadc05b9476e937a5557fcce476b9e547"
+deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Preferences", "Printf", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "UUIDs", "p7zip_jll"]
+git-tree-sha1 = "efaac003187ccc71ace6c755b197284cd4811bfe"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.69.5"
+version = "0.72.4"
 
 [[deps.GR_jll]]
-deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Pkg", "Qt5Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "bc9f7725571ddb4ab2c4bc74fa397c1c5ad08943"
+deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Qt5Base_jll", "Zlib_jll", "libpng_jll"]
+git-tree-sha1 = "4486ff47de4c18cb511a0da420efebb314556316"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.69.1+0"
+version = "0.72.4+0"
 
 [[deps.Gettext_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
@@ -867,10 +574,10 @@ uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
 
 [[deps.HTTP]]
-deps = ["Base64", "CodecZlib", "Dates", "IniFile", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "a97d47758e933cd5fe5ea181d178936a9fc60427"
+deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
+git-tree-sha1 = "69182f9a2d6add3736b7a06ab6416aafdeec2196"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.5.1"
+version = "1.8.0"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -896,16 +603,11 @@ git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
 uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
 version = "0.2.2"
 
-[[deps.IniFile]]
-git-tree-sha1 = "f550e6e32074c939295eb5ea6de31849ac2c9625"
-uuid = "83e8ac13-25f8-5344-8a64-a9f2b223428f"
-version = "0.5.1"
-
 [[deps.InlineStrings]]
 deps = ["Parsers"]
-git-tree-sha1 = "db619c421554e1e7e07491b85a8f4b96b3f04ca0"
+git-tree-sha1 = "9cc2baf75c6d09f9da536ddf58eb2f29dedaf461"
 uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
-version = "1.2.2"
+version = "1.4.0"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -913,19 +615,19 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
 [[deps.InverseFunctions]]
 deps = ["Test"]
-git-tree-sha1 = "49510dfcb407e572524ba94aeae2fced1f3feb0f"
+git-tree-sha1 = "6667aadd1cdee2c6cd068128b3d226ebc4fb0c67"
 uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
-version = "0.1.8"
+version = "0.1.9"
 
 [[deps.InvertedIndices]]
-git-tree-sha1 = "bee5f1ef5bf65df56bdd2e40447590b272a5471f"
+git-tree-sha1 = "0dc7b50b8d436461be01300fd8cd45aa0274b038"
 uuid = "41ab1584-1d38-5bbf-9106-f11c6c58b48f"
-version = "1.1.0"
+version = "1.3.0"
 
 [[deps.IrrationalConstants]]
-git-tree-sha1 = "7fd44fd4ff43fc60815f8e764c0f352b83c49151"
+git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
-version = "0.1.1"
+version = "0.2.2"
 
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
@@ -946,15 +648,15 @@ version = "1.4.1"
 
 [[deps.JSON]]
 deps = ["Dates", "Mmap", "Parsers", "Unicode"]
-git-tree-sha1 = "3c837543ddb02250ef42f4738347454f95079d4e"
+git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-version = "0.21.3"
+version = "0.21.4"
 
 [[deps.JpegTurbo_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "b53380851c6e6664204efb2e62cd24fa5c47e4ba"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "6f2675ef130a300a112286de91973805fcc5ffbc"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
-version = "2.1.2+0"
+version = "2.1.91+0"
 
 [[deps.LAME_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -981,9 +683,9 @@ version = "1.3.0"
 
 [[deps.Latexify]]
 deps = ["Formatting", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "OrderedCollections", "Printf", "Requires"]
-git-tree-sha1 = "ab9aa169d2160129beb241cb2750ca499b4e90e9"
+git-tree-sha1 = "099e356f267354f46ba65087981a77da23a279b7"
 uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
-version = "0.15.17"
+version = "0.16.0"
 
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
@@ -1025,9 +727,9 @@ version = "1.8.7+0"
 
 [[deps.Libglvnd_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll", "Xorg_libXext_jll"]
-git-tree-sha1 = "7739f837d6447403596a75d19ed01fd08d6f56bf"
+git-tree-sha1 = "6f73d1dd803986947b2c750138528a999a6c7733"
 uuid = "7e76a0d4-f3c7-5321-8279-8d96eeed0f29"
-version = "1.3.0+3"
+version = "1.6.0+0"
 
 [[deps.Libgpg_error_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1071,18 +773,18 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[deps.LogExpFunctions]]
 deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "94d9c52ca447e23eac0c0f074effbcd38830deb5"
+git-tree-sha1 = "0a1b7c2863e44523180fdb3146534e265a91870b"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.18"
+version = "0.3.23"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [[deps.LoggingExtras]]
 deps = ["Dates", "Logging"]
-git-tree-sha1 = "5d4d2d9904227b8bd66386c1138cf4d5ffa826bf"
+git-tree-sha1 = "cedb76b37bc5a6c702ade66be44f831fa23c681e"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
-version = "0.4.9"
+version = "1.0.0"
 
 [[deps.MIMEs]]
 git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
@@ -1111,30 +813,24 @@ uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
 version = "2.28.0+0"
 
 [[deps.Measures]]
-git-tree-sha1 = "e498ddeee6f9fdb4551ce855a46f54dbd900245f"
+git-tree-sha1 = "c13304c81eec1ed3af7fc20e75fb6b26092a1102"
 uuid = "442fdcdd-2543-5da2-b0f3-8c86c306513e"
-version = "0.3.1"
-
-[[deps.Metrics]]
-deps = ["DataFrames", "DataStructures", "Random", "StatsBase"]
-git-tree-sha1 = "6e9e77751dd230b360c29e23a10f6e6d2f4fafaf"
-uuid = "cb9f3049-315b-4f05-b90c-a8adaec4da78"
-version = "0.1.2"
+version = "0.3.2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
-git-tree-sha1 = "bf210ce90b6c9eed32d25dbcae1ebc565df2687f"
+git-tree-sha1 = "f66bdc5de519e8f8ae43bdc598782d35a25b1272"
 uuid = "e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28"
-version = "1.0.2"
+version = "1.1.0"
 
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[deps.Mocking]]
-deps = ["ExprTools"]
-git-tree-sha1 = "748f6e1e4de814b101911e64cc12d83a6af66782"
+deps = ["Compat", "ExprTools"]
+git-tree-sha1 = "782e258e80d68a73d8c916e55f8ced1de00c2cea"
 uuid = "78c3b35d-d492-501b-9361-3d52fe80e533"
-version = "0.7.2"
+version = "0.7.6"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
@@ -1142,15 +838,15 @@ version = "2022.2.1"
 
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
-git-tree-sha1 = "50310f934e55e5ca3912fb941dec199b49ca9b68"
+git-tree-sha1 = "a0b464d183da839699f4c79e7606d9d186ec172c"
 uuid = "d41bc354-129a-5804-8e4c-c37616107c6c"
-version = "7.8.2"
+version = "7.8.3"
 
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
-git-tree-sha1 = "a7c3d1da1189a1c2fe843a3bfa04d18d20eb3211"
+git-tree-sha1 = "0877504529a3e5c3343c6f8b4c0381e57e4387e4"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
-version = "1.0.1"
+version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
@@ -1174,15 +870,15 @@ version = "0.8.1+0"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
-git-tree-sha1 = "3c3c4a401d267b04942545b1e964a20279587fd7"
+git-tree-sha1 = "7fb975217aea8f1bb360cf1dde70bad2530622d2"
 uuid = "4d8831e6-92b7-49fb-bdf8-b643e874388c"
-version = "1.3.0"
+version = "1.4.0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "e60321e3f2616584ff98f0a4f18d98ae6f89bbb3"
+git-tree-sha1 = "9ff31d101d987eb9d66bd8b176ac7c277beccd09"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "1.1.17+0"
+version = "1.1.20+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
@@ -1192,9 +888,9 @@ version = "0.5.5+0"
 
 [[deps.Optim]]
 deps = ["Compat", "FillArrays", "ForwardDiff", "LineSearches", "LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "PositiveFactorizations", "Printf", "SparseArrays", "StatsBase"]
-git-tree-sha1 = "b9fe76d1a39807fdcf790b991981a922de0c3050"
+git-tree-sha1 = "a89b11f0f354f06099e4001c151dffad7ebab015"
 uuid = "429524aa-4258-5aef-a3af-852621145aeb"
-version = "1.7.3"
+version = "1.7.5"
 
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1203,9 +899,9 @@ uuid = "91d4177d-7536-5919-b921-800302f37372"
 version = "1.3.2+0"
 
 [[deps.OrderedCollections]]
-git-tree-sha1 = "85f8e6578bf1f9ee0d11e7bb1b1456435479d47c"
+git-tree-sha1 = "d321bf2de576bf25ec4d3e4360faca399afca282"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "1.4.1"
+version = "1.6.0"
 
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1219,16 +915,16 @@ uuid = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 version = "0.12.3"
 
 [[deps.Parsers]]
-deps = ["Dates"]
-git-tree-sha1 = "6c01a9b494f6d2a9fc180a08b182fcb06f0958a0"
+deps = ["Dates", "SnoopPrecompile"]
+git-tree-sha1 = "478ac6c952fddd4399e71d4779797c538d0ff2bf"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.4.2"
+version = "2.5.8"
 
 [[deps.Peaks]]
-deps = ["Compat"]
-git-tree-sha1 = "5f1390b0a0ef6d6411f9a9a37c4444d6a7e44780"
+deps = ["Compat", "RecipesBase"]
+git-tree-sha1 = "ca47b866754525ede84e5dec84a104c45f92afb6"
 uuid = "18e31ff7-3703-566c-8e60-38913d67486b"
-version = "0.4.1"
+version = "0.4.3"
 
 [[deps.Pipe]]
 git-tree-sha1 = "6842804e7867b115ca9de748a0cf6b364523c16d"
@@ -1253,10 +949,10 @@ uuid = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
 version = "3.1.0"
 
 [[deps.PlotUtils]]
-deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "SnoopPrecompile", "Statistics"]
-git-tree-sha1 = "21303256d239f6b484977314674aef4bb1fe4420"
+deps = ["ColorSchemes", "Colors", "Dates", "PrecompileTools", "Printf", "Random", "Reexport", "Statistics"]
+git-tree-sha1 = "f92e1315dadf8c46561fb9396e525f7200cdc227"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
-version = "1.3.1"
+version = "1.3.5"
 
 [[deps.PlotlyBase]]
 deps = ["ColorSchemes", "Dates", "DelimitedFiles", "DocStringExtensions", "JSON", "LaTeXStrings", "Logging", "Parameters", "Pkg", "REPL", "Requires", "Statistics", "UUIDs"]
@@ -1265,16 +961,16 @@ uuid = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 version = "0.8.19"
 
 [[deps.Plots]]
-deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SnoopPrecompile", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
-git-tree-sha1 = "0a56829d264eb1bc910cf7c39ac008b5bcb5a0d9"
+deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "PrecompileTools", "Preferences", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
+git-tree-sha1 = "6c7f47fd112001fc95ea1569c2757dffd9e81328"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.35.5"
+version = "1.38.11"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
-git-tree-sha1 = "efc140104e6d0ae3e7e30d56c98c4a927154d684"
+git-tree-sha1 = "b478a748be27bd2f2c73a7690da219d0844db305"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.48"
+version = "0.7.51"
 
 [[deps.PooledArrays]]
 deps = ["DataAPI", "Future"]
@@ -1288,6 +984,12 @@ git-tree-sha1 = "17275485f373e6673f7e7f97051f703ed5b15b20"
 uuid = "85a6dd25-e78a-55b7-8502-1745935b8125"
 version = "0.2.4"
 
+[[deps.PrecompileTools]]
+deps = ["Preferences"]
+git-tree-sha1 = "2e47054ffe7d0a8872e977c0d09eb4b3d162ebde"
+uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+version = "1.0.2"
+
 [[deps.Preferences]]
 deps = ["TOML"]
 git-tree-sha1 = "47e5f437cc0e7ef2ce8406ce1e7e24d44915f88d"
@@ -1295,10 +997,10 @@ uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.3.0"
 
 [[deps.PrettyTables]]
-deps = ["Crayons", "Formatting", "Markdown", "Reexport", "StringManipulation", "Tables"]
-git-tree-sha1 = "460d9e154365e058c4d886f6f7d6df5ffa1ea80e"
+deps = ["Crayons", "Formatting", "LaTeXStrings", "Markdown", "Reexport", "StringManipulation", "Tables"]
+git-tree-sha1 = "548793c7859e28ef026dba514752275ee871169f"
 uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
-version = "2.1.2"
+version = "2.2.3"
 
 [[deps.Printf]]
 deps = ["Unicode"]
@@ -1319,16 +1021,16 @@ deps = ["SHA", "Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[deps.RecipesBase]]
-deps = ["SnoopPrecompile"]
-git-tree-sha1 = "d12e612bba40d189cead6ff857ddb67bd2e6a387"
+deps = ["PrecompileTools"]
+git-tree-sha1 = "5c3d09cc4f31f5fc6af001c250bf1278733100ff"
 uuid = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
-version = "1.3.1"
+version = "1.3.4"
 
 [[deps.RecipesPipeline]]
-deps = ["Dates", "NaNMath", "PlotUtils", "RecipesBase", "SnoopPrecompile"]
-git-tree-sha1 = "9b1c0c8e9188950e66fc28f40bfe0f8aac311fe0"
+deps = ["Dates", "NaNMath", "PlotUtils", "PrecompileTools", "RecipesBase"]
+git-tree-sha1 = "45cf9fd0ca5839d06ef333c8201714e888486342"
 uuid = "01d81517-befc-4cb6-b9ec-a95719d0359c"
-version = "0.6.7"
+version = "0.6.12"
 
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
@@ -1353,15 +1055,15 @@ version = "0.7.0"
 
 [[deps.Scratch]]
 deps = ["Dates"]
-git-tree-sha1 = "f94f779c94e58bf9ea243e77a37e16d9de9126bd"
+git-tree-sha1 = "30449ee12237627992a99d5e30ae63e4d78cd24a"
 uuid = "6c6a2e73-6563-6170-7368-637461726353"
-version = "1.1.1"
+version = "1.2.0"
 
 [[deps.SentinelArrays]]
 deps = ["Dates", "Random"]
-git-tree-sha1 = "efd23b378ea5f2db53a55ae53d3133de4e080aa9"
+git-tree-sha1 = "77d3c4726515dca71f6d80fbb5e251088defe305"
 uuid = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
-version = "1.3.16"
+version = "1.3.18"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
@@ -1384,18 +1086,19 @@ uuid = "777ac1f9-54b0-4bf8-805c-2214025038e7"
 version = "1.1.0"
 
 [[deps.SnoopPrecompile]]
-git-tree-sha1 = "f604441450a3c0569830946e5b33b78c928e1a85"
+deps = ["Preferences"]
+git-tree-sha1 = "e760a70afdcd461cf01a575947738d359234665c"
 uuid = "66db9d55-30c0-4569-8b51-7e840670fc0c"
-version = "1.0.1"
+version = "1.0.3"
 
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 
 [[deps.SortingAlgorithms]]
 deps = ["DataStructures"]
-git-tree-sha1 = "b3363d7460f7d098ca0912c69b082f75625d7508"
+git-tree-sha1 = "a4ada03f999bd01b3a25dcaa30b2d929fe537e00"
 uuid = "a2af1166-a08f-5f64-846c-94a0d3cef48c"
-version = "1.0.1"
+version = "1.1.0"
 
 [[deps.SparseArrays]]
 deps = ["LinearAlgebra", "Random"]
@@ -1403,15 +1106,15 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[deps.SpecialFunctions]]
 deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
-git-tree-sha1 = "d75bda01f8c31ebb72df80a46c88b25d1c79c56d"
+git-tree-sha1 = "ef28127915f4229c971eb43f3fc075dd3fe91880"
 uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
-version = "2.1.7"
+version = "2.2.0"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "StaticArraysCore", "Statistics"]
-git-tree-sha1 = "f86b3a049e5d05227b10e15dbb315c5b90f14988"
+git-tree-sha1 = "c262c8e978048c2b095be1672c9bee55b4619521"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.5.9"
+version = "1.5.24"
 
 [[deps.StaticArraysCore]]
 git-tree-sha1 = "6b7ba252635a5eff6a0b0664a41ee140a1c9e72a"
@@ -1424,9 +1127,9 @@ uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [[deps.StatsAPI]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "f9af7f195fb13589dd2e2d57fdb401717d2eb1f6"
+git-tree-sha1 = "45a7769a04a3cf80da1c1c7c60caf932e6f4c9f7"
 uuid = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
-version = "1.5.0"
+version = "1.6.0"
 
 [[deps.StatsBase]]
 deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
@@ -1456,9 +1159,9 @@ version = "1.0.1"
 
 [[deps.Tables]]
 deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "OrderedCollections", "TableTraits", "Test"]
-git-tree-sha1 = "c79322d36826aa2f4fd8ecfa96ddb47b174ac78d"
+git-tree-sha1 = "1544b926975372da01227b382066ab70e574a3ec"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
-version = "1.10.0"
+version = "1.10.1"
 
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
@@ -1477,25 +1180,25 @@ uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.TimeZones]]
 deps = ["Dates", "Downloads", "InlineStrings", "LazyArtifacts", "Mocking", "Printf", "RecipesBase", "Scratch", "Unicode"]
-git-tree-sha1 = "d634a3641062c040fc8a7e2a3ea17661cc159688"
+git-tree-sha1 = "a92ec4466fc6e3dd704e2668b5e7f24add36d242"
 uuid = "f269a46b-ccf7-5d73-abea-4c690281aa53"
-version = "1.9.0"
+version = "1.9.1"
 
 [[deps.TranscodingStreams]]
 deps = ["Random", "Test"]
-git-tree-sha1 = "8a75929dcd3c38611db2f8d08546decb514fcadf"
+git-tree-sha1 = "9a6ae7ed916312b41236fcef7e0af564ef934769"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.9.9"
+version = "0.9.13"
 
 [[deps.Tricks]]
-git-tree-sha1 = "6bac775f2d42a611cdfcd1fb217ee719630c4175"
+git-tree-sha1 = "aadb748be58b492045b4f56166b5188aa63ce549"
 uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
-version = "0.1.6"
+version = "0.1.7"
 
 [[deps.URIs]]
-git-tree-sha1 = "e59ecc5a41b000fa94423a578d29290c7266fc10"
+git-tree-sha1 = "074f993b0ca030848b897beff716d93aca60f06a"
 uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
-version = "1.4.0"
+version = "1.4.2"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
@@ -1522,9 +1225,9 @@ version = "0.2.0"
 
 [[deps.Wayland_jll]]
 deps = ["Artifacts", "Expat_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg", "XML2_jll"]
-git-tree-sha1 = "3e61f0b86f90dacb0bc0e73a0c5a83f6a8636e23"
+git-tree-sha1 = "ed8d92d9774b077c53e1da50fd81a36af3744c1c"
 uuid = "a2964d1f-97da-50d4-b82a-358c7fce9d89"
-version = "1.19.0+0"
+version = "1.21.0+0"
 
 [[deps.Wayland_protocols_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1538,11 +1241,16 @@ git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
 uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 version = "1.4.2"
 
+[[deps.WorkerUtilities]]
+git-tree-sha1 = "cd1659ba0d57b71a464a29e64dbc67cfe83d54e7"
+uuid = "76eceee3-57b5-4d4a-8e66-0e911cebbf60"
+version = "1.6.1"
+
 [[deps.XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "58443b63fb7e465a8a7210828c91c08b92132dff"
+git-tree-sha1 = "93c41695bc1c08c46c5899f4fe06d6ead504bb73"
 uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
-version = "2.9.14+0"
+version = "2.10.3+0"
 
 [[deps.XSLT_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Libiconv_jll", "Pkg", "XML2_jll", "Zlib_jll"]
@@ -1682,10 +1390,10 @@ uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
 version = "1.2.12+3"
 
 [[deps.Zstd_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "e45044cd873ded54b6a5bac0eb5c971392cf1927"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "49ce682769cd5de6c72dcf1b94ed7790cd08974c"
 uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
-version = "1.5.2+0"
+version = "1.5.5+0"
 
 [[deps.fzf_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1758,117 +1466,38 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╟─a7ee0e00-55f8-11ed-195c-73103633e4f3
-# ╠═e8a9ead5-161e-4f6f-8f9c-3f61e979ef00
-# ╠═dd8724db-31dd-497f-a8b2-7e8656c3aa59
-# ╠═f97311ee-5f9b-4bed-a125-6c28a0aba50d
-# ╠═5e80012e-6d22-4191-b03b-4c977e726eb5
-# ╠═84cb2782-1b35-482a-9355-0f2cf5d22483
-# ╠═3b685aeb-1f99-428d-8311-7c86be4577db
-# ╠═9da21138-5f0f-4e72-ab6c-9859d4db08ca
-# ╠═5554c1aa-0264-40e9-a603-eee94eecf2d2
-# ╠═b87b55b2-3ed6-4cbd-9727-c565663dfe1e
-# ╠═738a95cd-8e5f-4476-82c1-53952fb4168c
-# ╠═9f216093-ad1e-42a8-afea-4d9482956603
-# ╠═6fb1fb1f-1127-4585-bf93-3cd3810a2769
-# ╠═45819c7d-be27-4abf-a663-2837f68c4d92
-# ╠═23811c64-fadc-42f5-a8d5-2ec7fb780e27
-# ╠═b2f67788-351c-48c3-89e3-a14ba837da7b
-# ╠═9fc932d8-6c41-4af2-9024-c313a010e323
-# ╠═bba5f2b1-f73b-4b2f-9c8d-6736a20860dd
-# ╠═483c7caa-e919-4863-9c73-2209184cf47a
-# ╠═954c00a9-055a-4831-b8d1-0009ca35f19e
-# ╠═740d0e37-8538-4e7e-9933-d686fc34f3ed
-# ╠═1516a095-8d66-402a-8bbb-ef793939a4fd
-# ╠═6964deca-f0f0-40c7-b21e-4389a973a226
-# ╠═fa33e044-ff8c-4535-84f1-8f5e4e25ccc2
-# ╠═f205e0d8-2564-4bf2-87c4-345a75935b9d
-# ╠═3bbd23fa-8421-4e79-b786-58a0a34dd761
-# ╠═bc1fcad1-6f06-4f93-b616-9023d0a382a4
-# ╠═30bee5a3-dd36-46d1-9b47-aa5e38a093d8
-# ╠═67e632e4-2975-42a6-98c7-48a8d51a914a
-# ╟─cc155214-dc25-4e08-a055-1fc977a58396
-# ╠═8ed7ac6f-f4cd-42d3-ac47-f1cee701a4f6
-# ╠═50eb4d80-790d-45a3-9c71-6553336d8eb4
-# ╠═9247695e-d46b-461f-9091-44f2b5e89d92
-# ╠═0e4eb22f-0319-4070-8497-af0b7c2dfb70
-# ╠═c0592665-2891-4057-8883-5802ab886e9e
-# ╠═64d2ea28-82e6-42f4-a50b-61ff7b651744
-# ╠═d61aab46-78aa-45b9-94ba-9902355044f8
-# ╠═c4c6e3ea-1389-4a33-8c69-07c86a446764
-# ╠═6ce8d5de-f6f7-4e4c-877c-053fd604e7cb
-# ╠═c676ea74-7e39-47dd-8e62-b740eb7f176d
-# ╠═dcd260c8-0024-4582-af1f-cef95944a709
-# ╠═54a2a471-37a6-4344-9591-f3ca0aadafc0
-# ╠═cf21aa5a-bedc-43b1-9bf2-0db9c0990d1f
-# ╠═4a9daa07-e1d0-4221-82ae-cf3aee70f77f
-# ╠═dced5964-da29-44e4-a17b-96435de9fe5a
-# ╠═eb6e439b-1d2c-4ee9-bed2-f743b59436d4
-# ╠═8e4dd08d-b0b9-4488-bc43-c8cd84fa3144
-# ╠═678ced14-6bfc-47bd-be48-2c987a20d020
-# ╠═4b39d507-0cff-47a4-aab4-d828edae167f
-# ╠═65aafdc2-44cf-49bf-8d59-7a4c5a620344
-# ╠═7773ab00-a68a-4e7b-97c7-7a98374181ae
-# ╠═52b3d3f1-7bb8-48d2-9c3a-129bb0ff72d8
-# ╠═50ec284d-4484-4e6f-8bef-8a0ee4cf0a10
-# ╠═87c84923-398d-41fb-8f26-785c4503333c
-# ╠═602794dc-8a03-499d-aa1c-c1b6ba7a432e
-# ╠═921d508e-2efe-42a0-8043-abf365d59ff8
-# ╠═1c2f866f-92c2-46e7-a8b0-b622ea220401
-# ╠═4fcf509e-9d69-4e54-806b-4d9251b76b3a
-# ╠═a66eef8c-2cbd-467d-a5a9-13df9748fc03
-# ╠═b0986021-e5cf-409a-ae73-04a028ee5098
-# ╠═43193df9-4065-40ed-91a8-ffc5f600e4d5
-# ╠═e6fd5c95-7006-4450-869b-4b79b8df7016
-# ╠═d2e18269-07d8-4769-8806-4c6a07cb72e2
-# ╠═38fc024c-6978-4ead-a4af-fd0d714d4f48
-# ╠═1f68f942-2e0e-486a-889e-a3f81257c1f8
-# ╠═2c2a0224-4213-4421-87e1-b89641c92339
-# ╠═b9e6ecba-b7fb-4a35-9d80-05aa65862141
-# ╠═357be2e9-ed10-41f0-ab0a-96a83af6c4ff
-# ╠═ce2b73a6-2053-4337-b28d-909623ad3236
-# ╠═8951bb1b-f878-4b32-b900-6a38b93c9008
-# ╠═0b3783cf-8af7-42a9-9ad0-618aff3302ba
-# ╠═d437b7ee-a62e-4270-a7b1-193aaf560869
-# ╠═b2681cbd-64e7-40df-87ad-24be0adbe042
-# ╠═e8f82bc4-a269-43b2-a40a-12c7304b2d02
-# ╠═6249f8ce-dc83-4662-821c-7470639bb8e8
-# ╠═a6dcb927-e35b-44af-ae70-0241a8c6a0e8
-# ╠═6cd37256-5781-46e7-b67e-8724ab64edcf
-# ╠═f69c1192-7bd3-4d17-b9dd-ec634ef1ea29
-# ╠═4350e7f7-824d-4eba-9a0c-0fdcf80d5431
-# ╠═8464be7f-b0a8-403c-af1d-8009617c56a8
-# ╠═eed29dd7-feb4-4233-b118-234ed0c704f8
-# ╠═80270ef2-e711-4756-a639-0fd352f034e5
-# ╠═293b01e2-82c5-4bb7-a3bd-9c126e7d3b30
-# ╠═1b4a755f-f6e5-4097-8bc2-05dd4a2d7642
-# ╠═26342aab-9798-45fa-9700-603f66c7449a
-# ╠═af339667-3f7e-4e72-8a8a-bf87787db0e9
-# ╠═36aad8d4-e241-4294-a362-22f11947bed7
-# ╠═d1a19c6f-2b8b-4600-9fd5-fdff94d8530b
-# ╠═5225be03-34ac-4e5f-b1e8-fb91ff20f690
-# ╠═039bd76e-37c5-4f90-a7dd-01f3f95d6ab9
-# ╠═c91c7f93-78e9-463b-9d15-419c564d6983
-# ╠═12bc33af-eba4-4eae-87e3-e95bace47c3d
-# ╠═a2fecfe2-4d42-47f6-b6ff-a185a0601945
-# ╠═6d8c0302-f26d-40fc-a858-c5093b82ca10
-# ╠═c13d78d6-d78a-4cc8-89cf-dd8cc1dc5779
-# ╠═db5753e5-a105-4d49-a6ab-7e94a5e097b3
-# ╠═a41cf01b-14ff-48c4-8927-9020d9a90cf9
-# ╠═af4f6c48-d7e3-445e-a3d1-25634cf75e92
-# ╠═5e65228b-01ae-44a9-919f-fe4bf1dac4a2
-# ╠═de0f00f3-09f9-49ee-bfca-4ffc65cd4956
-# ╠═4ca481f3-767e-4c20-9bda-51defd812a7e
-# ╠═c5c7105a-36e5-47c8-a94f-ab10a8a7a040
-# ╠═18e668df-3434-44b5-897d-40de1792dc46
-# ╠═8d5a843b-7afa-4dc5-87f4-a0ee32a79838
-# ╠═c9678e4d-b355-494b-9105-4e115cf997d4
-# ╠═40010f9a-7075-412b-b25b-4d40a6490253
-# ╠═e3ad1ef7-0e5b-40f2-8c16-4eb6908207d7
-# ╠═572c3c0f-46c0-4156-9e8c-5c487721fe76
-# ╠═72f9f8c9-8c5b-4127-829e-a1496500f27f
-# ╠═e305544f-5bf5-4cb6-b694-2f502c0ba3d1
-# ╠═1dbba344-5e08-4c44-b153-398101334e65
-# ╠═d3ac9b97-27b7-4de2-9139-fa80105a1951
+# ╠═29237f00-e924-11ed-2feb-db9b4c88debb
+# ╠═06286695-13b1-47e8-8620-7acaab9caa37
+# ╠═bfdbfe71-e7d0-4e06-b07d-3c589dac4584
+# ╠═c56eb344-364f-4f56-9ca0-ffe00e5d54dd
+# ╠═7e946de1-90c5-42a8-8d08-8e306a458f24
+# ╠═bca49108-52e9-4c24-a5b7-561c22175bfd
+# ╠═e30edad1-eeff-4f85-a9d9-068279c9a224
+# ╠═75dedd49-2e98-442f-8a16-21b558fd9ef4
+# ╠═42d3c72b-9420-4c78-943d-8f4faeffb873
+# ╠═297cf407-1bd8-4922-bc2b-116819104251
+# ╠═a6af61cb-e6cb-4055-be95-8ee87ea19bac
+# ╠═4183843f-f87b-4c33-a158-73d7dd434fa9
+# ╠═738d31d8-a047-42e1-ac24-e3b9043f836b
+# ╠═8d228438-c0ba-4ec7-b47f-ca9ec3340438
+# ╠═c0106090-faa6-41a1-89b0-56243016bf4f
+# ╠═74483421-b600-4891-836d-3d18865c8481
+# ╠═7f1d8487-001b-40ba-b19a-bc6374621578
+# ╠═cfe7d92e-9fc1-4f2f-8a99-f0e8738d0786
+# ╠═fdf00bb3-735c-4418-8664-98a481cf2cf1
+# ╠═aa03a987-75ce-4375-984c-26bf8f28d8ff
+# ╠═1d9bfa34-eac6-463d-afaa-e009fb3c5dd4
+# ╠═54365347-345f-4a01-8ef0-33e0a8636ce5
+# ╠═31106dc6-d9a7-4520-bc7c-9a3f475b5020
+# ╠═a1b59724-021d-42e0-93b7-50735665a10a
+# ╠═0d46eece-4371-4e86-96de-02f27217b8b6
+# ╠═3f67539e-4638-4c20-999a-9524d3af5fb1
+# ╠═62a8b78a-9b97-4057-b92a-8732eb71a578
+# ╠═2e6ae1e8-faf8-4827-9c7a-01889c7c6a19
+# ╠═7831ba8c-fa38-4b49-be17-b09d2d97aa7e
+# ╠═6a6a183c-0813-421f-b222-fbf17e5204a8
+# ╠═d7d5fa0b-c77a-40d6-a799-9c7f899a12e9
+# ╠═90d3bef0-4e12-4c21-95f0-c98c8c506e23
+# ╠═e95b171f-6373-4a9b-ac74-8164f727d754
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

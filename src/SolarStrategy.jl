@@ -6,7 +6,6 @@ using CSV
 using Plots # default
 using PlotlyBase
 # using PlotlySave
-import Pluto
 using TimeZones
 using Dates
 using Optim
@@ -57,9 +56,9 @@ plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data
 @time res = iterative_optimization(
     track_peaks, segments_peaks,
     5,
-    5,
+    7,
     5100.,
-    DateTime(2022,7,1,0,0,0)
+    DateTime(2022,1,1,0,0,0)
 );
 # 13 secs for 2 iterations
 # 126 seconds full
@@ -79,7 +78,7 @@ plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data
 
 # # graphs looks ok, we can continue to optimization
 
-distance_segments_sum = cumsum(segments_peaks.diff_distance)
+distance_segments_sum = cumsum(segments_peaks.diff_distance);
 
 for r in res
     println(last(r.solution.seconds))
@@ -110,6 +109,56 @@ end
 
 # TODO: somehow ensure that we are NOT running out of energy
 
+
+############################
+# making an optimization without hierarchy/iterations
+
+variables_num = 100
+variable_boundaries = calculate_boundaries(
+    1,
+    size(track_peaks, 1),
+    variables_num
+)
+
+function f_wrap(input_speeds)
+    return solar_partial_trip_wrapper_iter(
+        input_speeds, segments_peaks, variable_boundaries,
+        5100., 0.,
+        DateTime(2022,7,1,0,0,0)
+    )
+end
+
+init_speeds = fill(44., variables_num)
+
+td = TwiceDifferentiable(f_wrap, init_speeds; autodiff = :forward)
+lower_bound = fill(0.0, variables_num)
+upper_bound = fill(100.0, variables_num)
+tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+# line_search = LineSearches.BackTracking();
+# result = optimize(td, fill(speed, vars_amount),
+    #Newton(; linesearch = line_search),
+@time result = optimize(td, tdc, init_speeds 
+# .+ rand(vars_amount) .- 0.5
+    ,
+    IPNewton(),
+    Optim.Options(
+        x_tol = 1e-12,
+        f_tol = 1e-12,
+        g_tol = 1e-12
+    )
+)
+minimized_speeds = Optim.minimizer(result)
+# TODO: calculate distance at split points
+# calculcate time
+# calculate energy
+
+plot(
+    minimized_speeds,
+    line=:stepmid,
+    title=string(
+        "Single optim results "
+    ) 
+)
 
 # TODO: slope angle preprocessing
 

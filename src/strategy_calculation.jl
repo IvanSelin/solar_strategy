@@ -708,6 +708,27 @@ function solar_partial_trip_wrapper_iter(speeds, segments, variables_boundaries,
 	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 end
 
+function solar_partial_trip_wrapper_iter_full(speeds, segments, variables_boundaries, start_energy, finish_energy, start_datetime)
+	speeds_ms = convert_kmh_to_ms(speeds)
+	speed_vector = set_speeds_boundaries(speeds_ms, variables_boundaries)
+	power_use, solar_power, time_s = solar_trip_boundaries(
+		speed_vector, segments, start_datetime
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system = start_energy .+ solar_power .- power_use
+
+	energy_capacity = 5100.
+
+	cost = sum(segments.diff_distance ./ speed_vector) + 100 * (finish_energy - last(energy_in_system))^2;
+
+	# cost = last(time_s) + (
+	# 	10000 * (finish_energy - last(energy_in_system))^2 +
+	# 	100 * max(0, maximum(energy_in_system) - energy_capacity)
+	# )
+	return cost, speed_vector, energy_in_system, solar_power, power_use, time_s
+	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
+end
+
 function hierarchical_optimization(
     speed, track, chunks_amount, start_energy, finish_energy, start_datetime,
     iteration, end_index
@@ -1006,12 +1027,6 @@ function fill_array(source_array, desired_size)
 	return Float64.(output_array)
 end
 
-function deflate_array(source_array, desired_size)
-	# TODO: write how to extract 
-	1.0//2
-	return "zalupa"
-end
-
 function iterative_optimization(track, segments, scaling_coef_subtasks,
 		scaling_coef_subtask_input_speeds,
 		start_energy, start_datetime=DateTime(2022,7,1,0,0,0)
@@ -1032,12 +1047,13 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 	track_size = size(track,1)
 	scaling_coef_variables = scaling_coef_subtasks * scaling_coef_subtask_input_speeds
 
-	# there should be as many speeds, as variables on last iteration
-	speeds_general = []
-	push!(speeds_general, [ [43.97116943001747] ] )
-	# push!(speeds_general, minimize_single_speed(50., track) )
-
-
+	start_speeds = minimize_single_speed(
+		track,
+		segments,
+		start_energy,
+		start_datetime,
+		50.
+	)
 	start_energies_general = []
 	push!(start_energies_general, [ [start_energy] ])
 
@@ -1048,7 +1064,7 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 		SubtaskProblem(
 			start_energy,
 			0.,
-			[43.97116943001747],
+			start_speeds,
 			start_datetime
 		),
 		[]
@@ -1264,4 +1280,74 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 	println("Calc done")
 	return iterations
 
+end
+
+function minimize_single_speed(track, segments, start_energy, start_datetime, init_speed)
+
+	boundaries = calculate_boundaries(1, size(track, 1), 1)
+
+	function f_single_speed(input_speed)
+		return solar_partial_trip_wrapper_iter(
+			input_speed, segments, boundaries,
+			start_energy, 0.,
+			start_datetime
+		)
+	end
+	speeds = [init_speed]
+	println("Calculating best single speed")
+	td_0 = TwiceDifferentiable(f_single_speed, speeds; autodiff = :forward)
+	lower_bound_0 = fill(0.0, 1)
+	upper_bound_0 = fill(100.0, 1)
+	tdc_0 = TwiceDifferentiableConstraints(lower_bound_0, upper_bound_0)
+	# line_search = LineSearches.BackTracking();
+	# result = optimize(td, fill(speed, 1),
+		#Newton(; linesearch = line_search),
+	result = optimize(td_0, tdc_0, speeds 
+	# .+ rand(1) .- 0.5
+		,
+		IPNewton(),
+		Optim.Options(
+			x_tol = 1e-12,
+			f_tol = 1e-12,
+			g_tol = 1e-12
+		)
+	)
+	minimized_speeds = Optim.minimizer(result)
+	println("Got $(minimized_speeds) km/h")
+	return minimized_speeds
+end
+
+function minimize_n_speeds(track, segments, n_variables, start_energy, start_datetime, init_speed)
+
+	boundaries = calculate_boundaries(1, size(track, 1), n_variables)
+
+	function f_speeds(input_speeds)
+		return solar_partial_trip_wrapper_iter(
+			input_speeds, segments, boundaries,
+			start_energy, 0.,
+			start_datetime
+		)
+	end
+	speeds = fill(init_speed, n_variables)
+	println("Calculating best speeds")
+	td_0 = TwiceDifferentiable(f_speeds, speeds; autodiff = :forward)
+	lower_bound_0 = fill(0.0, n_variables)
+	upper_bound_0 = fill(100.0, n_variables)
+	tdc_0 = TwiceDifferentiableConstraints(lower_bound_0, upper_bound_0)
+	# line_search = LineSearches.BackTracking();
+	# result = optimize(td, fill(speed, 1),
+		#Newton(; linesearch = line_search),
+	result = optimize(td_0, tdc_0, speeds 
+	# .+ rand(1) .- 0.5
+		,
+		IPNewton(),
+		Optim.Options(
+			x_tol = 1e-12,
+			f_tol = 1e-12,
+			g_tol = 1e-12
+		)
+	)
+	minimized_speeds = Optim.minimizer(result)
+	println("Got $(minimized_speeds) km/h")
+	return minimized_speeds
 end
