@@ -4,16 +4,6 @@
 using Markdown
 using InteractiveUtils
 
-# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
-macro bind(def, element)
-    quote
-        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
-        local el = $(esc(element))
-        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
-        el
-    end
-end
-
 # ╔═╡ c6a2816d-e81e-449e-af8c-93676c3fd077
 begin
 	using DataFrames
@@ -50,179 +40,342 @@ PlutoUI.TableOfContents()
 plotly()
 
 # ╔═╡ 64ecb4d9-b67c-4a41-a79e-300affd0440f
-md"План (что делаем)
+md"# План
 
 План довольно прост. Надо доказать, что нам есть зачем выбирать разные скорости на разных участках трассы.
 
 Шаги для осуществления плана:
 1. Взять ровную трассу, подобрать одну скорость на все участки (отлично работает)
-2. Взять трассу с холмом, подобрать одну скорость на все участки (плохо работает, нужен другой подход)
-3. Взять трассу с холмом, подобрать разные скорости для каждого участка (должно норм работать)
-4. Взять трассу ощутимой длины (участков 300-500) с холмами, чтобы оно считалось достаточно долго. Подобрать разные скорости обычной оптимизацией и сказать что долго выходит (по идее норм посчитает, но долго)
-5. Взять эту же трассу с холмами, подобрать скорости моим методом (в идеале должно посчитать примерно так же, но быстрее)
+2. Взять ровную трассу, подобрать разные скорости на все участки (работает, но избыточно)
+3. Взять трассу с холмом, подобрать одну скорость на все участки (плохо работает, нужен другой подход)
+4. Взять трассу с холмом, подобрать разные скорости для каждого участка (должно норм работать)
+5. Взять трассу ощутимой длины (участков 300-500) с холмами, чтобы оно считалось достаточно долго. Подобрать разные скорости обычной оптимизацией и сказать что долго выходит (по идее норм посчитает, но долго)
+6. Взять эту же трассу с холмами, подобрать скорости моим методом (в идеале должно посчитать примерно так же, но быстрее)
 "
 
-# ╔═╡ df5b2134-2bd7-4e07-91ff-e5ec736f2dfa
-md"# Ровная трасса"
+# ╔═╡ 9529a535-3655-496c-8077-30c148341fb9
+md"## Необходимые приготовления (функции и пр.)"
 
-# ╔═╡ 8f1d25de-f4dd-481a-a7f5-b8691586e705
-@md_str "# Трасса с холмом"
+# ╔═╡ e3fa515b-10bd-4ae3-9c47-d8b5e365c4ea
+md"### Переменная на все участки"
 
-# ╔═╡ 7f3807d7-e3ef-4c8f-8a21-8abdd4f25259
-begin
-	track, segments = get_track_and_segments("data/data_test_hill.csv");
-	# track_short_test, segments_short_test = keep_extremum_only_peaks_segments(track_test);
-	track
-end
-
-# ╔═╡ 67e01c26-832a-4eda-863d-e1842aae13dd
-segments
-
-# ╔═╡ 7981a27a-4733-46aa-bf86-8547421437af
-plot(track.distance, track.altitude, title="Short test track")
-
-# ╔═╡ 107197b9-9202-4ad7-a512-65b9496463cb
-max_size = size(segments,1)
-
-# ╔═╡ 12926919-e974-4aec-8e56-8c0098622ce5
-start_energy = 75.
-
-# ╔═╡ f280289c-b550-4a03-a0a2-f4db345e83e5
-start_datetime = DateTime(2022,1,1,10,0,0)
-
-# ╔═╡ 8d7d06df-6c0d-4625-8f3a-d1d78bea37ef
-# @bind variables_num confirm(NumberField(1:max_size, default=1))
-variables_num = max_size
-
-# ╔═╡ 85b20e07-2d54-4cb1-b56f-3b743ce43f47
-variable_boundaries = calculate_boundaries(
-	1,
-	size(track,1),
-	variables_num
-)
-
-# ╔═╡ a00fda8b-d2c4-402c-a6aa-f7ded0a06d72
-input_speeds_test = fill(15., variables_num)
-
-# ╔═╡ 3647470a-17ce-48b2-b934-d03210940fb2
-# function f_wrap(input_speeds)
-#     cost,_,_,_,_ = solar_partial_trip_wrapper_iter_full(
-#         input_speeds, segments, variable_boundaries,
-#         start_energy,
-# 		0.,
-#         start_datetime
-#     )
-# 	return cost
-# end
-
-function f_wrap(input_speeds)
-	power_use_f, solar_power_f, time_s_f = solar_trip_boundaries(
-		input_speeds, segments, start_datetime
-	)
-	energy_in_system_f = start_energy .+ solar_power_f .- power_use_f
-
-	# cost = sum(segments_clean.diff_distance ./ input_speeds) + 100 * (0. - last(energy_in_system_clean))^2;
+# ╔═╡ 1029bac5-c3ae-4dd9-b992-db077cf69c18
+function single_optim(track, segments, start_energy, start_datetime)
+	segments_length = size(segments, 1)
 	
-	cost = sum(segments.diff_distance ./ input_speeds) + 1000 * abs(minimum(energy_in_system_f))^2 + 10 * (0. - last(energy_in_system_f))^2;
+	function f_wrap_single(input_speed)
+		# speed_vector = fill(first(input_speeds) / 3.6, segments_length)
+		speed_vector = fill(input_speed / 3.6, segments_length)
+		power_use_f, solar_power_f, time_s_f = solar_trip_boundaries(
+			speed_vector, segments, start_datetime
+		)
+		energy_in_system_f = start_energy .+ solar_power_f .- power_use_f
+		pushfirst!(energy_in_system_f, start_energy)
+	
+		# cost = sum(segments_clean.diff_distance ./ input_speeds) + 100 * (0. - last(energy_in_system_clean))^2;
+		
+		cost = sum(segments.diff_distance ./ speed_vector) + 1000 * abs(minimum(energy_in_system_f))^2 + 10 * (0. - last(energy_in_system_f))^2;
+	
+		# cost = sum(segments.diff_distance ./ input_speeds) + 100 * abs(minimum(energy_in_system_f))
+		return cost
+	end
 
-	# cost = sum(segments.diff_distance ./ input_speeds) + 100 * abs(minimum(energy_in_system_f))
-	return cost
-end
+	# td = TwiceDifferentiable(f_wrap_single, [speed]; autodiff = :forward)
+	# lower_bound = fill(0.0, var_num)
+	# upper_bound = fill(100.0, var_num)
+	# tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
 
-# ╔═╡ 9d54a0aa-5140-4b4e-b177-eef9f6f1efd9
-begin
-	td = TwiceDifferentiable(f_wrap, input_speeds_test; autodiff = :forward)
-	lower_bound = fill(0.0, variables_num)
-	upper_bound = fill(50.0, variables_num)
-	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
-end
 
-# ╔═╡ 7545bec1-f8e6-48a5-a713-534ad27cc566
-@time result = optimize(td, tdc, input_speeds_test 
-# .+ rand(vars_amount) .- 0.5
-    ,
-    IPNewton(),
-    Optim.Options(
-        x_tol = 1e-6,
-        f_tol = 1e-6,
-        g_tol = 1e-6
-    )
-)
+	# result = optimize(td, tdc, speeds 
+	# # .+ rand(vars_amount) .- 0.5
+	#     ,
+	#     IPNewton(),
+	#     Optim.Options(
+	#         x_tol = 1e-6,
+	#         f_tol = 1e-6,
+	#         g_tol = 1e-6
+	#     )
+	# )
 
-# ╔═╡ b68750d6-03b5-436c-8712-1dbfc67d7afd
-minimized_speeds = Optim.minimizer(result)
+	result = optimize(f_wrap_single, 0., 150.)
+	minimized_speeds = fill(Optim.minimizer(result), segments_length)
+	minimized_speeds_ms = minimized_speeds / 3.6
 
-# ╔═╡ 2232b189-6cfb-48e4-b725-c7bfca89c2e6
-# cost, speed_vector, energy_in_system, solar_power, power_use, time_s = solar_partial_trip_wrapper_iter_full(
-# 	minimized_speeds,
-# 	segments,
-# 	variable_boundaries,
-# 	start_energy,
-# 	0.,
-# 	start_datetime
-# );
-
-begin
 	power_use, solar_power, time_s = solar_trip_boundaries(
-		minimized_speeds, segments, start_datetime
-	)
-	# track points, not segments, that's why it is size is +1 
-	energy_in_system = start_energy .+ solar_power .- power_use
-	pushfirst!(energy_in_system, start_energy)
-	lowest_energy = minimum(energy_in_system)
-	last_energy = last(energy_in_system);
-end
-
-# ╔═╡ 3797acdd-36cc-4c54-85a1-f92f764c87f2
-min_energy_penalty = 1000 * abs(minimum(energy_in_system))^2
-
-# ╔═╡ f32f67d0-e4d2-478b-8f38-d2db757dde13
-last_energy_penalty = 10 * (0. - last(energy_in_system))^2
-
-# ╔═╡ 510d81ad-4aa4-494c-a10d-ceb28f13bba1
-distance_segments_sum = cumsum(segments.diff_distance)
-
-# ╔═╡ 5ad47c36-a517-4ff9-aead-a623edf287af
-function simulate_run(speeds)
-	power_use, solar_power, time_s = solar_trip_boundaries(
-		speeds, segments, start_datetime
+		minimized_speeds_ms, segments, start_datetime
 	)
 	# track points, not segments, that's why it is size is +1 
 	energy_in_system_new = start_energy .+ solar_power .- power_use
 	lowest_energy = minimum(energy_in_system_new)
 	last_energy = last(energy_in_system_new)
 	pushfirst!(energy_in_system_new, start_energy)
-	plot(
+
+	track_plot = plot(track.distance, track.altitude, title="Short test track, $(segments_length) pieces",
+		ylabel="altitude(m)")
+
+	speed_plot = plot(
+		get_mean_data(track.distance),
+		minimized_speeds,
+		seriestype=:bar,
+		bar_width=segments.diff_distance,
+		title="Speed plot with 1 var, total time $(round(last(time_s), digits=3)) sec",
+		ylabel="speed(kmh)"
+	)
+
+	energy_plot = plot(
 		track.distance,
 		energy_in_system_new,
-		title="Energy $(variables_num) vars, lowest $(round(minimum(energy_in_system_new), digits=2)), last $(round(last(energy_in_system_new),digits=2)), $(round(last(time_s), digits=2))sec"
+		title="Energy 1 var, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
+		xlabel="distance(m)", ylabel="energy(w*h)"
 	)
+	
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(650,700))
+	
 end
 
-# ╔═╡ 3034d0c2-6616-4e86-bca2-b5e5db8681cc
-plot(
-	track.distance,
-	energy_in_system,
-	title="Energy with $(variables_num) vars, lowest $(round(minimum(energy_in_system), digits=2)), last $(round(last(energy_in_system),digits=2))"
+# ╔═╡ 4b3430b1-619f-4123-9a5b-6db7e7083ee9
+md"### Переменная на каждый участок"
+
+# ╔═╡ 018eeb89-8463-414d-badb-f64e1105ffdd
+# подбираем скорости на всех участках
+function regular_optim(track, segments, speeds, start_energy, start_datetime, upper_speed_bound=150.)
+
+	var_num = size(segments,1)
+	function f_wrap_reg(input_speeds)
+		speed_vector = input_speeds / 3.6;
+		power_use_f, solar_power_f, time_s_f = solar_trip_boundaries(
+			speed_vector, segments, start_datetime
+		)
+		energy_in_system_f = start_energy .+ solar_power_f .- power_use_f
+		pushfirst!(energy_in_system_f, start_energy)
+	
+		# cost = sum(segments_clean.diff_distance ./ input_speeds) + 100 * (0. - last(energy_in_system_clean))^2;
+		
+		cost = sum(segments.diff_distance ./ speed_vector) + 1000 * abs(minimum(energy_in_system_f))^2 + 10 * (0. - last(energy_in_system_f))^2;
+	
+		# cost = sum(segments.diff_distance ./ input_speeds) + 100 * abs(minimum(energy_in_system_f))
+		return cost
+	end
+	
+	td = TwiceDifferentiable(f_wrap_reg, speeds; autodiff = :forward)
+	lower_bound = fill(0.0, var_num)
+	upper_bound = fill(upper_speed_bound, var_num)
+	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+
+	result = optimize(td, tdc, speeds 
+	# .+ rand(vars_amount) .- 0.5
+	    ,
+	    IPNewton(),
+	    Optim.Options(
+	        x_tol = 1e-6,
+	        f_tol = 1e-6,
+	        g_tol = 1e-6
+	    )
+	)
+
+	minimized_speeds = Optim.minimizer(result)
+	minimized_speeds_ms = minimized_speeds / 3.6
+
+	power_use, solar_power, time_s = solar_trip_boundaries(
+		minimized_speeds_ms, segments, start_datetime
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system_new = start_energy .+ solar_power .- power_use
+	lowest_energy = minimum(energy_in_system_new)
+	last_energy = last(energy_in_system_new)
+	pushfirst!(energy_in_system_new, start_energy)
+
+	track_plot = plot(track.distance, track.altitude, title="Short test track, $(var_num) pieces",
+		ylabel="altitude(m)")
+
+	speed_plot = plot(
+		get_mean_data(track.distance),
+		minimized_speeds,
+		seriestype=:bar,
+		bar_width=segments.diff_distance,
+		title="Speed plot with $(var_num) vars, total time $(round(last(time_s), digits=3)) sec",
+		ylabel="speed(kmh)"
+	)
+
+	energy_plot = plot(
+		track.distance,
+		energy_in_system_new,
+		title="Energy $(var_num) vars, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
+		xlabel="distance(m)", ylabel="energy(w*h)"
+	)
+	
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(650,700))
+
+end
+
+# ╔═╡ 2274f3b1-6a63-4206-a9ab-fb38c7a638f3
+function simulate_run(speeds, track, segments, start_energy, start_datetime)
+	minimized_speeds_ms = speeds / 3.6
+	
+	power_use, solar_power, time_s = solar_trip_boundaries(
+		minimized_speeds_ms, segments, start_datetime
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system_new = start_energy .+ solar_power .- power_use
+	lowest_energy = minimum(energy_in_system_new)
+	last_energy = last(energy_in_system_new)
+	pushfirst!(energy_in_system_new, start_energy)
+
+	track_plot = plot(track.distance, track.altitude, title="Track",
+		ylabel="altitude(m)")
+
+	speed_plot = plot(
+		get_mean_data(track.distance),
+		speeds,
+		seriestype=:bar,
+		bar_width=segments.diff_distance,
+		title="Speed plot with manually set speeds, total time $(round(last(time_s), digits=3)) sec",
+		ylabel="speed(kmh)"
+	)
+
+	energy_plot = plot(
+		track.distance,
+		energy_in_system_new,
+		title="Energy with manually set speeds, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
+		xlabel="distance(m)", ylabel="energy(w*h)"
+	)
+	
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(650,700))
+end
+
+# ╔═╡ df5b2134-2bd7-4e07-91ff-e5ec736f2dfa
+md"# Ровная трасса"
+
+# ╔═╡ e9a6a82a-ecde-4baf-ad2c-f0a858bb2ed0
+track_flat, segments_flat = get_track_and_segments("data/data_test_flat.csv");
+
+# ╔═╡ 9e47be95-5f9a-43d6-876e-abb33a67de0a
+track_flat
+
+# ╔═╡ 9de8094a-5d24-4b08-8879-c7853cf6954b
+segments_flat
+
+# ╔═╡ 7b11e719-87c7-47ea-a694-84fcbe4b6b59
+md"## 1. Одна скорость"
+
+# ╔═╡ b965ae63-8e6b-4c0a-91b6-c29bae610590
+single_optim(
+	track_flat,
+	segments_flat,
+	75.,
+	DateTime(2022,1,1,10,0,0)
 )
 
-# ╔═╡ d2db436e-d89a-4e5c-b781-8f72b2ac357b
-plot(
-	get_mean_data(track.distance),
-	minimized_speeds * 3.6,
-	seriestype=:bar,
-	bar_width=segments.diff_distance,
-	title="Speed plot with $(variables_num) vars, total time $(round(last(time_s), digits=3)) sec"
+# ╔═╡ c892b78b-58dd-4a61-b731-6f4c1432ea1a
+md"Получили одну скорость в 71.9 км/ч, на которой проезжаем всю дистанцию за 350.461 секунд"
+
+# ╔═╡ 16a90363-c55f-44d7-9fd0-289579272e99
+md"## 2. Несколько скоростей"
+
+# ╔═╡ c9daaf07-3dc2-4bef-ae23-b69acd2cb513
+regular_optim(
+	track_flat,
+	segments_flat,
+	fill(60., size(segments_flat,1)),
+	75.,
+	DateTime(2022,1,1,10,0,0)
 )
 
-# ╔═╡ a5ad888a-7cc9-4f8c-956a-ca2b159414c5
-plot(track.distance, track.altitude, title="Short test track")
+# ╔═╡ a4ebc847-08fd-4976-87a7-2c35ca7920be
+md"Получили 7 примерно одинаковых скоростей около тех же самых 72 км/ч (от 71.29 до 72.47 км/ч), на которой проезжаем всю дистанцию за 350.496 секунд
 
-# ╔═╡ 3b7876fb-e9b0-4dde-96f9-0feb987d3e71
-my_speeds = [15.,3.7,15.,57.,15.]
+Особой разницы нет, и в такой ситуации рассматривать каждый участок трассы как отдельный нет смысла"
 
-# ╔═╡ f2ed6812-9638-449f-8a61-61fc9e8a5729
-simulate_run(my_speeds)
+# ╔═╡ 8f1d25de-f4dd-481a-a7f5-b8691586e705
+md"# Трасса с холмом"
+
+# ╔═╡ 46a01c40-c920-483c-aa93-1297eb0cddc8
+md"А теперь попробуем более сложную конфигурацию. Допустим, нам надо преодолеть холм, т.е. на трассе будет подъём и спуск"
+
+# ╔═╡ 7f3807d7-e3ef-4c8f-8a21-8abdd4f25259
+track_hill, segments_hill = get_track_and_segments("data/data_test_hill.csv");
+
+# ╔═╡ 9f151595-8f5a-4337-90fb-a8ef10f453b3
+track_hill
+
+# ╔═╡ 67e01c26-832a-4eda-863d-e1842aae13dd
+segments_hill
+
+# ╔═╡ 79687995-2165-42ae-b72e-7a7ab20942f1
+md"## 3. Одна скорость"
+
+# ╔═╡ 074e1eeb-98db-4728-8bfe-4b4ed91b554f
+single_optim(
+	track_hill,
+	segments_hill,
+	75.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ 85d293fc-2992-4a38-a080-93179ff4a9f1
+md"При попытке поиска оптимального режима движения для холмистого варианта, скорость стала гораздо ниже, всего лишь 25 км/ч и итоговое время составило 704 секунды. Но почему?
+
+Потому что на подъём тратится большое количество энергии. И если поехать хоть немного быстрее, то количество энергии в системе упадёт ниже 0, чего быть не может.
+
+Решение получается далёким от оптимального. Это очевидно, т.к. в конце трассы остаётся много неиспользованной энергии. А это значит, что можно ехать быстрее
+
+Попробуем изменять скорость на каждом участке по отдельности"
+
+# ╔═╡ ec72bf91-5dae-4ed8-80a3-9f2439eb1694
+md"## 4. Несколько скоростей"
+
+# ╔═╡ b63f2571-079b-4ef3-9f96-6a465c255733
+regular_optim(
+	track_hill,
+	segments_hill,
+	fill(45., size(segments_hill,1)),
+	75.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ 48291326-f37d-4397-aeb0-fee0855970d8
+md"Стало гораздо лучше!
+
+Теперь трасса проезжается за 400+ секунд. Скорости при этом разнятся от ~15 км/ч в самом начале, до ~150 км/ч в конце. При этом фундаментальные ограничения не нарушаются."
+
+# ╔═╡ 825bc8e5-79aa-4461-9d61-1778b6f09ee0
+md"## 4a. Несколько скоростей с верхним ограничением"
+
+# ╔═╡ 3509ebf4-b758-4ce3-a69f-fb20c16615ef
+md"Однако, в предложенном плане движения очень высокие скорости в конце, которые далеко не всегда могут быть реализованы. Имеет смысл ограничить сверху максимальную скорость."
+
+# ╔═╡ 72773944-4541-4220-8f0a-151ccd67bcaa
+regular_optim(
+	track_hill,
+	segments_hill,
+	fill(45., size(segments_hill,1)),
+	75.,
+	DateTime(2022,1,1,10,0,0),
+	80.
+)
+
+# ╔═╡ d6921b5f-d9ae-4886-a40e-98f9ad052ed2
+md"Как видно, ограничив максимальную скорость 80 км/ч, итоговое время не сильно пострадало, но план получился гораздо более реалистичным."
+
+# ╔═╡ 53c9b844-5d1e-4444-abe2-ec16f7cb1ee9
+md"Доделать:
+
+1. более унифицированные трассы с и без холма
+2. энергия до холма и после осталась примерно такой же. что это означает? Это значит, что на значениях энергии не около нуля, на это всё равно. теперь надо проверить, можно ли проехать с определённой скоростью, чтобы было такое же время и энергия прохождения дистанции"
+
+# ╔═╡ e6540edc-e971-48e9-8679-689a3ed73e7b
+simulate_run(
+	fill(47.81, size(segments_hill, 1)),
+	track_hill,
+	segments_hill,
+	75.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ 0b1564a2-8129-43ae-8831-77e18959be67
+md"Получается быстрее за то же самое количество энергии
+
+Выходит, просто не стоит париться за нижний порог энергии?"
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1526,31 +1679,40 @@ version = "1.4.1+0"
 # ╠═b20a1cbd-705e-4b49-b671-d042d1511afe
 # ╠═769d7af1-e95c-426f-aa97-85b219c5b65e
 # ╠═3e46a49b-7bb7-4889-8c94-b842977899e4
-# ╟─64ecb4d9-b67c-4a41-a79e-300affd0440f
-# ╟─df5b2134-2bd7-4e07-91ff-e5ec736f2dfa
+# ╠═64ecb4d9-b67c-4a41-a79e-300affd0440f
+# ╠═9529a535-3655-496c-8077-30c148341fb9
+# ╠═e3fa515b-10bd-4ae3-9c47-d8b5e365c4ea
+# ╠═1029bac5-c3ae-4dd9-b992-db077cf69c18
+# ╠═4b3430b1-619f-4123-9a5b-6db7e7083ee9
+# ╠═018eeb89-8463-414d-badb-f64e1105ffdd
+# ╠═2274f3b1-6a63-4206-a9ab-fb38c7a638f3
+# ╠═df5b2134-2bd7-4e07-91ff-e5ec736f2dfa
+# ╠═e9a6a82a-ecde-4baf-ad2c-f0a858bb2ed0
+# ╠═9e47be95-5f9a-43d6-876e-abb33a67de0a
+# ╠═9de8094a-5d24-4b08-8879-c7853cf6954b
+# ╟─7b11e719-87c7-47ea-a694-84fcbe4b6b59
+# ╟─b965ae63-8e6b-4c0a-91b6-c29bae610590
+# ╟─c892b78b-58dd-4a61-b731-6f4c1432ea1a
+# ╟─16a90363-c55f-44d7-9fd0-289579272e99
+# ╟─c9daaf07-3dc2-4bef-ae23-b69acd2cb513
+# ╟─a4ebc847-08fd-4976-87a7-2c35ca7920be
 # ╟─8f1d25de-f4dd-481a-a7f5-b8691586e705
+# ╟─46a01c40-c920-483c-aa93-1297eb0cddc8
 # ╠═7f3807d7-e3ef-4c8f-8a21-8abdd4f25259
+# ╠═9f151595-8f5a-4337-90fb-a8ef10f453b3
 # ╠═67e01c26-832a-4eda-863d-e1842aae13dd
-# ╠═7981a27a-4733-46aa-bf86-8547421437af
-# ╠═107197b9-9202-4ad7-a512-65b9496463cb
-# ╠═12926919-e974-4aec-8e56-8c0098622ce5
-# ╠═f280289c-b550-4a03-a0a2-f4db345e83e5
-# ╠═8d7d06df-6c0d-4625-8f3a-d1d78bea37ef
-# ╠═85b20e07-2d54-4cb1-b56f-3b743ce43f47
-# ╠═a00fda8b-d2c4-402c-a6aa-f7ded0a06d72
-# ╠═3647470a-17ce-48b2-b934-d03210940fb2
-# ╠═9d54a0aa-5140-4b4e-b177-eef9f6f1efd9
-# ╠═7545bec1-f8e6-48a5-a713-534ad27cc566
-# ╠═b68750d6-03b5-436c-8712-1dbfc67d7afd
-# ╠═2232b189-6cfb-48e4-b725-c7bfca89c2e6
-# ╠═3797acdd-36cc-4c54-85a1-f92f764c87f2
-# ╠═f32f67d0-e4d2-478b-8f38-d2db757dde13
-# ╠═510d81ad-4aa4-494c-a10d-ceb28f13bba1
-# ╠═5ad47c36-a517-4ff9-aead-a623edf287af
-# ╟─3034d0c2-6616-4e86-bca2-b5e5db8681cc
-# ╟─d2db436e-d89a-4e5c-b781-8f72b2ac357b
-# ╠═a5ad888a-7cc9-4f8c-956a-ca2b159414c5
-# ╠═3b7876fb-e9b0-4dde-96f9-0feb987d3e71
-# ╠═f2ed6812-9638-449f-8a61-61fc9e8a5729
+# ╟─79687995-2165-42ae-b72e-7a7ab20942f1
+# ╟─074e1eeb-98db-4728-8bfe-4b4ed91b554f
+# ╟─85d293fc-2992-4a38-a080-93179ff4a9f1
+# ╟─ec72bf91-5dae-4ed8-80a3-9f2439eb1694
+# ╟─b63f2571-079b-4ef3-9f96-6a465c255733
+# ╟─48291326-f37d-4397-aeb0-fee0855970d8
+# ╟─825bc8e5-79aa-4461-9d61-1778b6f09ee0
+# ╟─3509ebf4-b758-4ce3-a69f-fb20c16615ef
+# ╠═72773944-4541-4220-8f0a-151ccd67bcaa
+# ╟─d6921b5f-d9ae-4886-a40e-98f9ad052ed2
+# ╠═53c9b844-5d1e-4444-abe2-ec16f7cb1ee9
+# ╠═e6540edc-e971-48e9-8679-689a3ed73e7b
+# ╠═0b1564a2-8129-43ae-8831-77e18959be67
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
