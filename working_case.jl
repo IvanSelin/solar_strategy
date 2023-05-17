@@ -9,6 +9,7 @@ begin
 	using DataFrames
 	using CSV
 	using Plots # default
+	import PlotlyJS as plotjs
 	# using PlotlyBase
 	# using PlotlySave
 	using TimeZones
@@ -17,7 +18,7 @@ begin
 	using LineSearches
 	using PlutoUI
 	using Peaks
-	# using PlotlyJS
+	using WebIO
 end
 
 # ╔═╡ 3e46a49b-7bb7-4889-8c94-b842977899e4
@@ -37,7 +38,7 @@ Threads.nthreads()
 PlutoUI.TableOfContents()
 
 # ╔═╡ 769d7af1-e95c-426f-aa97-85b219c5b65e
-plotly()
+plotlyjs()
 
 # ╔═╡ 64ecb4d9-b67c-4a41-a79e-300affd0440f
 md"# План
@@ -267,7 +268,7 @@ single_optim(
 )
 
 # ╔═╡ c892b78b-58dd-4a61-b731-6f4c1432ea1a
-md"Получили одну скорость в 71.9 км/ч, на которой проезжаем всю дистанцию за 350.461 секунд"
+md"Получили одну скорость в 79.35 км/ч, на которой проезжаем всю дистанцию за 226.831 секунд"
 
 # ╔═╡ 16a90363-c55f-44d7-9fd0-289579272e99
 md"## 2. Несколько скоростей"
@@ -282,7 +283,7 @@ regular_optim(
 )
 
 # ╔═╡ a4ebc847-08fd-4976-87a7-2c35ca7920be
-md"Получили 7 примерно одинаковых скоростей около тех же самых 72 км/ч (от 71.29 до 72.47 км/ч), на которой проезжаем всю дистанцию за 350.496 секунд
+md"Получили 5 примерно одинаковых скоростей около тех же самых 79 км/ч, на которых проезжаем всю дистанцию опять за 226 секунд
 
 Особой разницы нет, и в такой ситуации рассматривать каждый участок трассы как отдельный нет смысла"
 
@@ -357,11 +358,14 @@ regular_optim(
 # ╔═╡ d6921b5f-d9ae-4886-a40e-98f9ad052ed2
 md"Как видно, ограничив максимальную скорость 80 км/ч, итоговое время не сильно пострадало, но план получился гораздо более реалистичным."
 
+# ╔═╡ 49c58d5c-11e2-4aff-a408-cd4aabff7312
+md"### Лирическое отступление"
+
 # ╔═╡ 53c9b844-5d1e-4444-abe2-ec16f7cb1ee9
 md"Доделать:
 
-1. более унифицированные трассы с и без холма
-2. энергия до холма и после осталась примерно такой же. что это означает? Это значит, что на значениях энергии не около нуля, на это всё равно. теперь надо проверить, можно ли проехать с определённой скоростью, чтобы было такое же время и энергия прохождения дистанции"
+1. более унифицированные трассы с и без холма - сделано
+2. энергия до холма и после осталась примерно такой же. что это означает? Это значит, что на значениях энергии не около нуля, на это всё равно. теперь надо проверить, можно ли проехать с определённой скоростью, чтобы было такое же время и энергия прохождения дистанции - нужно только для ворлд солар челленджа. пока без этого"
 
 # ╔═╡ e6540edc-e971-48e9-8679-689a3ed73e7b
 simulate_run(
@@ -375,7 +379,209 @@ simulate_run(
 # ╔═╡ 0b1564a2-8129-43ae-8831-77e18959be67
 md"Получается быстрее за то же самое количество энергии
 
-Выходит, просто не стоит париться за нижний порог энергии?"
+Выходит, просто не стоит париться за нижний порог энергии?
+
+Нужно, если брать как одну большую задачу"
+
+# ╔═╡ 53e5f786-6e6a-4892-8252-aa3389682a80
+md"# Длинная трасса с повторяющимися холмами"
+
+# ╔═╡ afbea56b-194a-407e-9f74-8a3c9d0cbbed
+track_hills, segments_hills = get_track_and_segments("data/data_test_hills.csv");
+
+# ╔═╡ db0b009d-1abd-42c0-bbad-b6ba53af5fb5
+track_hills
+
+# ╔═╡ f664a938-2e64-4e37-9404-578720b4bd57
+segments_hills
+
+# ╔═╡ ec45bd26-942d-4180-81f5-a9db7e227c4f
+single_optim(
+	track_hills,
+	segments_hills,
+	250.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ d82662d3-5533-49cf-967f-5bfa1fb65b13
+regular_optim(
+	track_hills,
+	segments_hills,
+	fill(75., size(segments_hills,1)),
+	250.,
+	DateTime(2022,1,1,10,0,0),
+	100.
+)
+
+# ╔═╡ d907fa8d-f398-48ee-bd2d-e1fea7149fb1
+md"# Длинная трасса с разными холмами"
+
+# ╔═╡ de68d838-4e10-49fa-a92b-a5524ef378d7
+track_hills2, segments_hills2 = get_track_and_segments("data/data_test_hills2.csv");
+
+# ╔═╡ cd919288-f655-49a7-9d31-64eabb74c7ef
+md"## Одна скорость"
+
+# ╔═╡ fc78cf3e-c12c-43cb-9ce1-07665134b2cc
+single_optim(
+	track_hills2,
+	segments_hills2,
+	500.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ b7aa261e-70bd-48fc-82d9-747585195f29
+md"## Несколько скоростей"
+
+# ╔═╡ eb3bd221-532a-4299-88bc-3a19ccb4c7e3
+regular_optim(
+	track_hills2,
+	segments_hills2,
+	fill(50., size(segments_hills2,1)),
+	500.,
+	DateTime(2022,1,1,10,0,0),
+	100.
+)
+
+# ╔═╡ 0c1b0b93-23e0-422a-a6ce-30b1c6b1ab51
+md"# Длинная трасса с разными холмами (финиш выше старта)"
+
+# ╔═╡ f7a72d85-ec30-4406-9a9e-a148d2244cf2
+track_hills3, segments_hills3 = get_track_and_segments("data/data_test_hills3.csv");
+
+# ╔═╡ bb34bc3a-4232-4c52-8358-08c571566055
+single_optim(
+	track_hills3,
+	segments_hills3,
+	500.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ cd45b86d-7231-418f-a43c-b78b4fa2d879
+regular_optim(
+	track_hills3,
+	segments_hills3,
+	fill(50., size(segments_hills3,1)),
+	500.,
+	DateTime(2022,1,1,10,0,0),
+	200.
+)
+
+# ╔═╡ 69bf6ffc-8c79-4573-bfb2-d264c66a7040
+track_hills3a, segments_hills3a = get_track_and_segments("data/data_test_hills3a.csv");
+
+# ╔═╡ e410277c-87ef-4f18-89cb-7ce8817920b5
+single_optim(
+	track_hills3a,
+	segments_hills3a,
+	500.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ 6e74e3be-fb37-4bdd-a059-87b513f8382a
+regular_optim(
+	track_hills3a,
+	segments_hills3a,
+	fill(50., size(segments_hills3a,1)),
+	500.,
+	DateTime(2022,1,1,10,0,0),
+	200.
+)
+
+# ╔═╡ b4e85535-d731-4e90-bf33-24ba6ee69aa4
+md"# Австралия с сокращённым количеством точек"
+
+# ╔═╡ 940a6c60-a5e5-4bab-940b-4a3b027ecc65
+begin
+	track_aus, segments_aus = get_track_and_segments("data/data_australia_random.csv");
+	track_aus.altitude = track_aus.altitude * 10;
+	segments_aus = get_segments_for_track(track_aus);
+end
+
+# ╔═╡ 7adbc40f-8f0f-4434-96da-3962f7107ce9
+single_optim(
+	track_aus,
+	segments_aus,
+	5100.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ 52c423ab-248a-4398-af19-6f80acd6164f
+regular_optim(
+	track_aus,
+	segments_aus,
+	fill(50., size(segments_aus,1)),
+	5100.,
+	DateTime(2022,1,1,10,0,0),
+	200.
+)
+
+# ╔═╡ f8d9184d-e88e-430c-80e9-e2a660fce6ba
+md"Похоже что на длинных дистанциях работает нормально. Чем больше перепад высот, тем лучше работает"
+
+# ╔═╡ aae20b83-351f-44ef-8cc3-79404167fdc4
+md"Идея 2: выигрыш будет тем больше, чем раньше будет самый большой холм. Что это значит: можно подбирать скорость до первого самого большого холма (где энергия 0), потом подбирать её опять, но уже начиная с момента нулевой энергии. До следующего нулевого холма)"
+
+# ╔═╡ 9c686f0c-831a-4d5c-b18c-d5a459fe871a
+md"Похоже что пора делать осадки, ну или увеличивать количество получаемой энергии, чтобы была разница в режимах движения"
+
+# ╔═╡ 0eec4f71-31a7-435d-9ed5-1c86c2751f5b
+md"# Начинаем делать осадки"
+
+# ╔═╡ 9ad47da6-2b71-4354-9bd5-7113f98139d7
+md"Начнём с отображения дистанции, для того чтобы моделировать осадки"
+
+# ╔═╡ 6bc90ca1-dc8d-41e2-a9df-b54ccac74f79
+plotjs.Plot(
+	plotjs.scattergeo(
+		lat=track_aus.latitude,
+		lon=track_aus.longitude
+	),
+	plotjs.Layout(
+		width=700,
+		height=600,
+		# geo_scope="world",
+		# geo_resolution=50,
+		geo_fitbounds="locations" # geo_fitbounds="geojson"
+	)
+)
+
+# ╔═╡ 57f47d65-5a3e-4c86-be15-587d94fbf677
+md"## Создание данных осадков
+
+Осадки у нас локализованы по:
+1. Времени
+2. Месту
+
+Это значит что мне надо генерировать некоторую пространственную сетку с разными значениями в узлах (место), и иметь кучу таких сеток на каждый момент времени (время)
+
+План таков:
+1. Сделать статичную карту осадков, отобразить её
+2. Модифицировать код, чтобы он её использовал
+3. Помножить на локализацию по времени
+4. Опять модифицировать код, чтобы эти данные использовались"
+
+# ╔═╡ ac174dbd-11d5-4859-b8f5-751af94f9ac6
+md"### Генерируем карту сетку и накладываем осадки"
+
+# ╔═╡ b6e7b201-4ea7-4b34-9f4d-9b06879c3c11
+plotjs.Plot(
+	plotjs.scattergeo(
+		fill="toself",
+		fillcolor="yellow",
+		lat=[-11.,-11.,-12.,-12.5,-12., -12.],
+		lon=[130.,131.,131.,130.5,130., 130.],
+		marker_size=1,
+		marker_color="orange"
+	),
+	plotjs.Layout(
+		width=700,
+		height=600,
+		geo_fitbounds="locations"
+	)
+)
+# надо дублировать последнюю точку в координатах из-за ошибок на единицу в индексации))00))
+# вообще надо зарепортить, наверное
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -386,9 +592,11 @@ Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 LineSearches = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Peaks = "18e31ff7-3703-566c-8e60-38913d67486b"
+PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
+WebIO = "0f1e0344-ec1d-5b48-a673-e5cf874b6c29"
 
 [compat]
 CSV = "~0.10.10"
@@ -396,9 +604,11 @@ DataFrames = "~1.5.0"
 LineSearches = "~7.2.0"
 Optim = "~1.7.5"
 Peaks = "~0.4.3"
+PlotlyJS = "~0.18.10"
 Plots = "~1.38.11"
 PlutoUI = "~0.7.51"
 TimeZones = "~1.9.2"
+WebIO = "~0.8.20"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -407,7 +617,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "c1cd44be7da009933ddddc4bd8e218d588f88e5a"
+project_hash = "ab7de2603073da8eda1f1e1f534db732e5a792e9"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -417,9 +627,9 @@ version = "1.1.4"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "cc37d689f599e8df4f464b2fa3870ff7db7492ef"
+git-tree-sha1 = "76289dc51920fdc6e0013c872ba9551d54961c24"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "3.6.1"
+version = "3.6.2"
 weakdeps = ["StaticArrays"]
 
     [deps.Adapt.extensions]
@@ -454,6 +664,12 @@ version = "7.4.3"
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
+[[deps.AssetRegistry]]
+deps = ["Distributed", "JSON", "Pidfile", "SHA", "Test"]
+git-tree-sha1 = "b25e88db7944f98789130d7b503276bc34bc098e"
+uuid = "bf4720bc-e11a-5d0c-854e-bdca1663c893"
+version = "0.1.0"
+
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
@@ -461,6 +677,12 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
 version = "0.1.7"
+
+[[deps.Blink]]
+deps = ["Base64", "Distributed", "HTTP", "JSExpr", "JSON", "Lazy", "Logging", "MacroTools", "Mustache", "Mux", "Pkg", "Reexport", "Sockets", "WebIO"]
+git-tree-sha1 = "88616b94aa805689cf12f74b2509410135c00f43"
+uuid = "ad839575-38b3-5650-b840-f874b8c74a25"
+version = "0.12.6"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -562,9 +784,9 @@ uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 version = "4.1.1"
 
 [[deps.DataAPI]]
-git-tree-sha1 = "e8119c1a33d267e16108be441a287a6981ba1630"
+git-tree-sha1 = "8da84edb865b0b5b0100c0666a9bc9a0b71c553c"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
-version = "1.14.0"
+version = "1.15.0"
 
 [[deps.DataFrames]]
 deps = ["Compat", "DataAPI", "Future", "InlineStrings", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SentinelArrays", "SnoopPrecompile", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
@@ -704,6 +926,12 @@ git-tree-sha1 = "aa31987c2ba8704e23c6c8ba8a4f769d5d7e4f91"
 uuid = "559328eb-81f9-559d-9380-de523a88c83c"
 version = "1.0.10+0"
 
+[[deps.FunctionalCollections]]
+deps = ["Test"]
+git-tree-sha1 = "04cb9cfaa6ba5311973994fe3496ddec19b6292a"
+uuid = "de31a74c-ac4f-5751-b3fd-e18cd04993ca"
+version = "0.5.0"
+
 [[deps.Future]]
 deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
@@ -751,15 +979,21 @@ version = "1.0.2"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "877b7bc42729aa2c90bbbf5cb0d4294bd6d42e5a"
+git-tree-sha1 = "1cede8b3d0ff7efe5b194679bbb7f45fa08da535"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.9.1"
+version = "1.9.2"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
 git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
+
+[[deps.Hiccup]]
+deps = ["MacroTools", "Test"]
+git-tree-sha1 = "6187bb2d5fcbb2007c39e7ac53308b0d371124bd"
+uuid = "9fb69e20-1954-56bb-a84f-559cc56a8ff7"
+version = "0.2.2"
 
 [[deps.Hyperscript]]
 deps = ["Test"]
@@ -816,6 +1050,12 @@ git-tree-sha1 = "abc9885a7ca2052a736a600f7fa66209f96506e1"
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
 version = "1.4.1"
 
+[[deps.JSExpr]]
+deps = ["JSON", "MacroTools", "Observables", "WebIO"]
+git-tree-sha1 = "b413a73785b98474d8af24fd4c8a975e31df3658"
+uuid = "97c1335a-c9c5-57fe-bc5d-ec35cebe8660"
+version = "0.5.4"
+
 [[deps.JSON]]
 deps = ["Dates", "Mmap", "Parsers", "Unicode"]
 git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
@@ -827,6 +1067,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "6f2675ef130a300a112286de91973805fcc5ffbc"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "2.1.91+0"
+
+[[deps.Kaleido_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "43032da5832754f58d14a91ffbe86d5f176acda9"
+uuid = "f7e6163d-2fa5-5f23-b69c-1db539e41963"
+version = "0.2.1+0"
 
 [[deps.LAME_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -864,6 +1110,12 @@ version = "0.16.0"
     [deps.Latexify.weakdeps]
     DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
     SymEngine = "123dc426-2d89-5057-bbad-38513e3affd8"
+
+[[deps.Lazy]]
+deps = ["MacroTools"]
+git-tree-sha1 = "1370f8202dac30758f3c345f9909b97f53d87d3f"
+uuid = "50d2b5c4-7a5e-59d5-8109-a42b560f39c0"
+version = "0.15.1"
 
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
@@ -1024,6 +1276,18 @@ version = "0.7.6"
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2022.10.11"
 
+[[deps.Mustache]]
+deps = ["Printf", "Tables"]
+git-tree-sha1 = "87c371d27dbf2449a5685652ab322be163269df0"
+uuid = "ffc61752-8dc7-55ee-8c37-f3e9cdd09e70"
+version = "1.0.15"
+
+[[deps.Mux]]
+deps = ["AssetRegistry", "Base64", "HTTP", "Hiccup", "MbedTLS", "Pkg", "Sockets"]
+git-tree-sha1 = "0bdaa479939d2a1f85e2f93e38fbccfcb73175a5"
+uuid = "a975b10e-0019-58db-a62f-e48ff68538c9"
+version = "1.0.1"
+
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
 git-tree-sha1 = "a0b464d183da839699f4c79e7606d9d186ec172c"
@@ -1039,6 +1303,11 @@ version = "1.0.2"
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
+
+[[deps.Observables]]
+git-tree-sha1 = "6862738f9796b3edc1c09d0890afce4eca9e7e93"
+uuid = "510215fc-4207-5dde-b226-833fc4488ee2"
+version = "0.5.4"
 
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1103,16 +1372,22 @@ uuid = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 version = "0.12.3"
 
 [[deps.Parsers]]
-deps = ["Dates", "SnoopPrecompile"]
-git-tree-sha1 = "478ac6c952fddd4399e71d4779797c538d0ff2bf"
+deps = ["Dates", "PrecompileTools", "UUIDs"]
+git-tree-sha1 = "7302075e5e06da7d000d9bfa055013e3e85578ca"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.5.8"
+version = "2.5.9"
 
 [[deps.Peaks]]
 deps = ["Compat", "RecipesBase"]
 git-tree-sha1 = "ca47b866754525ede84e5dec84a104c45f92afb6"
 uuid = "18e31ff7-3703-566c-8e60-38913d67486b"
 version = "0.4.3"
+
+[[deps.Pidfile]]
+deps = ["FileWatching", "Test"]
+git-tree-sha1 = "2d8aaf8ee10df53d0dfb9b8ee44ae7c04ced2b03"
+uuid = "fa939f87-e72e-5be4-a000-7fc836dbe307"
+version = "1.3.0"
 
 [[deps.Pipe]]
 git-tree-sha1 = "6842804e7867b115ca9de748a0cf6b364523c16d"
@@ -1141,6 +1416,18 @@ deps = ["ColorSchemes", "Colors", "Dates", "PrecompileTools", "Printf", "Random"
 git-tree-sha1 = "f92e1315dadf8c46561fb9396e525f7200cdc227"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
 version = "1.3.5"
+
+[[deps.PlotlyBase]]
+deps = ["ColorSchemes", "Dates", "DelimitedFiles", "DocStringExtensions", "JSON", "LaTeXStrings", "Logging", "Parameters", "Pkg", "REPL", "Requires", "Statistics", "UUIDs"]
+git-tree-sha1 = "56baf69781fc5e61607c3e46227ab17f7040ffa2"
+uuid = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
+version = "0.8.19"
+
+[[deps.PlotlyJS]]
+deps = ["Base64", "Blink", "DelimitedFiles", "JSExpr", "JSON", "Kaleido_jll", "Markdown", "Pkg", "PlotlyBase", "REPL", "Reexport", "Requires", "WebIO"]
+git-tree-sha1 = "7452869933cd5af22f59557390674e8679ab2338"
+uuid = "f0f68f2c-4968-5e81-91da-67840de0976a"
+version = "0.18.10"
 
 [[deps.Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "PrecompileTools", "Preferences", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
@@ -1449,6 +1736,24 @@ git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
 uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 version = "1.4.2"
 
+[[deps.WebIO]]
+deps = ["AssetRegistry", "Base64", "Distributed", "FunctionalCollections", "JSON", "Logging", "Observables", "Pkg", "Random", "Requires", "Sockets", "UUIDs", "WebSockets", "Widgets"]
+git-tree-sha1 = "976d0738247f155d0dcd77607edea644f069e1e9"
+uuid = "0f1e0344-ec1d-5b48-a673-e5cf874b6c29"
+version = "0.8.20"
+
+[[deps.WebSockets]]
+deps = ["Base64", "Dates", "HTTP", "Logging", "Sockets"]
+git-tree-sha1 = "4162e95e05e79922e44b9952ccbc262832e4ad07"
+uuid = "104b5d7c-a370-577a-8038-80a2059c5097"
+version = "1.6.0"
+
+[[deps.Widgets]]
+deps = ["Colors", "Dates", "Observables", "OrderedCollections"]
+git-tree-sha1 = "fcdae142c1cfc7d89de2d11e08721d0f2f86c98a"
+uuid = "cc8bc4a8-27d6-5769-a93b-9d913e69aa62"
+version = "0.6.6"
+
 [[deps.WorkerUtilities]]
 git-tree-sha1 = "cd1659ba0d57b71a464a29e64dbc67cfe83d54e7"
 uuid = "76eceee3-57b5-4d4a-8e66-0e911cebbf60"
@@ -1705,14 +2010,47 @@ version = "1.4.1+0"
 # ╟─074e1eeb-98db-4728-8bfe-4b4ed91b554f
 # ╟─85d293fc-2992-4a38-a080-93179ff4a9f1
 # ╟─ec72bf91-5dae-4ed8-80a3-9f2439eb1694
-# ╟─b63f2571-079b-4ef3-9f96-6a465c255733
+# ╠═b63f2571-079b-4ef3-9f96-6a465c255733
 # ╟─48291326-f37d-4397-aeb0-fee0855970d8
 # ╟─825bc8e5-79aa-4461-9d61-1778b6f09ee0
 # ╟─3509ebf4-b758-4ce3-a69f-fb20c16615ef
 # ╠═72773944-4541-4220-8f0a-151ccd67bcaa
 # ╟─d6921b5f-d9ae-4886-a40e-98f9ad052ed2
-# ╠═53c9b844-5d1e-4444-abe2-ec16f7cb1ee9
+# ╟─49c58d5c-11e2-4aff-a408-cd4aabff7312
+# ╟─53c9b844-5d1e-4444-abe2-ec16f7cb1ee9
 # ╠═e6540edc-e971-48e9-8679-689a3ed73e7b
 # ╠═0b1564a2-8129-43ae-8831-77e18959be67
+# ╠═53e5f786-6e6a-4892-8252-aa3389682a80
+# ╠═afbea56b-194a-407e-9f74-8a3c9d0cbbed
+# ╠═db0b009d-1abd-42c0-bbad-b6ba53af5fb5
+# ╠═f664a938-2e64-4e37-9404-578720b4bd57
+# ╠═ec45bd26-942d-4180-81f5-a9db7e227c4f
+# ╠═d82662d3-5533-49cf-967f-5bfa1fb65b13
+# ╠═d907fa8d-f398-48ee-bd2d-e1fea7149fb1
+# ╠═de68d838-4e10-49fa-a92b-a5524ef378d7
+# ╟─cd919288-f655-49a7-9d31-64eabb74c7ef
+# ╠═fc78cf3e-c12c-43cb-9ce1-07665134b2cc
+# ╟─b7aa261e-70bd-48fc-82d9-747585195f29
+# ╠═eb3bd221-532a-4299-88bc-3a19ccb4c7e3
+# ╠═0c1b0b93-23e0-422a-a6ce-30b1c6b1ab51
+# ╠═f7a72d85-ec30-4406-9a9e-a148d2244cf2
+# ╠═bb34bc3a-4232-4c52-8358-08c571566055
+# ╠═cd45b86d-7231-418f-a43c-b78b4fa2d879
+# ╠═69bf6ffc-8c79-4573-bfb2-d264c66a7040
+# ╠═e410277c-87ef-4f18-89cb-7ce8817920b5
+# ╠═6e74e3be-fb37-4bdd-a059-87b513f8382a
+# ╠═b4e85535-d731-4e90-bf33-24ba6ee69aa4
+# ╠═940a6c60-a5e5-4bab-940b-4a3b027ecc65
+# ╠═7adbc40f-8f0f-4434-96da-3962f7107ce9
+# ╠═52c423ab-248a-4398-af19-6f80acd6164f
+# ╠═f8d9184d-e88e-430c-80e9-e2a660fce6ba
+# ╠═aae20b83-351f-44ef-8cc3-79404167fdc4
+# ╠═9c686f0c-831a-4d5c-b18c-d5a459fe871a
+# ╠═0eec4f71-31a7-435d-9ed5-1c86c2751f5b
+# ╠═9ad47da6-2b71-4354-9bd5-7113f98139d7
+# ╠═6bc90ca1-dc8d-41e2-a9df-b54ccac74f79
+# ╠═57f47d65-5a3e-4c86-be15-587d94fbf677
+# ╠═ac174dbd-11d5-4859-b8f5-751af94f9ac6
+# ╠═b6e7b201-4ea7-4b34-9f4d-9b06879c3c11
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
