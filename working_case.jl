@@ -19,6 +19,11 @@ begin
 	using PlutoUI
 	using Peaks
 	using WebIO
+	using StatsBase
+	using Distributions
+	# using LinearAlgebra
+	# using Ranges
+	using Random
 end
 
 # ╔═╡ 3e46a49b-7bb7-4889-8c94-b842977899e4
@@ -36,6 +41,9 @@ Threads.nthreads()
 
 # ╔═╡ b20a1cbd-705e-4b49-b671-d042d1511afe
 PlutoUI.TableOfContents()
+
+# ╔═╡ d5213897-9cb6-453a-bc4e-a7015909c886
+rng = MersenneTwister(1234)
 
 # ╔═╡ 769d7af1-e95c-426f-aa97-85b219c5b65e
 plotlyjs()
@@ -565,8 +573,8 @@ md"## Создание данных осадков
 md"### Генерируем карту сетку и накладываем осадки"
 
 # ╔═╡ b6e7b201-4ea7-4b34-9f4d-9b06879c3c11
-plotjs.Plot(
-	plotjs.scattergeo(
+p = plotjs.Plot(
+	plotjs.scattermapbox(
 		fill="toself",
 		fillcolor="yellow",
 		lat=[-11.,-11.,-12.,-12.5,-12., -12.],
@@ -577,11 +585,331 @@ plotjs.Plot(
 	plotjs.Layout(
 		width=700,
 		height=600,
-		geo_fitbounds="locations"
+		geo_fitbounds="locations",
+		mapbox_style="open-street-map",
+		autosize=true
 	)
 )
 # надо дублировать последнюю точку в координатах из-за ошибок на единицу в индексации))00))
 # вообще надо зарепортить, наверное
+
+# ╔═╡ 66e9389e-c4e6-471f-8788-fb90d5b5ad85
+typeof(
+	plotjs.scattermapbox(
+		fill="toself",
+		fillcolor="yellow",
+		lat=[-11.,-11.,-12.,-12.5,-12., -12.],
+		lon=[130.,131.,131.,130.5,130., 130.],
+		marker_size=1,
+		marker_color="orange"
+	)
+)
+
+# ╔═╡ 8e637142-5b75-4757-a38d-a4966ef2d3e8
+begin
+	traces::AbstractVector{plotjs.AbstractTrace} = [];
+	trace1 = plotjs.scattermapbox(
+		fill="toself",
+		# fillcolor="yellow",
+		lat=[-11.,-11.,-12.,-12.5,-12., -12.],
+		lon=[130.,131.,131.,130.5,130., 130.],
+		marker_size=1,
+		marker_color="orange",
+		opacity=0.5,
+		showlegend=false
+	);
+	push!(traces, trace1);
+	trace2 = plotjs.scattermapbox(
+		fill="toself",
+		# fillcolor="red",
+		lat=[-10.,-10.,-11.,-11.5,-11., -11.],
+		lon=[130.,131.,131.,130.5,130., 130.],
+		marker_size=1,
+		marker_color="red",
+		opacity=0.5,
+		showlegend=false
+	);
+	push!(traces, trace2);
+	println(typeof(traces))
+	plotjs.Plot(
+		traces,
+		plotjs.Layout(
+			width=700,
+			height=600,
+			geo_fitbounds="locations",
+			mapbox_style="open-street-map",
+			autosize=true
+		)
+	)
+	
+end
+
+# ╔═╡ 9495080c-f0f8-41aa-88df-ea9327e2acec
+begin
+	traces2::AbstractVector{plotjs.AbstractTrace} = [];
+	trace12 = plotjs.scattermapbox(
+		fill="toself",
+		# fillcolor="yellow",
+		lat=[-11.,-11.,-12.,-12.5,-12., -12.],
+		lon=[130.,131.,131.,130.5,130., 130.],
+		marker_size=1,
+		marker_colorscale=0.9,
+		opacity=0.5,
+		showlegend=false
+	);
+	push!(traces2, trace12);
+	trace22 = plotjs.scattermapbox(
+		fill="toself",
+		# fillcolor="red",
+		lat=[-10.,-10.,-11.,-11.5,-11., -11.],
+		lon=[130.,131.,131.,130.5,130., 130.],
+		marker_size=1,
+		marker_colorscale=0.5,
+		opacity=0.5,
+		showlegend=false
+	);
+	push!(traces2, trace22);
+	plotjs.Plot(
+		traces2,
+		plotjs.Layout(
+			width=700,
+			height=600,
+			geo_fitbounds="locations",
+			mapbox_style="open-street-map",
+			autosize=true
+		)
+	)
+	
+end
+
+# ╔═╡ 211e690b-6d77-4c39-b311-d582e17cde03
+# TODO: generate a heatmap and create an overlay
+
+# ╔═╡ 63532a3b-5817-4042-aaf8-034919ec52db
+md"#### Density mapbox"
+
+# ╔═╡ 19075625-4677-4788-950f-63255b0e082f
+plotjs.Plot(
+	plotjs.densitymapbox(
+		lat=[0.1,-11.,-11.,-12.,-12.5,-12.],
+		lon=[0.1,130.,131.,131.,130.5,130.],
+		z=[0.1,1.,2.,3.,4.,5.]
+	),
+	plotjs.Layout(
+		width=700,
+		height=600,
+		geo_fitbounds="locations",
+		autosize=true,
+		# mapbox_style="stamen-terrain"
+		mapbox_style="open-street-map"
+	)
+)
+
+# ╔═╡ e5088f3d-87f1-41e8-b8e6-e5a98b1c6e83
+md"Пробуем сперва даже без сетки!"
+
+# ╔═╡ 64628a15-fb96-4e65-ac4d-d07d9dab7fcb
+md"### Функция генерация осадков на сетке"
+
+# ╔═╡ 5709b86c-6e68-4dac-b7d8-a880e9eca00d
+function generate_clouds(
+	lat_from,
+	lon_from,
+	lat_to,
+	lon_to,
+	lat_peak,
+	lon_peak,
+	lat_std,
+	lon_std,
+	ndims,
+	coef
+)
+	lat_distr = rand(Normal(lat_peak, 2), 10000 * ndims)
+	lon_distr = rand(Normal(lon_peak, 2), 10000 * ndims)
+
+	edges_lat = range(min(lat_from, lat_to), max(lat_from, lat_to), ndims + 1) #lat_from:step:lat_to
+	edges_lon = range(min(lon_from, lon_to), max(lon_from, lon_to), ndims + 1)#lon_from:step:lon_to
+
+	hist = fit(
+		Histogram,
+		(lat_distr, lon_distr),
+		(edges_lat, edges_lon)
+	)
+
+	# return hist
+	normed_weights = hist.weights / maximum(hist.weights) * coef#, edges_lat, edges_lon
+
+	edges_lat_collected = collect(edges_lat)
+	edges_lon_collected = collect(edges_lon)
+	
+	if lat_from > lat_to
+		reverse!(normed_weights, dims=1)
+		reverse!(edges_lat_collected)
+	end
+
+	if lon_from > lon_to
+		reverse!(normed_weights, dims=2)
+		reverse!(edges_lon_collected)
+	end
+
+	return normed_weights, edges_lat_collected, edges_lon_collected
+	
+	#hist.weights, hist.edges[1], hist.egdes[2]
+end
+
+# ╔═╡ 8ade2b34-98e9-495c-b9e0-faa655652cef
+ndims = 15
+
+# ╔═╡ 6cab74b6-650e-4d6f-b6a9-0cbc0282f104
+w, elat, elon = generate_clouds(
+	-10,
+	130,
+	-18,
+	135,
+	-12.5,
+	131.2,
+	0.5,
+	0.5,
+	ndims,
+	0.75
+);
+
+# ╔═╡ 5fca02b2-24ae-4081-98b0-e7f640e65405
+function generate_density_mapbox(w, edges_lat, edges_lon)
+	ndims = size(w,1)
+	w_arr = collect(Iterators.flatten(w))
+	edges_lat_rep = repeat(get_mean_data(edges_lat), outer=ndims)
+	edges_lon_rep = repeat(get_mean_data(edges_lon), inner=ndims)
+
+	df = DataFrame(lat=edges_lat_rep, lon=edges_lon_rep, z=w_arr)
+	
+	plotjs.Plot(
+		plotjs.densitymapbox(
+			lat=df.lat,
+			lon=df.lon,
+			z=df.z,
+			opacity=0.5
+		),
+		plotjs.Layout(
+			width=650,
+			height=600,
+			geo_fitbounds="locations",
+			autosize=true,
+			# mapbox_style="stamen-terrain"
+			mapbox_style="open-street-map"
+		)
+	)
+end
+
+# ╔═╡ e4188c54-b620-48cd-b1ff-448ac4a15950
+generate_density_mapbox(w, elat, elon)
+
+# ╔═╡ 7bf6b5ed-ed8b-42c9-8772-38f4e2b3a0f9
+md"Выглядит правдиво, осталось только нормально настроить для норм внешнего вида"
+
+# ╔═╡ 7bd787da-997c-48bc-8c5b-f181148ac964
+md"#### Heat map (self-made)"
+
+# ╔═╡ 8e8ca19d-a381-4055-aef7-f27292aac611
+function generate_heatmap_traces(w, edges_lat, edges_lon)
+	traces_vector::AbstractVector{plotjs.AbstractTrace} = [];
+	for i=1:length(edges_lat)-1
+		for j=1:length(edges_lon)-1
+			# println("lat: $(edges_lat[i]), lon: $(edges_lon[j]), w: $(w[i,j])")
+			# println("lat+1: $(edges_lat[i+1]), lon+1: $(edges_lon[j+1]), w+1: $(w[i,j])")
+			trace = plotjs.scattermapbox(
+				fill="toself",
+				lat = [
+					edges_lat[i],
+					edges_lat[i],
+					edges_lat[i+1],
+					edges_lat[i+1],
+					edges_lat[i]
+				],
+				lon = [
+					edges_lon[j],
+					edges_lon[j+1],
+					edges_lon[j+1],
+					edges_lon[j],
+					edges_lon[j]
+				],
+				# lat=[-11.,-11.,-12.,-12.5,-12., -12.],
+				# lon=[130.,131.,131.,130.5,130., 130.],
+				marker_size=1,
+				# marker_color="orange",
+				opacity=0.5,
+				showlegend=false,
+				# marker_colorscale=w[i,j]
+				# marker_colorscale="Viridis",
+				# marker_color=w[i,j]
+				marker_color="rgb($(w[i,j]*255),$((1-w[i,j])*255),0)",
+				name="$(w[i,j])"
+			);
+			push!(traces_vector, trace)
+		end
+		# println()
+	end
+	plotjs.Plot(
+		traces_vector,
+		plotjs.Layout(
+			width=700,
+			height=600,
+			geo_fitbounds="locations",
+			mapbox_style="open-street-map",
+			autosize=true
+		)
+	)
+end
+
+# ╔═╡ 75f0759b-285c-402b-afdf-243cf5d81bbe
+generate_heatmap_traces(w, elat, elon)
+
+# ╔═╡ e7575b4b-49bf-4498-b74b-69bf9d1762cb
+begin
+	w_test, edges_lat_test, edges_lon_test = generate_clouds(
+		-10,
+		125,
+		-35,
+		145,
+		-20.,
+		134.,
+		0.5,
+		0.5,
+		15,
+		0.75
+	);
+	generate_heatmap_traces(
+		w_test, edges_lat_test, edges_lon_test
+	)
+end
+
+# ╔═╡ 63afb4e4-dc19-4106-8bb5-b51d0881675d
+begin
+	w_test2, edges_lat_test2, edges_lon_test2 = generate_clouds(
+		-10,
+		125,
+		-35,
+		145,
+		-20.,
+		134.,
+		0.5,
+		0.5,
+		50,
+		0.75
+	);
+	generate_density_mapbox(
+		w_test2, edges_lat_test2, edges_lon_test2
+	)
+end
+
+# ╔═╡ 78327f2d-7cf2-49e3-98fa-d90aeb479c45
+md"Density гораздо быстрее, его лучше использовать для анимаций"
+
+# ╔═╡ 760e7514-e3c4-4366-93fc-e1379f96c2ad
+md"Можно приступать к использованию сгенерированных облаков"
+
+# ╔═╡ e24f1d14-e0d9-45e8-a415-172e56e7cc9c
+md"А потом и к распространению во времени"
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -589,24 +917,29 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 LineSearches = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Peaks = "18e31ff7-3703-566c-8e60-38913d67486b"
 PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 WebIO = "0f1e0344-ec1d-5b48-a673-e5cf874b6c29"
 
 [compat]
 CSV = "~0.10.10"
 DataFrames = "~1.5.0"
+Distributions = "~0.25.90"
 LineSearches = "~7.2.0"
 Optim = "~1.7.5"
 Peaks = "~0.4.3"
 PlotlyJS = "~0.18.10"
 Plots = "~1.38.11"
 PlutoUI = "~0.7.51"
+StatsBase = "~0.33.21"
 TimeZones = "~1.9.2"
 WebIO = "~0.8.20"
 """
@@ -617,7 +950,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "ab7de2603073da8eda1f1e1f534db732e5a792e9"
+project_hash = "2cca9a3ff7173e81ea908e6500ff5f7f04beddc9"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -701,6 +1034,12 @@ deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jl
 git-tree-sha1 = "4b859a208b2397a7a623a03449e4636bdb17bcf2"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+1"
+
+[[deps.Calculus]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "f641eb0a4f00c343bbc32346e1217b86f3ce9dad"
+uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
+version = "0.5.1"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -831,6 +1170,20 @@ version = "1.13.0"
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
+[[deps.Distributions]]
+deps = ["FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns", "Test"]
+git-tree-sha1 = "eead66061583b6807652281c0fbf291d7a9dc497"
+uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
+version = "0.25.90"
+
+    [deps.Distributions.extensions]
+    DistributionsChainRulesCoreExt = "ChainRulesCore"
+    DistributionsDensityInterfaceExt = "DensityInterface"
+
+    [deps.Distributions.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
+
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
 git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
@@ -841,6 +1194,12 @@ version = "0.9.3"
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.6.0"
+
+[[deps.DualNumbers]]
+deps = ["Calculus", "NaNMath", "SpecialFunctions"]
+git-tree-sha1 = "5837a837389fccf076445fce071c8ddaea35a566"
+uuid = "fa6b7ba4-c1ee-5f82-b5fc-ecf0adba8f74"
+version = "0.6.8"
 
 [[deps.Expat_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -994,6 +1353,12 @@ deps = ["MacroTools", "Test"]
 git-tree-sha1 = "6187bb2d5fcbb2007c39e7ac53308b0d371124bd"
 uuid = "9fb69e20-1954-56bb-a84f-559cc56a8ff7"
 version = "0.2.2"
+
+[[deps.HypergeometricFunctions]]
+deps = ["DualNumbers", "LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]
+git-tree-sha1 = "84204eae2dd237500835990bcade263e27674a93"
+uuid = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
+version = "0.3.16"
 
 [[deps.Hyperscript]]
 deps = ["Test"]
@@ -1365,6 +1730,12 @@ deps = ["Artifacts", "Libdl"]
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
 version = "10.42.0+0"
 
+[[deps.PDMats]]
+deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
+git-tree-sha1 = "67eae2738d63117a196f497d7db789821bce61d1"
+uuid = "90014a1f-27ba-587c-ab20-58faa44d9150"
+version = "0.11.17"
+
 [[deps.Parameters]]
 deps = ["OrderedCollections", "UnPack"]
 git-tree-sha1 = "34c0e9ad262e5f7fc75b10a9952ca7692cfc5fbe"
@@ -1495,6 +1866,12 @@ git-tree-sha1 = "0c03844e2231e12fda4d0086fd7cbe4098ee8dc5"
 uuid = "ea2cea3b-5b76-57ae-a6ef-0a8af62496e1"
 version = "5.15.3+2"
 
+[[deps.QuadGK]]
+deps = ["DataStructures", "LinearAlgebra"]
+git-tree-sha1 = "6ec7ac8412e83d57e313393220879ede1740f9ee"
+uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
+version = "2.8.2"
+
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
@@ -1531,6 +1908,18 @@ deps = ["UUIDs"]
 git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.0"
+
+[[deps.Rmath]]
+deps = ["Random", "Rmath_jll"]
+git-tree-sha1 = "f65dcb5fa46aee0cf9ed6274ccbd597adc49aa7b"
+uuid = "79098fc4-a85e-5d69-aa6a-4863f24498fa"
+version = "0.7.1"
+
+[[deps.Rmath_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "6ed52fdd3382cf21947b15e8870ac0ddbff736da"
+uuid = "f50d1b31-88e8-58de-be2c-1cc44531875f"
+version = "0.4.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -1626,6 +2015,20 @@ deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missin
 git-tree-sha1 = "d1bf48bfcc554a3761a133fe3a9bb01488e06916"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 version = "0.33.21"
+
+[[deps.StatsFuns]]
+deps = ["HypergeometricFunctions", "IrrationalConstants", "LogExpFunctions", "Reexport", "Rmath", "SpecialFunctions"]
+git-tree-sha1 = "f625d686d5a88bcd2b15cd81f18f98186fdc0c9a"
+uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
+version = "1.3.0"
+
+    [deps.StatsFuns.extensions]
+    StatsFunsChainRulesCoreExt = "ChainRulesCore"
+    StatsFunsInverseFunctionsExt = "InverseFunctions"
+
+    [deps.StatsFuns.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
 
 [[deps.StringManipulation]]
 git-tree-sha1 = "46da2434b41f41ac3594ee9816ce5541c6096123"
@@ -1982,6 +2385,7 @@ version = "1.4.1+0"
 # ╠═94da1f00-efe7-11ed-2d94-f9a905085f40
 # ╠═c6a2816d-e81e-449e-af8c-93676c3fd077
 # ╠═b20a1cbd-705e-4b49-b671-d042d1511afe
+# ╠═d5213897-9cb6-453a-bc4e-a7015909c886
 # ╠═769d7af1-e95c-426f-aa97-85b219c5b65e
 # ╠═3e46a49b-7bb7-4889-8c94-b842977899e4
 # ╠═64ecb4d9-b67c-4a41-a79e-300affd0440f
@@ -2052,5 +2456,27 @@ version = "1.4.1+0"
 # ╠═57f47d65-5a3e-4c86-be15-587d94fbf677
 # ╠═ac174dbd-11d5-4859-b8f5-751af94f9ac6
 # ╠═b6e7b201-4ea7-4b34-9f4d-9b06879c3c11
+# ╠═66e9389e-c4e6-471f-8788-fb90d5b5ad85
+# ╠═8e637142-5b75-4757-a38d-a4966ef2d3e8
+# ╠═9495080c-f0f8-41aa-88df-ea9327e2acec
+# ╠═211e690b-6d77-4c39-b311-d582e17cde03
+# ╠═63532a3b-5817-4042-aaf8-034919ec52db
+# ╠═19075625-4677-4788-950f-63255b0e082f
+# ╠═e5088f3d-87f1-41e8-b8e6-e5a98b1c6e83
+# ╠═64628a15-fb96-4e65-ac4d-d07d9dab7fcb
+# ╠═5709b86c-6e68-4dac-b7d8-a880e9eca00d
+# ╠═8ade2b34-98e9-495c-b9e0-faa655652cef
+# ╠═6cab74b6-650e-4d6f-b6a9-0cbc0282f104
+# ╠═5fca02b2-24ae-4081-98b0-e7f640e65405
+# ╠═e4188c54-b620-48cd-b1ff-448ac4a15950
+# ╠═7bf6b5ed-ed8b-42c9-8772-38f4e2b3a0f9
+# ╠═7bd787da-997c-48bc-8c5b-f181148ac964
+# ╠═8e8ca19d-a381-4055-aef7-f27292aac611
+# ╠═75f0759b-285c-402b-afdf-243cf5d81bbe
+# ╠═e7575b4b-49bf-4498-b74b-69bf9d1762cb
+# ╠═63afb4e4-dc19-4106-8bb5-b51d0881675d
+# ╠═78327f2d-7cf2-49e3-98fa-d90aeb479c45
+# ╠═760e7514-e3c4-4366-93fc-e1379f96c2ad
+# ╠═e24f1d14-e0d9-45e8-a415-172e56e7cc9c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
