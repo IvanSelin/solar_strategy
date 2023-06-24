@@ -617,7 +617,11 @@ function solar_trip_boundaries(input_speed, segments, start_datetime)
 		segments.diff_distance,
 		input_speed
 	)
-    solar_power_accumulated = calculate_power_income_accumulated(solar_power)
+	# println("solar power len $(size(solar_power, 1))")
+    # solar_power_accumulated = calculate_power_income_accumulated(solar_power)
+	# println("modified trip with weather")
+	solar_power_adjusted = solar_power .* segments.weather_coeff
+    solar_power_accumulated = calculate_power_income_accumulated(solar_power_adjusted)
 
     # TODO: calculate night charging - do it later since it is not critical as of right now
     return power_use_accumulated_wt_h, solar_power_accumulated, time_seconds

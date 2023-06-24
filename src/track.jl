@@ -136,6 +136,7 @@ function get_segments_for_track(track)
     segments_df.latitude = get_mean_data(track.latitude)
     segments_df.longitude = get_mean_data(track.longitude)
     segments_df.altitude = get_mean_data(track.altitude)
+    segments_df.weather_coeff .= 1.0 
 
     return segments_df
 end

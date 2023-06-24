@@ -12,6 +12,9 @@ using Optim
 using LineSearches
 using ProtoStructs
 using OhMyREPL
+using Distributions
+using Random
+using StatsBase
 # using Alert
 # selecting a Plots backend
 plotly(ticks=:native)
@@ -24,6 +27,7 @@ include("time.jl")
 include("solar_radiation.jl")
 include("track.jl")
 include("utils.jl")
+include("weather.jl")
 include("strategy_calculation.jl")
 
 
@@ -47,26 +51,90 @@ start with stub, develop proper models later
 # track = get_track_data("data/data_australia.csv")
 track, segments = get_track_and_segments("data/data_australia.csv")
 plot(track.distance, track.altitude, title="Track raw data")
-# TODO: track preprocessing
-track.altitude = track.altitude .* 10;
 track_peaks, segments_peaks = keep_extremum_only_peaks_segments(track)
 plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data built w/ Peaks.jl")
+# TODO: track preprocessing
+track.altitude = track.altitude .* 10;
+track_peaks_high, segments_peaks_high = keep_extremum_only_peaks_segments(track)
+plot(track_peaks_high.distance, track_peaks_high.altitude, title="Track extremum only data built w/ Peaks.jl alt * 10")
 
 track_aus, segments_aus = get_track_and_segments("data/data_australia_random.csv");
 track_aus.altitude = track_aus.altitude * 10;
 segments_aus = get_segments_for_track(track_aus);
 plot(track_aus.distance, track_aus.altitude, title="Track aus short")
 
-@time res = iterative_optimization(track, segments, 5, 5100., DateTime(2022,7,1,0,0,0));
+
+dimensions=15;
+w, elat, elon = generate_clouds(
+	-10,
+	130,
+	-18,
+	135,
+	-12.5,
+	131.2,
+	0.5,
+	0.5,
+	dimensions,
+	0.75
+);
+
+weather_coeff = calculate_weather_weights_for_segments(
+    w,
+    elat,
+    elon,
+    segments_peaks
+);
+segments_peaks.weather_coeff = weather_coeff
+
+# @time res = iterative_optimization(track, segments, 5, 5100., DateTime(2022,7,1,0,0,0));
 # 41 sec for two iterations
-@time res3 = iterative_optimization(
+# regular track
+@time res_peaks = iterative_optimization(
     track_peaks, segments_peaks,
     5,
     5,
     5100.,
     DateTime(2023,1,1,10,0,0)
 );
-plots_for_results(res3, track_peaks, segments_peaks)
+plots_for_results(res_peaks, track_peaks, segments_peaks)
+
+simulate_run_finish_time(
+    fill(37.90363171504429, size(segments_peaks.diff_distance, 1)),
+    track_peaks,
+    segments_peaks,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+)
+
+# high track
+segments_peaks_high.weather_coeff = weather_coeff
+@time res_peaks_high = iterative_optimization(
+    track_peaks_high, segments_peaks_high,
+    5,
+    5,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+);
+plots_for_results(res_peaks_high, track_peaks_high, segments_peaks_high)
+
+single_speed_high = minimize_single_speed(
+    track_peaks_high,
+    segments_peaks_high,
+    5100.,
+    DateTime(2023,1,1,10,0,0),
+    31.
+)
+
+simulate_run_finish_time(
+    fill(28., size(segments_peaks_high.diff_distance, 1)),
+    track_peaks_high,
+    segments_peaks_high,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+)
+
+
+
 
 @time res_aus = iterative_optimization(
     track_aus, segments_aus,
@@ -76,6 +144,8 @@ plots_for_results(res3, track_peaks, segments_peaks)
     DateTime(2023,1,1,0,0,0)
 );
 plots_for_results(res_aus, track_aus, segments_aus)
+
+
 
 # 13 secs for 2 iterations
 # 126 seconds full
@@ -106,6 +176,17 @@ single_speed = minimize_single_speed(
     DateTime(2023,1,1,10,0,0),
     31.
 )
+
+simulate_run_finish_time(
+    fill(first(single_speed), size(segments_peaks.diff_distance, 1)),
+    track_peaks,
+    segments_peaks,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+)
+
+
+
 
 
 n_speeds = minimize_n_speeds(

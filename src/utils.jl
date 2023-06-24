@@ -76,6 +76,47 @@ function simulate_run(speeds, track, segments, start_energy, start_datetime)
 	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(750,700), legend=false)
 end
 
+function simulate_run_finish_time(speeds, track, segments, start_energy, start_datetime)
+	minimized_speeds_ms = speeds / 3.6
+	
+	power_use, solar_power, time_s = solar_trip_boundaries(
+		minimized_speeds_ms, segments, start_datetime
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system_new = start_energy .+ solar_power .- power_use
+	lowest_energy = minimum(energy_in_system_new)
+	last_energy = last(energy_in_system_new)
+	pushfirst!(energy_in_system_new, start_energy)
+	finish_time = start_datetime + Dates.Millisecond(round(last(time_s * 1000)))
+
+	track_plot = plot(track.distance, track.altitude, title="Track",
+		color=:green,
+		ylabel="altitude(m)", label="track")
+
+	speed_plot = plot(
+		get_mean_data(track.distance),
+		speeds,
+		# seriestype=:bar,
+		bar_width=segments.diff_distance,
+		title="Speed, proj. finish at $(finish_time)",
+		ylabel="speed(kmh)",
+		label="speed"
+	)
+
+	low_energy_red = fill(0., size(track.distance, 1))
+	
+	energy_plot = plot(
+		track.distance,
+		[energy_in_system_new low_energy_red],
+		linewidth=[1 3],
+		title="Energy with manually set speeds, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
+		xlabel="distance(m)", ylabel="energy(w*h)",
+		label="energy"
+	)
+	
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(750,700), legend=false)
+end
+
 function initial_optim_with_results(track, segments, n_var, start_energy, start_datetime)
 	n_speeds = minimize_n_speeds(
 		track_peaks,
