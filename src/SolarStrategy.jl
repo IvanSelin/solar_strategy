@@ -48,18 +48,35 @@ start with stub, develop proper models later
 track, segments = get_track_and_segments("data/data_australia.csv")
 plot(track.distance, track.altitude, title="Track raw data")
 # TODO: track preprocessing
+track.altitude = track.altitude .* 10;
 track_peaks, segments_peaks = keep_extremum_only_peaks_segments(track)
 plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data built w/ Peaks.jl")
 
+track_aus, segments_aus = get_track_and_segments("data/data_australia_random.csv");
+track_aus.altitude = track_aus.altitude * 10;
+segments_aus = get_segments_for_track(track_aus);
+plot(track_aus.distance, track_aus.altitude, title="Track aus short")
+
 @time res = iterative_optimization(track, segments, 5, 5100., DateTime(2022,7,1,0,0,0));
 # 41 sec for two iterations
-@time res = iterative_optimization(
+@time res3 = iterative_optimization(
     track_peaks, segments_peaks,
     5,
-    7,
+    5,
     5100.,
-    DateTime(2022,1,1,0,0,0)
+    DateTime(2023,1,1,10,0,0)
 );
+plots_for_results(res3, track_peaks, segments_peaks)
+
+@time res_aus = iterative_optimization(
+    track_aus, segments_aus,
+    5,
+    5,
+    5100.,
+    DateTime(2023,1,1,0,0,0)
+);
+plots_for_results(res_aus, track_aus, segments_aus)
+
 # 13 secs for 2 iterations
 # 126 seconds full
 
@@ -78,34 +95,40 @@ plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data
 
 # # graphs looks ok, we can continue to optimization
 
-distance_segments_sum = cumsum(segments_peaks.diff_distance);
 
-for r in res
-    println(last(r.solution.seconds))
-    display(
-        plot(
-            distance_segments_sum,
-            r.solution.speeds,
-            line=:stepmid,
-            title=string(
-                "Iteration $(r.number) speeds, ",
-                "total time $(round(last(r.solution.seconds), digits=3)) seconds"
-            ) 
-        )
-    )
-end
 
-for r in res
-    println(minimum(r.solution.energies))
-    display(
-        plot(
-            track_peaks.distance,
-            r.solution.energies,
-            line=:stepmid,
-            title="Iteration $(r.number) energies"
-        )
-    )
-end
+
+
+single_speed = minimize_single_speed(
+    track_peaks,
+    segments_peaks,
+    5100.,
+    DateTime(2023,1,1,10,0,0),
+    31.
+)
+
+
+n_speeds = minimize_n_speeds(
+    track_peaks,
+    segments_peaks,
+    2,
+    5100.,
+    DateTime(2023,1,1,10,0,0),
+    first(single_speed)
+    # 35.
+)
+
+boundaries = calculate_boundaries(1, size(track_peaks, 1), 2)
+
+out_speeds = set_speeds_boundaries(n_speeds, boundaries)
+
+simulate_run(
+    out_speeds,
+    track_peaks,
+    segments_peaks,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+)
 
 # TODO: somehow ensure that we are NOT running out of energy
 

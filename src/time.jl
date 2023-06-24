@@ -110,3 +110,10 @@ function calculate_travel_time_datetime(speed_vector, segments, start_datetime)
 	time_utc = travel_time_to_datetime(time_s, start_datetime)
 	return DataFrame(utc_time=time_utc[2:end], time_s=time_s)
 end
+
+function calculate_travel_time_datetime_and_seconds_no_gaps(speed_vector, segments, start_datetime)
+    time_s_segments = calculate_travel_time_seconds(speed_vector, segments)
+    time_utc = start_datetime .+ Dates.Millisecond.(round.(time_s_segments .* 1000))
+    pushfirst!(time_utc, start_datetime)
+    return time_utc, time_s_segments
+end

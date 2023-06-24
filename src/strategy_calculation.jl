@@ -580,8 +580,12 @@ function solar_trip_boundaries(input_speed, segments, start_datetime)
 	# @debug "func solar_trip_calculation_bounds input_speed size is $(size(input_speed, 1)), track size is $(size(track.distance, 1)))"
 
     # calculating time needed to spend to travel across distance
-    time_df = calculate_travel_time_datetime(input_speed, segments, start_datetime)
-
+    # time_df = calculate_travel_time_datetime(input_speed, segments, start_datetime)
+	# utc_time, time_seconds = calculate_travel_time_datetime_and_seconds_no_gaps(
+	# 	input_speed,
+	# 	segments,
+	# 	start_datetime
+	# )
     #### calculcations
     # mechanical calculations are now in separate file
     mechanical_power = mechanical_power_calculation_alloc.(input_speed, segments.slope, segments.diff_distance)
@@ -594,20 +598,28 @@ function solar_trip_boundaries(input_speed, segments, start_datetime)
 	cumsum!(power_use_accumulated_wt_h, power_use_accumulated_wt_h)
 	power_use_accumulated_wt_h = power_use_accumulated_wt_h / 3600.
 
+	time_seconds = calculate_travel_time_seconds(input_speed, segments)
+	mean_seconds = get_mean_data(time_seconds)
+	pushfirst!(mean_seconds, 0.)
+	# println(mean_seconds)
+	milliseconds = round.(mean_seconds .* 1000)
+	# println(milliseconds)
+	mean_segment_utc = start_datetime .+ Dates.Millisecond.(milliseconds)
+
     # get solar energy income
 	# @debug "track size is $(size(track.latitude, 1))"
     solar_power = solar_power_income_alloc.(
 		segments.latitude,
 		segments.longitude, 
 		segments.altitude, 
-		time_df.utc_time,
+		# time_df.utc_time,
+		mean_segment_utc,
 		segments.diff_distance,
 		input_speed
 	)
     solar_power_accumulated = calculate_power_income_accumulated(solar_power)
 
     # TODO: calculate night charging - do it later since it is not critical as of right now
-    time_seconds = calculate_travel_time_seconds(input_speed, segments)
     return power_use_accumulated_wt_h, solar_power_accumulated, time_seconds
 end
 
@@ -700,6 +712,29 @@ function solar_partial_trip_wrapper_iter(speeds, segments, variables_boundaries,
 
 	cost = sum(segments.diff_distance ./ speed_vector) + 100 * (finish_energy - last(energy_in_system))^2;
 
+	# cost = last(time_s) + (
+	# 	10000 * (finish_energy - last(energy_in_system))^2 +
+	# 	100 * max(0, maximum(energy_in_system) - energy_capacity)
+	# )
+	return cost
+	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
+end
+
+function solar_partial_trip_wrapper_iter_with_low_energy(speeds, segments, variables_boundaries, start_energy, finish_energy, start_datetime)
+	speeds_ms = convert_kmh_to_ms(speeds)
+	speed_vector = set_speeds_boundaries(speeds_ms, variables_boundaries)
+	power_use, solar_power, time_s = solar_trip_boundaries(
+		speed_vector, segments, start_datetime
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system = start_energy .+ solar_power .- power_use
+	pushfirst!(energy_in_system, start_energy)
+
+	energy_capacity = 5100.
+
+	# cost = sum(segments.diff_distance ./ speed_vector) + 10000 * abs(minimum(energy_in_system)) + 100 * (finish_energy - last(energy_in_system));
+	cost = sum(segments.diff_distance ./ speed_vector) + 150000 * abs(minimum(energy_in_system))^2 + 10000 * (finish_energy - last(energy_in_system))^2;
+	# println("f cost min energy $((minimum(energy_in_system)))")
 	# cost = last(time_s) + (
 	# 	10000 * (finish_energy - last(energy_in_system))^2 +
 	# 	100 * max(0, maximum(energy_in_system) - energy_capacity)
@@ -1052,10 +1087,43 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 		segments,
 		start_energy,
 		start_datetime,
-		50.
+		31.
 	)
-	start_energies_general = []
-	push!(start_energies_general, [ [start_energy] ])
+
+	start_n_speeds = minimize_n_speeds(
+		track,
+		segments,
+		2,
+		start_energy,
+		start_datetime,
+		first(start_speeds)
+	)
+
+	# boundaries = calculate_boundaries(1, size(track, 1), scaling_coef_subtask_input_speeds)
+
+
+
+	# solar_trip_boundaries(
+	# 		convert_kmh_to_ms(iteration_speeds),
+	# 		segments,
+	# 		start_datetime
+	# 	)
+
+
+	# for i in eachindex(start_n_speeds)
+	# 	subtask = Subtask(
+	# 		boundaries[i],
+	# 		# calculate_boundaries(1, track_size, scaling_coef),
+	# 		[],
+	# 		SubtaskProblem(
+	# 			start_energy,
+	# 			0.,
+	# 			start_speeds,
+	# 			start_datetime
+	# 		),
+	# 		[]
+	# 	)
+	# end
 
 	zero_subtask = Subtask(
 		Boundaries(1, track_size),
@@ -1064,7 +1132,8 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 		SubtaskProblem(
 			start_energy,
 			0.,
-			start_speeds,
+			# start_speeds,
+			start_n_speeds,
 			start_datetime
 		),
 		[]
@@ -1089,6 +1158,7 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 	is_track_divisible_further = true
 	# while iteration_num <= 2
 	while is_track_divisible_further # && iteration_num <= 2
+	# while is_track_divisible_further && iteration_num <= 3
 
 		iteration = iterations[iteration_num]
 		println("Iteration $(iteration.number)")
@@ -1154,23 +1224,58 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 			)
 
 			# 4. solve optimization problem for every subtask with its chunks (variables)
+			# function f_iter(input_speeds)
+			# 	if iteration_num == 1
+			# 		return solar_partial_trip_wrapper_iter_with_low_energy(
+			# 		# return solar_partial_trip_wrapper_iter_with_low_energy(
+			# 			input_speeds, subtask_segments, subtask.variables_boundaries,
+			# 			subtask.problem.start_energy, subtask.problem.finish_energy,
+			# 			subtask.problem.start_datetime
+			# 		)
+			# 	else
+			# 		return solar_partial_trip_wrapper_iter(
+			# 		# return solar_partial_trip_wrapper_iter_with_low_energy(
+			# 			input_speeds, subtask_segments, subtask.variables_boundaries,
+			# 			subtask.problem.start_energy, subtask.problem.finish_energy,
+			# 			subtask.problem.start_datetime
+			# 		)
+			# 	end
+			# end
+
 			function f_iter(input_speeds)
 				return solar_partial_trip_wrapper_iter(
+				# return solar_partial_trip_wrapper_iter_with_low_energy(
 					input_speeds, subtask_segments, subtask.variables_boundaries,
 					subtask.problem.start_energy, subtask.problem.finish_energy,
 					subtask.problem.start_datetime
 				)
 			end
 
-			td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)
+			function f_iter_low_energy(input_speeds)
+				# return solar_partial_trip_wrapper_iter(
+				return solar_partial_trip_wrapper_iter_with_low_energy(
+					input_speeds, subtask_segments, subtask.variables_boundaries,
+					subtask.problem.start_energy, subtask.problem.finish_energy,
+					subtask.problem.start_datetime
+				)
+			end
+
+			if iteration_num == 1
+				td = TwiceDifferentiable(f_iter_low_energy, prev_iter_speeds; autodiff = :forward)
+			else
+				td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)	
+			end
+
+			# td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)
 			lower_bound = fill(0.0, vars_amount)
 			upper_bound = fill(100.0, vars_amount)
+			# upper_bound = fill(200.0, vars_amount)
 			tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
 			# line_search = LineSearches.BackTracking();
 			# result = optimize(td, fill(speed, vars_amount),
 				#Newton(; linesearch = line_search),
 			result = optimize(td, tdc, prev_iter_speeds 
-			# .+ rand(vars_amount) .- 0.5
+			.+ rand(vars_amount) .- 0.5
 				,
 				IPNewton(),
 				Optim.Options(
@@ -1180,7 +1285,8 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 				)
 			)
 			minimized_speeds = Optim.minimizer(result)
-
+			# println(Optim.minimizer(result))
+			# println(Optim.minimum(result))
 			subtask.solution = minimized_speeds
 
 			# TODO: check optimization procedure in compliance with article
@@ -1208,13 +1314,17 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 
 		println("solar sum $(sum(solar_power))")
 		println("use sum $(sum(power_use))")
+		
 
 		energy_in_system = []
 		push!(energy_in_system, start_energy)
 		total_energy = start_energy .+ solar_power .- power_use
 		append!(energy_in_system, total_energy)
+		println("min energy $(minimum(energy_in_system))")
 
-		times = travel_time_to_datetime(time_seconds, start_datetime)
+		times = start_datetime .+ Dates.Millisecond.(round.(time_seconds .* 1000))
+		pushfirst!(times, start_datetime)
+		# times = travel_time_to_datetime(time_seconds, start_datetime)
 		iteration.solution = IterationSolution(
 			iteration_speeds,
 			energy_in_system,
@@ -1287,7 +1397,8 @@ function minimize_single_speed(track, segments, start_energy, start_datetime, in
 	boundaries = calculate_boundaries(1, size(track, 1), 1)
 
 	function f_single_speed(input_speed)
-		return solar_partial_trip_wrapper_iter(
+		# return solar_partial_trip_wrapper_iter(
+		return solar_partial_trip_wrapper_iter_with_low_energy(
 			input_speed, segments, boundaries,
 			start_energy, 0.,
 			start_datetime
@@ -1296,8 +1407,9 @@ function minimize_single_speed(track, segments, start_energy, start_datetime, in
 	speeds = [init_speed]
 	println("Calculating best single speed")
 	td_0 = TwiceDifferentiable(f_single_speed, speeds; autodiff = :forward)
-	lower_bound_0 = fill(0.0, 1)
+	lower_bound_0 = fill(5.0, 1)
 	upper_bound_0 = fill(100.0, 1)
+	# upper_bound_0 = fill(150.0, 1)
 	tdc_0 = TwiceDifferentiableConstraints(lower_bound_0, upper_bound_0)
 	# line_search = LineSearches.BackTracking();
 	# result = optimize(td, fill(speed, 1),
@@ -1322,7 +1434,8 @@ function minimize_n_speeds(track, segments, n_variables, start_energy, start_dat
 	boundaries = calculate_boundaries(1, size(track, 1), n_variables)
 
 	function f_speeds(input_speeds)
-		return solar_partial_trip_wrapper_iter(
+		# return solar_partial_trip_wrapper_iter(
+		return solar_partial_trip_wrapper_iter_with_low_energy(
 			input_speeds, segments, boundaries,
 			start_energy, 0.,
 			start_datetime
@@ -1331,7 +1444,7 @@ function minimize_n_speeds(track, segments, n_variables, start_energy, start_dat
 	speeds = fill(init_speed, n_variables)
 	println("Calculating best speeds")
 	td_0 = TwiceDifferentiable(f_speeds, speeds; autodiff = :forward)
-	lower_bound_0 = fill(0.0, n_variables)
+	lower_bound_0 = fill(10.0, n_variables)
 	upper_bound_0 = fill(100.0, n_variables)
 	tdc_0 = TwiceDifferentiableConstraints(lower_bound_0, upper_bound_0)
 	# line_search = LineSearches.BackTracking();
