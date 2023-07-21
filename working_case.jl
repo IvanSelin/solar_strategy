@@ -4,6 +4,16 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
 # ╔═╡ c6a2816d-e81e-449e-af8c-93676c3fd077
 begin
 	using DataFrames
@@ -38,6 +48,18 @@ end
 
 # ╔═╡ 94da1f00-efe7-11ed-2d94-f9a905085f40
 Threads.nthreads()
+
+# ╔═╡ 7282988b-0667-409d-9634-d874e7767d16
+html"""
+<style>
+	main {
+		margin: 0 auto;
+		max-width: 1500px;
+    	padding-left: max(160px, 10%);
+    	padding-right: max(160px, 10%);
+	}
+</style>
+"""
 
 # ╔═╡ b20a1cbd-705e-4b49-b671-d042d1511afe
 PlutoUI.TableOfContents()
@@ -119,7 +141,8 @@ function single_optim(track, segments, start_energy, start_datetime)
 	last_energy = last(energy_in_system_new)
 	pushfirst!(energy_in_system_new, start_energy)
 
-	track_plot = plot(track.distance, track.altitude, title="Short test track, $(segments_length) pieces",
+	track_plot = plot(track.distance, track.altitude, title="Track, $(segments_length) segments",
+		color=:green,
 		ylabel="altitude(m)")
 
 	speed_plot = plot(
@@ -127,18 +150,21 @@ function single_optim(track, segments, start_energy, start_datetime)
 		minimized_speeds,
 		seriestype=:bar,
 		bar_width=segments.diff_distance,
-		title="Speed plot with 1 var, total time $(round(last(time_s), digits=3)) sec",
+		title="Speed plot for 1 var, total time $(round(last(time_s), digits=3)) sec",
 		ylabel="speed(kmh)"
 	)
 
+	low_energy_red = fill(0., size(track.distance, 1))
+
 	energy_plot = plot(
 		track.distance,
-		energy_in_system_new,
-		title="Energy 1 var, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
+		[energy_in_system_new low_energy_red],
+		linewidth=[1 3],
+		title="Energy for 1 var, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
 		xlabel="distance(m)", ylabel="energy(w*h)"
 	)
 	
-	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(650,700))
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(650,700), legend=false)
 	
 end
 
@@ -194,7 +220,8 @@ function regular_optim(track, segments, speeds, start_energy, start_datetime, up
 	last_energy = last(energy_in_system_new)
 	pushfirst!(energy_in_system_new, start_energy)
 
-	track_plot = plot(track.distance, track.altitude, title="Short test track, $(var_num) pieces",
+	track_plot = plot(track.distance, track.altitude, title="Track, $(var_num) segments",
+		color=:green,
 		ylabel="altitude(m)")
 
 	speed_plot = plot(
@@ -202,18 +229,21 @@ function regular_optim(track, segments, speeds, start_energy, start_datetime, up
 		minimized_speeds,
 		seriestype=:bar,
 		bar_width=segments.diff_distance,
-		title="Speed plot with $(var_num) vars, total time $(round(last(time_s), digits=3)) sec",
+		title="Speed plot for $(var_num) vars, total time $(round(last(time_s), digits=3)) sec",
 		ylabel="speed(kmh)"
 	)
 
+	low_energy_red = fill(0., size(track.distance, 1))
+	
 	energy_plot = plot(
 		track.distance,
-		energy_in_system_new,
-		title="Energy $(var_num) vars, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
+		[energy_in_system_new low_energy_red],
+		linewidth=[1 3],
+		title="Energy for $(var_num) vars, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
 		xlabel="distance(m)", ylabel="energy(w*h)"
 	)
 	
-	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(650,700))
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(650,700), legend=false)
 
 end
 
@@ -231,7 +261,8 @@ function simulate_run(speeds, track, segments, start_energy, start_datetime)
 	pushfirst!(energy_in_system_new, start_energy)
 
 	track_plot = plot(track.distance, track.altitude, title="Track",
-		ylabel="altitude(m)")
+		color=:green,
+		ylabel="altitude(m)", label="track")
 
 	speed_plot = plot(
 		get_mean_data(track.distance),
@@ -239,17 +270,22 @@ function simulate_run(speeds, track, segments, start_energy, start_datetime)
 		seriestype=:bar,
 		bar_width=segments.diff_distance,
 		title="Speed plot with manually set speeds, total time $(round(last(time_s), digits=3)) sec",
-		ylabel="speed(kmh)"
+		ylabel="speed(kmh)",
+		label="speed"
 	)
 
+	low_energy_red = fill(0., size(track.distance, 1))
+	
 	energy_plot = plot(
 		track.distance,
-		energy_in_system_new,
+		[energy_in_system_new low_energy_red],
+		linewidth=[1 3],
 		title="Energy with manually set speeds, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
-		xlabel="distance(m)", ylabel="energy(w*h)"
+		xlabel="distance(m)", ylabel="energy(w*h)",
+		label="energy"
 	)
 	
-	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(650,700))
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(750,700), legend=false)
 end
 
 # ╔═╡ df5b2134-2bd7-4e07-91ff-e5ec736f2dfa
@@ -264,9 +300,6 @@ track_flat
 # ╔═╡ 9de8094a-5d24-4b08-8879-c7853cf6954b
 segments_flat
 
-# ╔═╡ 7b11e719-87c7-47ea-a694-84fcbe4b6b59
-md"## 1. Одна скорость"
-
 # ╔═╡ b965ae63-8e6b-4c0a-91b6-c29bae610590
 single_optim(
 	track_flat,
@@ -277,9 +310,6 @@ single_optim(
 
 # ╔═╡ c892b78b-58dd-4a61-b731-6f4c1432ea1a
 md"Получили одну скорость в 79.35 км/ч, на которой проезжаем всю дистанцию за 226.831 секунд"
-
-# ╔═╡ 16a90363-c55f-44d7-9fd0-289579272e99
-md"## 2. Несколько скоростей"
 
 # ╔═╡ c9daaf07-3dc2-4bef-ae23-b69acd2cb513
 regular_optim(
@@ -310,9 +340,6 @@ track_hill
 # ╔═╡ 67e01c26-832a-4eda-863d-e1842aae13dd
 segments_hill
 
-# ╔═╡ 79687995-2165-42ae-b72e-7a7ab20942f1
-md"## 3. Одна скорость"
-
 # ╔═╡ 074e1eeb-98db-4728-8bfe-4b4ed91b554f
 single_optim(
 	track_hill,
@@ -330,9 +357,6 @@ md"При попытке поиска оптимального режима дв
 
 Попробуем изменять скорость на каждом участке по отдельности"
 
-# ╔═╡ ec72bf91-5dae-4ed8-80a3-9f2439eb1694
-md"## 4. Несколько скоростей"
-
 # ╔═╡ b63f2571-079b-4ef3-9f96-6a465c255733
 regular_optim(
 	track_hill,
@@ -346,9 +370,6 @@ regular_optim(
 md"Стало гораздо лучше!
 
 Теперь трасса проезжается за 400+ секунд. Скорости при этом разнятся от ~15 км/ч в самом начале, до ~150 км/ч в конце. При этом фундаментальные ограничения не нарушаются."
-
-# ╔═╡ 825bc8e5-79aa-4461-9d61-1778b6f09ee0
-md"## 4a. Несколько скоростей с верхним ограничением"
 
 # ╔═╡ 3509ebf4-b758-4ce3-a69f-fb20c16615ef
 md"Однако, в предложенном плане движения очень высокие скорости в конце, которые далеко не всегда могут быть реализованы. Имеет смысл ограничить сверху максимальную скорость."
@@ -418,7 +439,7 @@ regular_optim(
 	fill(75., size(segments_hills,1)),
 	250.,
 	DateTime(2022,1,1,10,0,0),
-	100.
+	150.
 )
 
 # ╔═╡ d907fa8d-f398-48ee-bd2d-e1fea7149fb1
@@ -426,9 +447,6 @@ md"# Длинная трасса с разными холмами"
 
 # ╔═╡ de68d838-4e10-49fa-a92b-a5524ef378d7
 track_hills2, segments_hills2 = get_track_and_segments("data/data_test_hills2.csv");
-
-# ╔═╡ cd919288-f655-49a7-9d31-64eabb74c7ef
-md"## Одна скорость"
 
 # ╔═╡ fc78cf3e-c12c-43cb-9ce1-07665134b2cc
 single_optim(
@@ -438,9 +456,6 @@ single_optim(
 	DateTime(2022,1,1,10,0,0)
 )
 
-# ╔═╡ b7aa261e-70bd-48fc-82d9-747585195f29
-md"## Несколько скоростей"
-
 # ╔═╡ eb3bd221-532a-4299-88bc-3a19ccb4c7e3
 regular_optim(
 	track_hills2,
@@ -448,7 +463,7 @@ regular_optim(
 	fill(50., size(segments_hills2,1)),
 	500.,
 	DateTime(2022,1,1,10,0,0),
-	100.
+	150.
 )
 
 # ╔═╡ 0c1b0b93-23e0-422a-a6ce-30b1c6b1ab51
@@ -496,6 +511,18 @@ regular_optim(
 	200.
 )
 
+# ╔═╡ 08027dc4-0f87-4c31-8c30-703314a0c512
+md"Пока очень похоже на то, что скорости подбираются следующим образом:
+
+Подобрать максимально возможную скорость одной переменной на всю дистанцию, чтобы минимум энергии не был меньше 0.
+
+Зафиксировать скорости до точки, где энергия стала равной нулю. Далее рассматривать только участки после этой точки.
+
+Подбирать такую скорость одной переменной на всю оставшуюся дистанцию, чтобы минимум энергии не был меньше 0. Зафиксировать. Далее рассматривать только после этой точки.
+
+И так до тех пор, пока точка не будет финишем
+"
+
 # ╔═╡ b4e85535-d731-4e90-bf33-24ba6ee69aa4
 md"# Австралия с сокращённым количеством точек"
 
@@ -536,6 +563,11 @@ md"Похоже что пора делать осадки, ну или увел�
 # ╔═╡ 0eec4f71-31a7-435d-9ed5-1c86c2751f5b
 md"# Начинаем делать осадки"
 
+# ╔═╡ 3b0cd1f5-b2f2-4178-8f0e-156f2e6ffd10
+# mapbox_style="open-street-map"
+mapbox_style="stamen-terrain"
+# "open-street-map", "carto-positron", "carto-darkmatter", "stamen-terrain", "stamen-toner" or "stamen-watercolor" yield maps composed of raster tiles from various public tile servers which do not require signups or access tokens
+
 # ╔═╡ 9ad47da6-2b71-4354-9bd5-7113f98139d7
 md"Начнём с отображения дистанции, для того чтобы моделировать осадки"
 
@@ -570,146 +602,13 @@ md"## Создание данных осадков
 4. Опять модифицировать код, чтобы эти данные использовались"
 
 # ╔═╡ ac174dbd-11d5-4859-b8f5-751af94f9ac6
-md"### Генерируем карту сетку и накладываем осадки"
-
-# ╔═╡ b6e7b201-4ea7-4b34-9f4d-9b06879c3c11
-p = plotjs.Plot(
-	plotjs.scattermapbox(
-		fill="toself",
-		fillcolor="yellow",
-		lat=[-11.,-11.,-12.,-12.5,-12., -12.],
-		lon=[130.,131.,131.,130.5,130., 130.],
-		marker_size=1,
-		marker_color="orange"
-	),
-	plotjs.Layout(
-		width=700,
-		height=600,
-		geo_fitbounds="locations",
-		mapbox_style="open-street-map",
-		autosize=true
-	)
-)
-# надо дублировать последнюю точку в координатах из-за ошибок на единицу в индексации))00))
-# вообще надо зарепортить, наверное
-
-# ╔═╡ 66e9389e-c4e6-471f-8788-fb90d5b5ad85
-typeof(
-	plotjs.scattermapbox(
-		fill="toself",
-		fillcolor="yellow",
-		lat=[-11.,-11.,-12.,-12.5,-12., -12.],
-		lon=[130.,131.,131.,130.5,130., 130.],
-		marker_size=1,
-		marker_color="orange"
-	)
-)
-
-# ╔═╡ 8e637142-5b75-4757-a38d-a4966ef2d3e8
-begin
-	traces::AbstractVector{plotjs.AbstractTrace} = [];
-	trace1 = plotjs.scattermapbox(
-		fill="toself",
-		# fillcolor="yellow",
-		lat=[-11.,-11.,-12.,-12.5,-12., -12.],
-		lon=[130.,131.,131.,130.5,130., 130.],
-		marker_size=1,
-		marker_color="orange",
-		opacity=0.5,
-		showlegend=false
-	);
-	push!(traces, trace1);
-	trace2 = plotjs.scattermapbox(
-		fill="toself",
-		# fillcolor="red",
-		lat=[-10.,-10.,-11.,-11.5,-11., -11.],
-		lon=[130.,131.,131.,130.5,130., 130.],
-		marker_size=1,
-		marker_color="red",
-		opacity=0.5,
-		showlegend=false
-	);
-	push!(traces, trace2);
-	println(typeof(traces))
-	plotjs.Plot(
-		traces,
-		plotjs.Layout(
-			width=700,
-			height=600,
-			geo_fitbounds="locations",
-			mapbox_style="open-street-map",
-			autosize=true
-		)
-	)
-	
-end
-
-# ╔═╡ 9495080c-f0f8-41aa-88df-ea9327e2acec
-begin
-	traces2::AbstractVector{plotjs.AbstractTrace} = [];
-	trace12 = plotjs.scattermapbox(
-		fill="toself",
-		# fillcolor="yellow",
-		lat=[-11.,-11.,-12.,-12.5,-12., -12.],
-		lon=[130.,131.,131.,130.5,130., 130.],
-		marker_size=1,
-		marker_colorscale=0.9,
-		opacity=0.5,
-		showlegend=false
-	);
-	push!(traces2, trace12);
-	trace22 = plotjs.scattermapbox(
-		fill="toself",
-		# fillcolor="red",
-		lat=[-10.,-10.,-11.,-11.5,-11., -11.],
-		lon=[130.,131.,131.,130.5,130., 130.],
-		marker_size=1,
-		marker_colorscale=0.5,
-		opacity=0.5,
-		showlegend=false
-	);
-	push!(traces2, trace22);
-	plotjs.Plot(
-		traces2,
-		plotjs.Layout(
-			width=700,
-			height=600,
-			geo_fitbounds="locations",
-			mapbox_style="open-street-map",
-			autosize=true
-		)
-	)
-	
-end
-
-# ╔═╡ 211e690b-6d77-4c39-b311-d582e17cde03
-# TODO: generate a heatmap and create an overlay
-
-# ╔═╡ 63532a3b-5817-4042-aaf8-034919ec52db
-md"#### Density mapbox"
-
-# ╔═╡ 19075625-4677-4788-950f-63255b0e082f
-plotjs.Plot(
-	plotjs.densitymapbox(
-		lat=[0.1,-11.,-11.,-12.,-12.5,-12.],
-		lon=[0.1,130.,131.,131.,130.5,130.],
-		z=[0.1,1.,2.,3.,4.,5.]
-	),
-	plotjs.Layout(
-		width=700,
-		height=600,
-		geo_fitbounds="locations",
-		autosize=true,
-		# mapbox_style="stamen-terrain"
-		mapbox_style="open-street-map"
-	)
-)
+md"## Генерируем карту сетку и накладываем осадки"
 
 # ╔═╡ e5088f3d-87f1-41e8-b8e6-e5a98b1c6e83
 md"Пробуем сперва даже без сетки!"
 
 # ╔═╡ 64628a15-fb96-4e65-ac4d-d07d9dab7fcb
-md"### Функция генерация осадков на сетке"
+md"## Функция генерация осадков на сетке"
 
 # ╔═╡ 5709b86c-6e68-4dac-b7d8-a880e9eca00d
 function generate_clouds(
@@ -782,21 +681,41 @@ function generate_density_mapbox(w, edges_lat, edges_lon)
 	edges_lon_rep = repeat(get_mean_data(edges_lon), inner=ndims)
 
 	df = DataFrame(lat=edges_lat_rep, lon=edges_lon_rep, z=w_arr)
-	
-	plotjs.Plot(
+	traces_vector::AbstractVector{plotjs.AbstractTrace} = [];
+
+	push!(
+		traces_vector,
 		plotjs.densitymapbox(
 			lat=df.lat,
 			lon=df.lon,
 			z=df.z,
 			opacity=0.5
-		),
+		)
+	)
+	
+	push!(
+		traces_vector,
+		plotjs.scattermapbox(
+			lat=track_aus.latitude,
+			lon=track_aus.longitude,
+			marker_color="red",
+			marker_size=1,
+			mode="lines"
+		)
+	)
+	
+	plotjs.Plot(
+		traces_vector,
 		plotjs.Layout(
 			width=650,
 			height=600,
 			geo_fitbounds="locations",
 			autosize=true,
 			# mapbox_style="stamen-terrain"
-			mapbox_style="open-street-map"
+			mapbox_style=mapbox_style,
+			mapbox_center_lat=-25.0,
+			mapbox_center_lon=132.0,
+			mapbox_zoom=3
 		)
 	)
 end
@@ -808,11 +727,21 @@ generate_density_mapbox(w, elat, elon)
 md"Выглядит правдиво, осталось только нормально настроить для норм внешнего вида"
 
 # ╔═╡ 7bd787da-997c-48bc-8c5b-f181148ac964
-md"#### Heat map (self-made)"
+md"## Heat map (self-made)"
 
 # ╔═╡ 8e8ca19d-a381-4055-aef7-f27292aac611
 function generate_heatmap_traces(w, edges_lat, edges_lon)
 	traces_vector::AbstractVector{plotjs.AbstractTrace} = [];
+	push!(
+		traces_vector,
+		plotjs.scattermapbox(
+			lat=track_aus.latitude,
+			lon=track_aus.longitude,
+			marker_color="red",
+			marker_size=1,
+			mode="lines"
+		)
+	)
 	for i=1:length(edges_lat)-1
 		for j=1:length(edges_lon)-1
 			# println("lat: $(edges_lat[i]), lon: $(edges_lon[j]), w: $(w[i,j])")
@@ -855,8 +784,11 @@ function generate_heatmap_traces(w, edges_lat, edges_lon)
 			width=700,
 			height=600,
 			geo_fitbounds="locations",
-			mapbox_style="open-street-map",
-			autosize=true
+			mapbox_style=mapbox_style,
+			autosize=true,
+			mapbox_center_lat=-25.0,
+			mapbox_center_lon=132.0,
+			mapbox_zoom=3
 		)
 	)
 end
@@ -883,6 +815,21 @@ begin
 	)
 end
 
+# ╔═╡ 45183999-58ff-4bdd-a4b0-225b1e50a5ee
+md"### Регулировка пика"
+
+# ╔═╡ 00973819-68b4-4d7e-8c2a-bebfce2a820a
+@bind lat_peak Slider(-35:0.1:-10, default=-20)
+
+# ╔═╡ 3498e807-a860-4f73-9d97-68c6f46d7efe
+lat_peak
+
+# ╔═╡ b1449601-ce61-4097-8b32-345275f859b8
+@bind lon_peak Slider(125:0.1:145, default=134)
+
+# ╔═╡ aba59435-42d9-4ac8-b768-0f017591d788
+lon_peak
+
 # ╔═╡ 63afb4e4-dc19-4106-8bb5-b51d0881675d
 begin
 	w_test2, edges_lat_test2, edges_lon_test2 = generate_clouds(
@@ -890,8 +837,8 @@ begin
 		125,
 		-35,
 		145,
-		-20.,
-		134.,
+		lat_peak,
+		lon_peak,
 		0.5,
 		0.5,
 		50,
@@ -910,6 +857,767 @@ md"Можно приступать к использованию сгенери�
 
 # ╔═╡ e24f1d14-e0d9-45e8-a415-172e56e7cc9c
 md"А потом и к распространению во времени"
+
+# ╔═╡ a803b045-f7ce-4a14-b363-1c166e34fbe7
+md"## Обновлённый функционал со статичными осадками"
+
+# ╔═╡ f7d29865-473d-47f5-a40c-08f48b531401
+function solar_trip_weather(input_speed, segments, start_datetime,
+	weather_weights, weather_edges_lat, weather_edges_lon
+)
+    # input speed in m/s
+	# @debug "func solar_trip_calculation_bounds input_speed size is $(size(input_speed, 1)), track size is $(size(track.distance, 1)))"
+
+    # calculating time needed to spend to travel across distance
+    time_df = calculate_travel_time_datetime(input_speed, segments, start_datetime)
+
+    #### calculcations
+    # mechanical calculations are now in separate file
+    mechanical_power = mechanical_power_calculation_alloc.(input_speed, segments.slope, segments.diff_distance)
+
+    # electical losses
+    electrical_power = electrical_power_calculation(segments.diff_distance, input_speed)
+    # converting mechanical work to elecctrical power and then power use
+    # power_use = calculate_power_use(mechanical_power, electrical_power)
+    power_use_accumulated_wt_h = mechanical_power + electrical_power
+	cumsum!(power_use_accumulated_wt_h, power_use_accumulated_wt_h)
+	power_use_accumulated_wt_h = power_use_accumulated_wt_h / 3600.
+
+    # get solar energy income
+	# @debug "track size is $(size(track.latitude, 1))"
+    solar_power = solar_power_income_alloc.(
+		segments.latitude,
+		segments.longitude, 
+		segments.altitude, 
+		time_df.utc_time,
+		segments.diff_distance,
+		input_speed
+	)
+	weather_coef = zeros(size(segments.latitude,1))
+	for i in eachindex(weather_coef)
+		_, lat_index = findmin(abs.(weather_edges_lat .- segments.latitude[i]))
+		_, lon_index = findmin(abs.(weather_edges_lon .- segments.longitude[i]))
+		weather_coef[i] = 1 .- weather_weights[lat_index, lon_index]
+		# println("lat $(segments.latitude[i]), lon $(segments.longitude[i]), w is $(weather_coef[i])")
+	end
+	solar_power_adjusted = solar_power .* weather_coef
+	# println()
+	# print(solar_power_adjusted)
+    solar_power_accumulated = calculate_power_income_accumulated(solar_power_adjusted)
+
+    # TODO: calculate night charging - do it later since it is not critical as of right now
+    time_seconds = calculate_travel_time_seconds(input_speed, segments)
+    return power_use_accumulated_wt_h, solar_power_accumulated, time_seconds
+end
+
+# ╔═╡ 525a59f1-e377-4bb4-a922-51fb940ad688
+pua_weather,spa_weather,ts_weather = solar_trip_weather(
+	fill(55., size(segments_aus.longitude, 1)),
+	segments_aus,
+	DateTime(2022,1,1,10,0,0),
+	w_test2,
+	edges_lat_test2,
+	edges_lon_test2
+)
+
+# ╔═╡ 1e9d17e9-d9fb-4b25-8233-4fc2fa6ce23e
+plot(spa_weather, title="Наколенная солнечная энергия с учётом осадков")
+
+# ╔═╡ 63bf3f77-6abe-4280-ab2f-520beb93a353
+pua_no_weather,spa_no_weather,ts_no_weather = solar_trip_boundaries(
+	fill(55., size(segments_aus.longitude, 1)),
+	segments_aus,
+	DateTime(2022,1,1,10,0,0)
+);
+
+# ╔═╡ ac2a21e4-491b-4b92-826c-5d4d74cf9ef1
+plot(spa_no_weather, title="Наколенная солнечная энергия без учёта осадков")
+
+# ╔═╡ 8d5be066-4625-4b60-a789-557ff2bd4660
+plot(diff(spa_weather), title="Cолнечная энергия (абсолютная) с учётом осадков")
+
+# ╔═╡ 8ae2eaaa-4a63-4c01-b0f7-0050e5e41b04
+plot(diff(spa_no_weather), title="Солнечная энергия (абсолютная) без учёта осадков")
+
+# ╔═╡ 7cba5ab0-8844-454d-8f7d-1fe5552f201c
+plot(diff(spa_no_weather) .- diff(spa_weather),
+	title="Разница в количестве солнечной энергии"
+)
+
+# ╔═╡ 6ae05363-c7b9-492d-91f0-ebc7935e40db
+md"Получили меньше энергии на 3-10 участке
+
+А это
+
+от $(segments_aus.latitude[3]); $(segments_aus.longitude[3])
+
+до $(segments_aus.latitude[10]); $(segments_aus.longitude[10]) "
+
+# ╔═╡ b1a41a59-3842-468f-af9c-84387129ca45
+weather_difference = last(spa_no_weather)-last(spa_weather)
+
+# ╔═╡ b184d70e-9cdf-4531-87fc-6b606c54a8e8
+md"Всего разница в энергии:
+
+С осадками: $(last(spa_weather))
+
+Без осадков: $(last(spa_no_weather))
+
+Разница: $(weather_difference), т.е. $(weather_difference / last(spa_no_weather) * 100)%"
+
+# ╔═╡ 52c09620-90cd-4e67-b84c-c7458d67c2c2
+md"### Функция с погодой, 1 переменная на все"
+
+# ╔═╡ 036ba7a9-8695-4022-a97b-dec4b3a08921
+function single_optim_weather(track, segments, start_energy, start_datetime,
+weather_weights, weather_edges_lat, weather_edges_lon)
+	segments_length = size(segments, 1)
+	
+	function f_wrap_single(input_speed)
+		# speed_vector = fill(first(input_speeds) / 3.6, segments_length)
+		speed_vector = fill(input_speed / 3.6, segments_length)
+		power_use_f, solar_power_f, time_s_f = solar_trip_weather(
+			speed_vector, segments, start_datetime,
+			weather_weights, weather_edges_lat, weather_edges_lon
+		)
+		energy_in_system_f = start_energy .+ solar_power_f .- power_use_f
+		pushfirst!(energy_in_system_f, start_energy)
+	
+		# cost = sum(segments_clean.diff_distance ./ input_speeds) + 100 * (0. - last(energy_in_system_clean))^2;
+		
+		cost = sum(segments.diff_distance ./ speed_vector) + 1000 * abs(minimum(energy_in_system_f))^2 + 10 * (0. - last(energy_in_system_f))^2;
+	
+		# cost = sum(segments.diff_distance ./ input_speeds) + 100 * abs(minimum(energy_in_system_f))
+		return cost
+	end
+
+	# td = TwiceDifferentiable(f_wrap_single, [speed]; autodiff = :forward)
+	# lower_bound = fill(0.0, var_num)
+	# upper_bound = fill(100.0, var_num)
+	# tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+
+
+	# result = optimize(td, tdc, speeds 
+	# # .+ rand(vars_amount) .- 0.5
+	#     ,
+	#     IPNewton(),
+	#     Optim.Options(
+	#         x_tol = 1e-6,
+	#         f_tol = 1e-6,
+	#         g_tol = 1e-6
+	#     )
+	# )
+
+	result = optimize(f_wrap_single, 0., 150.)
+	minimized_speeds = fill(Optim.minimizer(result), segments_length)
+	minimized_speeds_ms = minimized_speeds / 3.6
+
+	power_use, solar_power, time_s = solar_trip_weather(
+		minimized_speeds_ms, segments, start_datetime,
+		weather_weights, weather_edges_lat, weather_edges_lon
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system_new = start_energy .+ solar_power .- power_use
+	lowest_energy = minimum(energy_in_system_new)
+	last_energy = last(energy_in_system_new)
+	pushfirst!(energy_in_system_new, start_energy)
+
+	track_plot = plot(track.distance, track.altitude, title="Track, $(segments_length) segments",
+		color=:green,
+		ylabel="altitude(m)")
+
+	speed_plot = plot(
+		get_mean_data(track.distance),
+		minimized_speeds,
+		seriestype=:bar,
+		bar_width=segments.diff_distance,
+		title="Speed plot for 1 var, total time $(round(last(time_s), digits=3)) sec",
+		ylabel="speed(kmh)"
+	)
+
+	low_energy_red = fill(0., size(track.distance, 1))
+
+	energy_plot = plot(
+		track.distance,
+		[energy_in_system_new low_energy_red],
+		linewidth=[1 3],
+		title="Energy for 1 var, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
+		xlabel="distance(m)", ylabel="energy(w*h)"
+	)
+	
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(650,700), legend=false)
+	
+end
+
+# ╔═╡ c93555bf-a560-4d52-9545-c18af2749faa
+md"### Функция с погодой, переменная на каждый участок"
+
+# ╔═╡ bd36b76f-51bb-43c3-a94f-eb675fa3ac75
+# подбираем скорости на всех участках
+function regular_optim_weather(track, segments, speeds, start_energy, start_datetime, 
+	weather_weights, weather_edges_lat, weather_edges_lon,
+	upper_speed_bound=150.
+)
+
+	var_num = size(segments,1)
+	function f_wrap_reg(input_speeds)
+		speed_vector = input_speeds / 3.6;
+		power_use_f, solar_power_f, time_s_f = solar_trip_weather(
+			speed_vector, segments, start_datetime,
+			weather_weights, weather_edges_lat, weather_edges_lon
+		)
+		energy_in_system_f = start_energy .+ solar_power_f .- power_use_f
+		pushfirst!(energy_in_system_f, start_energy)
+	
+		# cost = sum(segments_clean.diff_distance ./ input_speeds) + 100 * (0. - last(energy_in_system_clean))^2;
+		
+		cost = sum(segments.diff_distance ./ speed_vector) + 1000 * abs(minimum(energy_in_system_f))^2 + 10 * (0. - last(energy_in_system_f))^2;
+	
+		# cost = sum(segments.diff_distance ./ input_speeds) + 100 * abs(minimum(energy_in_system_f))
+		return cost
+	end
+	
+	td = TwiceDifferentiable(f_wrap_reg, speeds; autodiff = :forward)
+	lower_bound = fill(0.0, var_num)
+	upper_bound = fill(upper_speed_bound, var_num)
+	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+
+	result = optimize(td, tdc, speeds 
+	# .+ rand(vars_amount) .- 0.5
+	    ,
+	    IPNewton(),
+	    Optim.Options(
+	        x_tol = 1e-10,
+	        f_tol = 1e-10,
+	        g_tol = 1e-10
+	    )
+	)
+
+	minimized_speeds = Optim.minimizer(result)
+	minimized_speeds_ms = minimized_speeds / 3.6
+
+	power_use, solar_power, time_s = solar_trip_weather(
+		minimized_speeds_ms, segments, start_datetime,
+		weather_weights, weather_edges_lat, weather_edges_lon
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system_new = start_energy .+ solar_power .- power_use
+	lowest_energy = minimum(energy_in_system_new)
+	last_energy = last(energy_in_system_new)
+	pushfirst!(energy_in_system_new, start_energy)
+
+	track_plot = plot(track.distance, track.altitude, title="Track, $(var_num) segments",
+		color=:green,
+		ylabel="altitude(m)")
+
+	speed_plot = plot(
+		get_mean_data(track.distance),
+		minimized_speeds,
+		seriestype=:bar,
+		bar_width=segments.diff_distance,
+		title="Speed plot for $(var_num) vars, total time $(round(last(time_s), digits=3)) sec",
+		ylabel="speed(kmh)"
+	)
+
+	low_energy_red = fill(0., size(track.distance, 1))
+
+	energy_plot = plot(
+		track.distance,
+		[energy_in_system_new low_energy_red],
+		linewidth=[1 3],
+		title="Energy for $(var_num) vars, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
+		xlabel="distance(m)", ylabel="energy(w*h)"
+	)
+	println(time_s)
+	println(energy_in_system_new)
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(650,700), legend=false)
+
+end
+
+# ╔═╡ 941b2f24-83a7-410c-aba3-51083c99c43e
+function regular_optim_weather_from(track_input, segments_input, start_index, speeds, start_energy, start_datetime, 
+	weather_weights, weather_edges_lat, weather_edges_lon,
+	upper_speed_bound=150.
+)
+	orig_size = size(track_input.distance, 1)
+	track = track_input[start_index:orig_size,:]
+	segments = segments_input[start_index:orig_size-1,:]
+	
+	var_num = size(segments,1)
+	
+	function f_wrap_reg(input_speeds)
+		speed_vector = input_speeds / 3.6;
+		power_use_f, solar_power_f, time_s_f = solar_trip_weather(
+			speed_vector, segments, start_datetime,
+			weather_weights, weather_edges_lat, weather_edges_lon
+		)
+		energy_in_system_f = start_energy .+ solar_power_f .- power_use_f
+		pushfirst!(energy_in_system_f, start_energy)
+	
+		# cost = sum(segments_clean.diff_distance ./ input_speeds) + 100 * (0. - last(energy_in_system_clean))^2;
+		
+		cost = sum(segments.diff_distance ./ speed_vector) + 1000 * abs(minimum(energy_in_system_f))^2 + 10 * (0. - last(energy_in_system_f))^2;
+	
+		# cost = sum(segments.diff_distance ./ input_speeds) + 100 * abs(minimum(energy_in_system_f))
+		return cost
+	end
+	
+	td = TwiceDifferentiable(f_wrap_reg, speeds; autodiff = :forward)
+	lower_bound = fill(0.0, var_num)
+	upper_bound = fill(upper_speed_bound, var_num)
+	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+
+	result = optimize(td, tdc, speeds 
+	# .+ rand(vars_amount) .- 0.5
+	    ,
+	    IPNewton(),
+	    Optim.Options(
+	        x_tol = 1e-10,
+	        f_tol = 1e-10,
+	        g_tol = 1e-10
+	    )
+	)
+
+	minimized_speeds = Optim.minimizer(result)
+	minimized_speeds_ms = minimized_speeds / 3.6
+
+	power_use, solar_power, time_s = solar_trip_weather(
+		minimized_speeds_ms, segments, start_datetime,
+		weather_weights, weather_edges_lat, weather_edges_lon
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system_new = start_energy .+ solar_power .- power_use
+	lowest_energy = minimum(energy_in_system_new)
+	last_energy = last(energy_in_system_new)
+	pushfirst!(energy_in_system_new, start_energy)
+	time_utc_res = travel_time_to_datetime(time_s, start_datetime)
+	projected_finish_time = last(time_utc_res)
+	# projected_finish_time = start_datetime + Dates.Millisecond(round(last(time_s) * 1000))
+
+	point_times = start_datetime .+ Dates.Millisecond.(round.(time_s*1000))
+	pushfirst!(point_times, start_datetime)
+
+	for i in 1:var_num+1
+		println("$i: $(point_times[i]), $(energy_in_system_new[i])")
+	end
+
+	track_plot = plot(track.distance, track.altitude, title="Track, $(var_num) segments",
+		color=:green,
+		ylabel="altitude(m)",
+		xlimits=(-20, last(track.distance)+1000)
+	)
+
+	speed_plot = plot(
+		get_mean_data(track.distance),
+		minimized_speeds,
+		seriestype=:bar,
+		bar_width=segments.diff_distance,
+		title="Speed from $(start_index) point, proj. finish at $(projected_finish_time)",
+		ylabel="speed(kmh)",
+		xlimits=(-20, last(track.distance)+1000)
+	)
+
+	low_energy_red = fill(0., size(track.distance, 1))
+
+	energy_plot = plot(
+		track.distance,
+		[energy_in_system_new low_energy_red],
+		linewidth=[1 3],
+		title="Energy from $(start_index) point, lowest $(round(lowest_energy, digits=2)), last $(round(last_energy, digits=2))",
+		xlabel="distance(m)", ylabel="energy(w*h)",
+		xlimits=(-20, last(track.distance)+1000)
+	)
+	
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(700,700), legend=false)
+
+end
+
+# ╔═╡ 9147e247-e7bf-4f16-b1a9-a270bae7c7e4
+md"## Простая австралия, опять"
+
+# ╔═╡ 8b34704f-7d4f-4929-94cf-6fa6e550d6af
+md"Ещё раз простая австралия с одной переменной"
+
+# ╔═╡ 9d014721-b6dc-4e2e-9ec8-814f5ece3d6a
+single_optim(
+	track_aus,
+	segments_aus,
+	5100.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ 89bffc0d-79af-4011-8867-3d85000978e1
+md"Одна переменная с облаками"
+
+# ╔═╡ d36c07b3-87fc-47a4-8b64-40ec984de403
+single_optim_weather(
+	track_aus,
+	segments_aus,
+	5100.,
+	DateTime(2022,1,1,10,0,0),
+	w_test2,
+	edges_lat_test2,
+	edges_lon_test2
+)
+
+# ╔═╡ 6efe9e33-2346-4176-bf77-cd89e7691f9e
+md"Со всеми переменными"
+
+# ╔═╡ d14b8b83-26ef-4530-b6b2-d700e674075d
+regular_optim(
+	track_aus,
+	segments_aus,
+	fill(50., size(segments_aus,1)),
+	5100.,
+	DateTime(2022,1,1,10,0,0),
+	200.
+)
+
+# ╔═╡ 08f3f82d-f4b5-47da-a645-5da40cde61a5
+md"Все переменные, с погодой"
+
+# ╔═╡ 0350f096-b3cb-4141-9c58-c221748fd12f
+regular_optim_weather(
+	track_aus,
+	segments_aus,
+	fill(55., size(segments_aus,1)),
+	5100.,
+	DateTime(2022,1,1,10,0,0),
+	w_test2,
+	edges_lat_test2,
+	edges_lon_test2,
+	150.
+)
+
+# ╔═╡ 9dc3a519-3672-4956-8237-00d16da2ea26
+md"Ну, это уже успех!
+
+Почему? Потому что в самом проблемном месте (где тучка), соптимизировалась наибольшая скорость.
+
+То есть надо как можно быстрее проезжать тучные места.
+
+И стало чуточку быстрее.
+
+Но у нас слишком много энрегии накопилось (надо что-то делать с ограничениями, или как-то скейлить штрафы в зависимости от размера задачи"
+
+# ╔═╡ 23612b01-0bc3-4620-96f5-416895ce55cd
+regular_optim_weather(
+	track_aus,
+	segments_aus,
+	fill(55., size(segments_aus,1)),
+	5100.,
+	DateTime(2022,1,1,10,0,0),
+	w_test2,
+	edges_lat_test2,
+	edges_lon_test2,
+	150.
+)
+
+# ╔═╡ 6fb38907-fbec-4f2b-81b9-63adb1a1b5d2
+md"Вот я поменял всего лишь максимальную скорость, и всё рассыпалось. Без черри-пикинга не работает"
+
+# ╔═╡ c94bc74e-f68a-4522-a7fa-bdcfbd8ec413
+md"Итого, что надо делать то?
+
+вариант 1 - Переделать модель на JuMP, может станет лучше, т.к. правильней будут учитываться ограничения
+
+вариант 2 - Попробовать посчитать это итеративно? То есть сужаем пространство поиска, т.к. оптимизатор застрявает в локальном минимуме
+
+вариант 3 - попробовать backward diff - не факт что получится.
+
+вариант 4 - тупая стратегия про одна скорость до холма?
+"
+
+# ╔═╡ ff6c92b6-783b-445e-a3b7-f70b689df4ad
+md"# План №2 (исправленный)
+
+План довольно прост. Надо доказать, что нам есть зачем выбирать разные скорости на разных участках трассы.
+
+Шаги для осуществления плана:
+1. Взять ровную трассу, подобрать одну скорость на все участки (отлично работает) +
+2. Взять ровную трассу, подобрать разные скорости на все участки (работает, но избыточно) + 
+3. Взять трассу с холмом, подобрать одну скорость на все участки (плохо работает, нужен другой подход) +
+4. Взять трассу с холмом, подобрать разные скорости для каждого участка (должно норм работать) +
+5. Взять трассу ощутимой длины (участков 300-500) с холмами, чтобы оно считалось достаточно долго. Подобрать разные скорости обычной оптимизацией и сказать что долго выходит (по идее норм посчитает, но долго) - (работает иногда нормально, иногда не сходится)
+6. Взять эту же трассу с холмами, подобрать скорости моим методом (в идеале должно посчитать примерно так же, но быстрее) - до этого даже не дошл
+7. Сделали статические осадки. Холм с осадками +
+8. Холм с осадками разные скорости +, есть улучшение
+
+
+ДОПИСАТЬ!!"
+
+# ╔═╡ 2bb84981-520c-4e6c-9e19-568dda484881
+md"# Проверяем накопление энергии"
+
+# ╔═╡ f181c3e1-b5c4-407c-8003-b1e624e65761
+md"Есть сомнение, что правильно считается накопление энергии в ночное время"
+
+# ╔═╡ 5296b7de-93f9-415d-b268-a61eb4390dfa
+Dates.dayofyear(DateTime(2022,5,1,0,0))
+
+# ╔═╡ 2c95d568-eb5d-447d-a21e-786df523a1b4
+begin
+	# through 1 24-hour period, whole day (day+night)
+	seconds = 0:60*60*25
+	date = DateTime(2023,6,20)
+	utc_times = date .+ Dates.Second.(seconds)
+	# utc_times = DateTime(2023,1,1,0,0) .+ Dates.Second.(seconds)
+
+	array_len = length(utc_times)
+
+	lat = fill(-23.7, array_len)
+	lon = fill(133.87, array_len)
+	alt = fill(2000., array_len)
+
+	lat_spb = fill(59.9386300, array_len)
+	lon_spb = fill(30.3141300, array_len)
+	alt_spb = fill(3., array_len)
+	
+	irradiance = solar_radiation_alloc.(
+		lat,
+		lon,
+		alt,
+		utc_times
+	)
+	irradiance_spb = solar_radiation_alloc.(
+		lat_spb,
+		lon_spb,
+		alt_spb,
+		utc_times
+	)
+	plot(
+		utc_times,
+		[irradiance irradiance_spb],
+		title="Дневная солнечная радиация на $(Date(date))",
+		# legend=false,
+		legend=:right,
+		labels=["Alice Springs, Австралия" "Санкт-Петербург, Россия"],
+		ylimits=(-20,1300)
+	)
+end
+
+# ╔═╡ 35a3b594-89c9-4d96-9eae-e5d20cca5476
+md"Выглядит нормально"
+
+# ╔═╡ 175f6fca-6c59-4814-9460-4dc9b1e2cf79
+md"# Генерируем картинки"
+
+# ╔═╡ 6ad29152-b8ad-47fd-bfa9-df87b64396d0
+simulate_run(
+	fill(10., size(segments_hill, 1)),
+	track_hill,
+	segments_hill,
+	75.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ 172784cf-2df6-4c90-910c-e6362847999a
+simulate_run(
+	fill(60., size(segments_hill, 1)),
+	track_hill,
+	segments_hill,
+	75.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ 12bbb3a5-e742-40c4-b89e-4e94574153cb
+simulate_run(
+	[55,45,60,40,30,40,50,55,60,40,65,35,45,60,55,60,50,45],
+	track_aus,
+	segments_aus,
+	5100.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ 7ba245e1-861c-47bd-b6b6-f7bd253cacb9
+simulate_run(
+	[109.17170893064288, 62.994584397266614, 108.33077015054835, 147.885468922807, 51.21062154781847, 98.67897603416483, 129.04537257465546, 133.39540229034336, 44.171273543445515, 41.24716187838297, 62.79237229568634, 1.8570579263272768, 51.58712986415076, 131.66717962274188, 104.66828180485733, 57.06231084905412, 89.68752269233823, 6.966200571105846],
+	track_aus,
+	segments_aus,
+	5100.,
+	DateTime(2022,1,1,10,0,0)
+)
+
+# ╔═╡ 14a6ee0b-ccef-4d6c-9008-cc67e8c486c9
+println(rand(18) .* 150.)
+
+# ╔═╡ 469732ca-7e68-43f2-a3f2-234c7fad425a
+Random.seed!(1234)
+
+# ╔═╡ 0859e307-6ab7-492a-8c57-802c44b1d814
+rand(5)
+
+# ╔═╡ 7e44936d-a96f-4fc5-b807-0bf41b298180
+plot(
+	[10,30,50,70,90],
+	[10,20,15,25,10],
+	seriestype=:bar,
+	bar_width=fill(20, 5),
+	title="Пример разбиения переменных",
+	ylabel="Скорость(kmh)",
+	xlabel="Номер участка",
+	xticks=[0,20,40,60,80,100],
+	legend=false
+)
+
+# ╔═╡ ff95e97c-360f-4a2a-bfa3-75fcf886aacd
+md"## Картинки для плана энергосбережения"
+
+# ╔═╡ e33c012d-ea0d-4a48-bc67-50dd45c9a967
+plotjs.Plot(
+	plotjs.scattermapbox(
+		lat=track_aus.latitude,
+		lon=track_aus.longitude,
+		marker_color="red",
+		marker_size=1,
+		mode="lines"
+	),
+	plotjs.Layout(
+		width=700,
+		height=600,
+		geo_fitbounds="locations",
+		mapbox_style=mapbox_style,
+		autosize=true,
+		mapbox_center_lat=-25.0,
+		mapbox_center_lon=132.0,
+		mapbox_zoom=3,
+		title="Полная дистанция"
+	)
+)
+
+# ╔═╡ 53b029d2-7ad7-49be-a911-b9f6e54fc891
+plotjs.Plot(
+	plotjs.scattermapbox(
+		lat=track_aus.latitude[8:end],
+		lon=track_aus.longitude[8:end],
+		marker_color="red",
+		marker_size=1,
+		mode="lines"
+	),
+	plotjs.Layout(
+		width=700,
+		height=600,
+		geo_fitbounds="locations",
+		mapbox_style=mapbox_style,
+		autosize=true,
+		mapbox_center_lat=-25.0,
+		mapbox_center_lon=132.0,
+		mapbox_zoom=3,
+		title="Оставшаяся часть дистанции"
+	)
+)
+
+# ╔═╡ 6c705457-ffd6-46d4-bc0a-6a6b60493fa9
+function generate_plan(track, segments, start_index, start_datetime)
+	# нужна карта, управляющие воздействия и ожидаемое время финиша
+
+	traces_vector::AbstractVector{plotjs.AbstractTrace} = [];
+	push!(
+		traces_vector,
+		plotjs.scattermapbox(
+			lat=track.latitude[start_index:end],
+			lon=track.longitude[start_index:end],
+			marker_color="red",
+			marker_size=1,
+			mode="lines"
+		)
+	)
+	map_plot = plotjs.Plot(
+		plotjs.scattermapbox(
+			lat=track.latitude[start_index:end],
+			lon=track.longitude[start_index:end],
+			marker_color="red",
+			marker_size=1,
+			mode="lines"
+		),
+		plotjs.Layout(
+			width=700,
+			height=600,
+			geo_fitbounds="locations",
+			mapbox_style=mapbox_style,
+			autosize=true,
+			mapbox_center_lat=-25.0,
+			mapbox_center_lon=132.0,
+			mapbox_zoom=3,
+			title="Оставшаяся часть дистанции"
+		)
+	)
+	track_plot = plotjs.Plot(
+		track.distance[start_index:end],
+		track.altitude[start_index:end],
+		plotjs.Layout(
+			width=600,
+			height=300
+		)
+	)
+	plots = [map_plot; track_plot]
+
+	plots.layout["showlegend"] = false
+    plots.layout["width"] = 700
+    plots.layout["height"] = 600
+    return plotjs.Plot(plots)
+
+end
+
+# ╔═╡ 478c720b-7c13-4990-b14b-d1e5c3f80953
+generate_plan(track_aus, segments_aus, 1, DateTime(2023,1,1,10,0,0))
+
+# ╔═╡ fd7dc6b5-100a-438b-a7d3-662b9ca32e66
+plotjs.Plot(
+	track_aus.distance,
+	track_aus.altitude,
+	plotjs.Layout(
+		width=600,
+		height=300
+	)
+)
+
+# ╔═╡ b1e3829c-93b8-4546-9f4a-a0bcd0de120b
+regular_optim_weather(
+	track_aus,
+	segments_aus,
+	fill(55., size(segments_aus,1)),
+	5100.,
+	DateTime(2022,1,1,10,0,0),
+	w_test2,
+	edges_lat_test2,
+	edges_lon_test2,
+	200.
+)
+
+# ╔═╡ 17be5e6f-de9e-46a0-ade2-8d7f59d4e334
+md"## План с момента"
+
+# ╔═╡ 01f41a82-1783-4595-9fc0-d7507819bc85
+regular_optim_weather_from(
+	track_aus,
+	segments_aus,
+	1,
+	fill(55., size(segments_aus,1)-1+1),
+	5100.,
+	DateTime(2022,1,1,10,0,0),
+	w_test2,
+	edges_lat_test2,
+	edges_lon_test2,
+	150.
+)
+
+# ╔═╡ 5f56b21f-8df4-472b-a7da-cb50e597aa99
+regular_optim_weather_from(
+	track_aus,
+	segments_aus,
+	8,
+	fill(45., size(segments_aus,1)-8+1),
+	126.451,
+	DateTime(2022,1,2,15,14,59),
+	w_test2,
+	edges_lat_test2,
+	edges_lon_test2,
+	150.
+)
+
+# ╔═╡ bfdede64-c065-44ad-847f-59ec460b0591
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -948,7 +1656,7 @@ WebIO = "~0.8.20"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0"
+julia_version = "1.9.1"
 manifest_format = "2.0"
 project_hash = "2cca9a3ff7173e81ea908e6500ff5f7f04beddc9"
 
@@ -960,9 +1668,9 @@ version = "1.1.4"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "76289dc51920fdc6e0013c872ba9551d54961c24"
+git-tree-sha1 = "cc37d689f599e8df4f464b2fa3870ff7db7492ef"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "3.6.2"
+version = "3.6.1"
 weakdeps = ["StaticArrays"]
 
     [deps.Adapt.extensions]
@@ -1123,9 +1831,9 @@ uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 version = "4.1.1"
 
 [[deps.DataAPI]]
-git-tree-sha1 = "8da84edb865b0b5b0100c0666a9bc9a0b71c553c"
+git-tree-sha1 = "e8119c1a33d267e16108be441a287a6981ba1630"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
-version = "1.15.0"
+version = "1.14.0"
 
 [[deps.DataFrames]]
 deps = ["Compat", "DataAPI", "Future", "InlineStrings", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SentinelArrays", "SnoopPrecompile", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
@@ -1338,9 +2046,9 @@ version = "1.0.2"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "1cede8b3d0ff7efe5b194679bbb7f45fa08da535"
+git-tree-sha1 = "877b7bc42729aa2c90bbbf5cb0d4294bd6d42e5a"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.9.2"
+version = "1.9.1"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -1743,10 +2451,10 @@ uuid = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 version = "0.12.3"
 
 [[deps.Parsers]]
-deps = ["Dates", "PrecompileTools", "UUIDs"]
-git-tree-sha1 = "7302075e5e06da7d000d9bfa055013e3e85578ca"
+deps = ["Dates", "SnoopPrecompile"]
+git-tree-sha1 = "478ac6c952fddd4399e71d4779797c538d0ff2bf"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.5.9"
+version = "2.5.8"
 
 [[deps.Peaks]]
 deps = ["Compat", "RecipesBase"]
@@ -2332,7 +3040,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.7.0+0"
+version = "5.8.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -2383,6 +3091,7 @@ version = "1.4.1+0"
 
 # ╔═╡ Cell order:
 # ╠═94da1f00-efe7-11ed-2d94-f9a905085f40
+# ╠═7282988b-0667-409d-9634-d874e7767d16
 # ╠═c6a2816d-e81e-449e-af8c-93676c3fd077
 # ╠═b20a1cbd-705e-4b49-b671-d042d1511afe
 # ╠═d5213897-9cb6-453a-bc4e-a7015909c886
@@ -2399,10 +3108,8 @@ version = "1.4.1+0"
 # ╠═e9a6a82a-ecde-4baf-ad2c-f0a858bb2ed0
 # ╠═9e47be95-5f9a-43d6-876e-abb33a67de0a
 # ╠═9de8094a-5d24-4b08-8879-c7853cf6954b
-# ╟─7b11e719-87c7-47ea-a694-84fcbe4b6b59
 # ╟─b965ae63-8e6b-4c0a-91b6-c29bae610590
 # ╟─c892b78b-58dd-4a61-b731-6f4c1432ea1a
-# ╟─16a90363-c55f-44d7-9fd0-289579272e99
 # ╟─c9daaf07-3dc2-4bef-ae23-b69acd2cb513
 # ╟─a4ebc847-08fd-4976-87a7-2c35ca7920be
 # ╟─8f1d25de-f4dd-481a-a7f5-b8691586e705
@@ -2410,13 +3117,10 @@ version = "1.4.1+0"
 # ╠═7f3807d7-e3ef-4c8f-8a21-8abdd4f25259
 # ╠═9f151595-8f5a-4337-90fb-a8ef10f453b3
 # ╠═67e01c26-832a-4eda-863d-e1842aae13dd
-# ╟─79687995-2165-42ae-b72e-7a7ab20942f1
 # ╟─074e1eeb-98db-4728-8bfe-4b4ed91b554f
 # ╟─85d293fc-2992-4a38-a080-93179ff4a9f1
-# ╟─ec72bf91-5dae-4ed8-80a3-9f2439eb1694
 # ╠═b63f2571-079b-4ef3-9f96-6a465c255733
 # ╟─48291326-f37d-4397-aeb0-fee0855970d8
-# ╟─825bc8e5-79aa-4461-9d61-1778b6f09ee0
 # ╟─3509ebf4-b758-4ce3-a69f-fb20c16615ef
 # ╠═72773944-4541-4220-8f0a-151ccd67bcaa
 # ╟─d6921b5f-d9ae-4886-a40e-98f9ad052ed2
@@ -2432,9 +3136,7 @@ version = "1.4.1+0"
 # ╠═d82662d3-5533-49cf-967f-5bfa1fb65b13
 # ╠═d907fa8d-f398-48ee-bd2d-e1fea7149fb1
 # ╠═de68d838-4e10-49fa-a92b-a5524ef378d7
-# ╟─cd919288-f655-49a7-9d31-64eabb74c7ef
 # ╠═fc78cf3e-c12c-43cb-9ce1-07665134b2cc
-# ╟─b7aa261e-70bd-48fc-82d9-747585195f29
 # ╠═eb3bd221-532a-4299-88bc-3a19ccb4c7e3
 # ╠═0c1b0b93-23e0-422a-a6ce-30b1c6b1ab51
 # ╠═f7a72d85-ec30-4406-9a9e-a148d2244cf2
@@ -2443,6 +3145,7 @@ version = "1.4.1+0"
 # ╠═69bf6ffc-8c79-4573-bfb2-d264c66a7040
 # ╠═e410277c-87ef-4f18-89cb-7ce8817920b5
 # ╠═6e74e3be-fb37-4bdd-a059-87b513f8382a
+# ╠═08027dc4-0f87-4c31-8c30-703314a0c512
 # ╠═b4e85535-d731-4e90-bf33-24ba6ee69aa4
 # ╠═940a6c60-a5e5-4bab-940b-4a3b027ecc65
 # ╠═7adbc40f-8f0f-4434-96da-3962f7107ce9
@@ -2451,17 +3154,11 @@ version = "1.4.1+0"
 # ╠═aae20b83-351f-44ef-8cc3-79404167fdc4
 # ╠═9c686f0c-831a-4d5c-b18c-d5a459fe871a
 # ╠═0eec4f71-31a7-435d-9ed5-1c86c2751f5b
+# ╠═3b0cd1f5-b2f2-4178-8f0e-156f2e6ffd10
 # ╠═9ad47da6-2b71-4354-9bd5-7113f98139d7
 # ╠═6bc90ca1-dc8d-41e2-a9df-b54ccac74f79
 # ╠═57f47d65-5a3e-4c86-be15-587d94fbf677
 # ╠═ac174dbd-11d5-4859-b8f5-751af94f9ac6
-# ╠═b6e7b201-4ea7-4b34-9f4d-9b06879c3c11
-# ╠═66e9389e-c4e6-471f-8788-fb90d5b5ad85
-# ╠═8e637142-5b75-4757-a38d-a4966ef2d3e8
-# ╠═9495080c-f0f8-41aa-88df-ea9327e2acec
-# ╠═211e690b-6d77-4c39-b311-d582e17cde03
-# ╠═63532a3b-5817-4042-aaf8-034919ec52db
-# ╠═19075625-4677-4788-950f-63255b0e082f
 # ╠═e5088f3d-87f1-41e8-b8e6-e5a98b1c6e83
 # ╠═64628a15-fb96-4e65-ac4d-d07d9dab7fcb
 # ╠═5709b86c-6e68-4dac-b7d8-a880e9eca00d
@@ -2474,9 +3171,70 @@ version = "1.4.1+0"
 # ╠═8e8ca19d-a381-4055-aef7-f27292aac611
 # ╠═75f0759b-285c-402b-afdf-243cf5d81bbe
 # ╠═e7575b4b-49bf-4498-b74b-69bf9d1762cb
+# ╠═45183999-58ff-4bdd-a4b0-225b1e50a5ee
+# ╠═00973819-68b4-4d7e-8c2a-bebfce2a820a
+# ╠═3498e807-a860-4f73-9d97-68c6f46d7efe
+# ╠═b1449601-ce61-4097-8b32-345275f859b8
+# ╠═aba59435-42d9-4ac8-b768-0f017591d788
 # ╠═63afb4e4-dc19-4106-8bb5-b51d0881675d
 # ╠═78327f2d-7cf2-49e3-98fa-d90aeb479c45
 # ╠═760e7514-e3c4-4366-93fc-e1379f96c2ad
 # ╠═e24f1d14-e0d9-45e8-a415-172e56e7cc9c
+# ╠═a803b045-f7ce-4a14-b363-1c166e34fbe7
+# ╠═f7d29865-473d-47f5-a40c-08f48b531401
+# ╠═525a59f1-e377-4bb4-a922-51fb940ad688
+# ╠═1e9d17e9-d9fb-4b25-8233-4fc2fa6ce23e
+# ╠═63bf3f77-6abe-4280-ab2f-520beb93a353
+# ╠═ac2a21e4-491b-4b92-826c-5d4d74cf9ef1
+# ╠═8d5be066-4625-4b60-a789-557ff2bd4660
+# ╠═8ae2eaaa-4a63-4c01-b0f7-0050e5e41b04
+# ╠═7cba5ab0-8844-454d-8f7d-1fe5552f201c
+# ╠═6ae05363-c7b9-492d-91f0-ebc7935e40db
+# ╠═b1a41a59-3842-468f-af9c-84387129ca45
+# ╠═b184d70e-9cdf-4531-87fc-6b606c54a8e8
+# ╠═52c09620-90cd-4e67-b84c-c7458d67c2c2
+# ╠═036ba7a9-8695-4022-a97b-dec4b3a08921
+# ╠═c93555bf-a560-4d52-9545-c18af2749faa
+# ╠═bd36b76f-51bb-43c3-a94f-eb675fa3ac75
+# ╠═941b2f24-83a7-410c-aba3-51083c99c43e
+# ╠═9147e247-e7bf-4f16-b1a9-a270bae7c7e4
+# ╠═8b34704f-7d4f-4929-94cf-6fa6e550d6af
+# ╠═9d014721-b6dc-4e2e-9ec8-814f5ece3d6a
+# ╠═89bffc0d-79af-4011-8867-3d85000978e1
+# ╠═d36c07b3-87fc-47a4-8b64-40ec984de403
+# ╠═6efe9e33-2346-4176-bf77-cd89e7691f9e
+# ╠═d14b8b83-26ef-4530-b6b2-d700e674075d
+# ╠═08f3f82d-f4b5-47da-a645-5da40cde61a5
+# ╠═0350f096-b3cb-4141-9c58-c221748fd12f
+# ╠═9dc3a519-3672-4956-8237-00d16da2ea26
+# ╠═23612b01-0bc3-4620-96f5-416895ce55cd
+# ╠═6fb38907-fbec-4f2b-81b9-63adb1a1b5d2
+# ╠═c94bc74e-f68a-4522-a7fa-bdcfbd8ec413
+# ╠═ff6c92b6-783b-445e-a3b7-f70b689df4ad
+# ╠═2bb84981-520c-4e6c-9e19-568dda484881
+# ╠═f181c3e1-b5c4-407c-8003-b1e624e65761
+# ╠═5296b7de-93f9-415d-b268-a61eb4390dfa
+# ╠═2c95d568-eb5d-447d-a21e-786df523a1b4
+# ╠═35a3b594-89c9-4d96-9eae-e5d20cca5476
+# ╠═175f6fca-6c59-4814-9460-4dc9b1e2cf79
+# ╠═6ad29152-b8ad-47fd-bfa9-df87b64396d0
+# ╠═172784cf-2df6-4c90-910c-e6362847999a
+# ╠═12bbb3a5-e742-40c4-b89e-4e94574153cb
+# ╠═7ba245e1-861c-47bd-b6b6-f7bd253cacb9
+# ╠═14a6ee0b-ccef-4d6c-9008-cc67e8c486c9
+# ╠═469732ca-7e68-43f2-a3f2-234c7fad425a
+# ╠═0859e307-6ab7-492a-8c57-802c44b1d814
+# ╠═7e44936d-a96f-4fc5-b807-0bf41b298180
+# ╠═ff95e97c-360f-4a2a-bfa3-75fcf886aacd
+# ╠═e33c012d-ea0d-4a48-bc67-50dd45c9a967
+# ╠═53b029d2-7ad7-49be-a911-b9f6e54fc891
+# ╠═6c705457-ffd6-46d4-bc0a-6a6b60493fa9
+# ╠═478c720b-7c13-4990-b14b-d1e5c3f80953
+# ╠═fd7dc6b5-100a-438b-a7d3-662b9ca32e66
+# ╠═b1e3829c-93b8-4546-9f4a-a0bcd0de120b
+# ╠═17be5e6f-de9e-46a0-ade2-8d7f59d4e334
+# ╠═01f41a82-1783-4595-9fc0-d7507819bc85
+# ╠═5f56b21f-8df4-472b-a7da-cb50e597aa99
+# ╠═bfdede64-c065-44ad-847f-59ec460b0591
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

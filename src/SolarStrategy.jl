@@ -50,13 +50,43 @@ start with stub, develop proper models later
 # preparing the track data
 # track = get_track_data("data/data_australia.csv")
 track, segments = get_track_and_segments("data/data_australia.csv")
-plot(track.distance, track.altitude, title="Track raw data")
+plot(
+    track.distance / 1000., track.altitude, title="Гоночный маршрут",
+    xlabel="Дистанция (км)",
+    ylabel="Высота (м)",
+    legend=false
+)
 track_peaks, segments_peaks = keep_extremum_only_peaks_segments(track)
 plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data built w/ Peaks.jl")
 # TODO: track preprocessing
 track.altitude = track.altitude .* 10;
 track_peaks_high, segments_peaks_high = keep_extremum_only_peaks_segments(track)
 plot(track_peaks_high.distance, track_peaks_high.altitude, title="Track extremum only data built w/ Peaks.jl alt * 10")
+
+plot(
+    track_peaks.distance / 1000., track_peaks.altitude, title="Сокращённый гоночный маршрут",
+    xlabel="Дистанция (км)",
+    ylabel="Высота (м)",
+    legend=false
+)
+
+
+from_index = 1
+to_index = 3000
+
+from_index = 3000
+to_index = 7000
+
+from_index = 7000
+to_index = size(track_peaks.distance, 1)
+
+plot(
+    track_peaks.distance[from_index:to_index] / 1000., track_peaks.altitude[from_index:to_index],
+    title="Сокращённый гоночный маршрут, подзадача 3",
+    xlabel="Дистанция (км)",
+    ylabel="Высота (м)",
+    legend=false
+)
 
 track_aus, segments_aus = get_track_and_segments("data/data_australia_random.csv");
 track_aus.altitude = track_aus.altitude * 10;
@@ -117,7 +147,7 @@ segments_peaks_high.weather_coeff = weather_coeff
 );
 plots_for_results(res_peaks_high, track_peaks_high, segments_peaks_high)
 
-single_speed_high = minimize_single_speed(
+@time single_speed_high = minimize_single_speed(
     track_peaks_high,
     segments_peaks_high,
     5100.,
@@ -207,6 +237,29 @@ simulate_run(
     out_speeds,
     track_peaks,
     segments_peaks,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+)
+
+
+@time n_speeds_high = minimize_n_speeds(
+    track_peaks_high,
+    segments_peaks_high,
+    11,
+    5100.,
+    DateTime(2023,1,1,10,0,0),
+    first(single_speed_high)
+    # 35.
+)
+
+boundaries = calculate_boundaries(1, size(track_peaks_high, 1), 11)
+
+out_speeds_high = set_speeds_boundaries(n_speeds_high, boundaries)
+
+simulate_run_finish_time(
+    out_speeds_high,
+    track_peaks_high,
+    segments_peaks_high,
     5100.,
     DateTime(2023,1,1,10,0,0)
 )
