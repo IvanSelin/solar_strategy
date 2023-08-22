@@ -490,6 +490,112 @@ plot(track.distance[1:82,:], track.altitude[1:82,:])
 # ╔═╡ 5adf37eb-4815-489a-8602-9a14ab016593
 md"Рассмотрим поплотнее участки 3, 4 и 6 из peaks"
 
+# ╔═╡ e895ceae-d260-44df-9a40-cf46a47dd789
+plot(track.distance[1:82,:], track.altitude[1:82,:], markers=:diamond)
+
+# ╔═╡ e5769e28-8dd8-4f58-93b6-58c75c270871
+md"Выяснилось что max и min значения высоты нормально учитываются, но одинаковые значения подряд (плато) не учитываются правильно
+
+Написал новую функцию расчёта, сейчас будем пробовать"
+
+# ╔═╡ 691e1f9a-5d10-475f-9ede-8d687f9d07b1
+md"# Новое получение peaks"
+
+# ╔═╡ f17bfc9f-01b5-4535-b05e-a4251e6a3594
+peak_points = get_peak_points_plateau(track.altitude)
+
+# ╔═╡ 1c54eea3-b89a-4c7c-a7ab-7759f1bd4242
+track_peaks_pl, segments_peaks_pl = get_track_and_segments_for_selected_points(track, peak_points)
+
+# ╔═╡ 89fdba6b-0c3f-4dd2-ae5b-a26dc1a90368
+pl_income, pl_use, pl_time, pl_energy = compare_track_energies_income_use(
+	track, segments,
+	track_peaks_pl, segments_peaks_pl, peak_points,
+	opt_speed, start_energy, start_datetime
+)
+
+# ╔═╡ 0f248c56-5ab5-4183-9260-634be0fc9736
+plot_differences(
+	pl_income, pl_use, pl_time, pl_energy, track, peak_points
+)
+
+# ╔═╡ 3e84943e-1f80-44d6-b3fc-9f7c0553c4c1
+plot(track.distance[peak_points,:], pl_use)
+
+# ╔═╡ 43ce04fb-8443-493c-8f9f-7abc19f01cd7
+diff(pl_use)
+
+# ╔═╡ ee1d6a44-941a-4ac5-9928-b6790329334e
+md"Что-то тут не так.
+
+Сравним с обычнми peaks"
+
+# ╔═╡ cdf74c41-75ac-4d1d-be16-a6fff7bc2165
+orig_peaks_income, orig_peaks_use, orig_peaks_time = simulate_run_income_use_time(opt_speed, segments_peaks, start_datetime)
+
+# ╔═╡ 4fa48c6d-d4d4-4e4e-950a-f4198b046297
+new_peaks_income, new_peaks_use, new_peaks_time = simulate_run_income_use_time(opt_speed, segments_peaks_pl, start_datetime)
+
+# ╔═╡ e0bb15e1-0bca-4d10-9fb6-08e54074152d
+income, use, time = simulate_run_income_use_time(opt_speed, segments, start_datetime)
+
+# ╔═╡ aad628de-6530-4cce-8ea8-6b258716b75e
+plot(track_peaks.distance, segment_data_to_track_data(orig_peaks_use, 0.), title="Исходные и новые peaks траты энергии")
+
+# ╔═╡ 6fffcf11-0236-4e90-922b-34c6ae8796e6
+plot!(track_peaks_pl.distance, segment_data_to_track_data(new_peaks_use, 0.), title="Исходные и новые peaks траты энергии")
+
+# ╔═╡ 3e229834-bc84-4eee-8ee5-b4c4955a9553
+md"на графике не видно, будем искать по пересекающимся точкам"
+
+# ╔═╡ 3d9560f0-3843-4f03-9b3f-2485c7605cc6
+last(new_peaks_use)
+
+# ╔═╡ a2086714-5522-4d12-8fd7-34cb40fbbad8
+last(orig_peaks_use)
+
+# ╔═╡ 84cb6d65-fbc8-4470-a4e7-3116532cba5b
+last(orig_peaks_use) - last(new_peaks_use)
+
+# ╔═╡ 8c711de5-2bd7-492d-8f20-a68538e3f51e
+md"С новыми peaks ситуация стала даже немного хуже!"
+
+# ╔═╡ 6d0d758e-1df3-4dec-b6cf-fb6cc453a6c1
+# points_peaks - original peaks
+# peak_points - new peaks
+intersect_peaks = Set(points_peaks)
+
+# ╔═╡ 3a73d079-aa41-4b61-90b8-a93b94d8159c
+intersect!(intersect_peaks, Set(peak_points))
+
+# ╔═╡ 4c1c1493-f48a-49ff-8e49-bd850819d7f8
+intersect_array = sort(collect(intersect_peaks))
+
+# ╔═╡ 7c68e07a-29bf-48d2-b6c4-595df52abdf7
+length(intersect_array)
+
+# ╔═╡ f85e9a18-df29-449a-bc7e-34a3024d03e0
+length(new_peaks_income)
+
+# ╔═╡ e11b95a0-a96d-4f83-a61a-f9e8698368df
+md"Сравним с исходными данными"
+
+# ╔═╡ 4d887c9a-02dc-471d-9299-f6b35ed77daf
+last(use)
+
+# ╔═╡ 21c94bfb-ee4b-40c7-ab73-40681c3f77d6
+last(use) - last(new_peaks_use)
+
+# ╔═╡ 58f2a9ab-a24b-408d-80ab-8a9ca688d572
+last(use) - last(orig_peaks_use)
+
+# ╔═╡ 9ceb2c87-80e4-4dce-8cd9-7570567d4ecb
+md"Кризис пройден, стало лучше)
+
+Но расхождение всё равно есть
+
+И использование peaks приводит к СНИЖЕННЫМ оценкам по энергии"
+
 # ╔═╡ 0a7000be-88dd-4cba-a0b8-6f82ff1c9c07
 md"# На будущее"
 
@@ -956,9 +1062,9 @@ version = "0.1.5"
 
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
-git-tree-sha1 = "a7e91ef94114d5bc8952bcaa8d6ff952cf709808"
+git-tree-sha1 = "7e5d6779a1e09a36db2a7b6cff50942a0a7d0fca"
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
-version = "1.4.2"
+version = "1.5.0"
 
 [[deps.JSON]]
 deps = ["Dates", "Mmap", "Parsers", "Unicode"]
@@ -1097,9 +1203,9 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "c3ce8e7420b3a6e071e0fe4745f5d4300e37b13f"
+git-tree-sha1 = "5ab83e1679320064c29e8973034357655743d22d"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.24"
+version = "0.3.25"
 
     [deps.LogExpFunctions.extensions]
     LogExpFunctionsChainRulesCoreExt = "ChainRulesCore"
@@ -1127,9 +1233,9 @@ version = "0.1.4"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
-git-tree-sha1 = "42324d08725e200c23d4dfb549e0d5d89dede2d2"
+git-tree-sha1 = "9ee1618cbf5240e6d4e0371d6f24065083f60c48"
 uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-version = "0.5.10"
+version = "0.5.11"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -1943,6 +2049,36 @@ version = "1.4.1+0"
 # ╠═d94db435-491a-4799-aadd-95baf06074ad
 # ╠═39a775fc-dc4b-4664-9fd1-dd008c45a7b8
 # ╠═5adf37eb-4815-489a-8602-9a14ab016593
+# ╠═e895ceae-d260-44df-9a40-cf46a47dd789
+# ╠═e5769e28-8dd8-4f58-93b6-58c75c270871
+# ╠═691e1f9a-5d10-475f-9ede-8d687f9d07b1
+# ╠═f17bfc9f-01b5-4535-b05e-a4251e6a3594
+# ╠═1c54eea3-b89a-4c7c-a7ab-7759f1bd4242
+# ╠═89fdba6b-0c3f-4dd2-ae5b-a26dc1a90368
+# ╠═0f248c56-5ab5-4183-9260-634be0fc9736
+# ╠═3e84943e-1f80-44d6-b3fc-9f7c0553c4c1
+# ╠═43ce04fb-8443-493c-8f9f-7abc19f01cd7
+# ╠═ee1d6a44-941a-4ac5-9928-b6790329334e
+# ╠═cdf74c41-75ac-4d1d-be16-a6fff7bc2165
+# ╠═4fa48c6d-d4d4-4e4e-950a-f4198b046297
+# ╠═e0bb15e1-0bca-4d10-9fb6-08e54074152d
+# ╠═aad628de-6530-4cce-8ea8-6b258716b75e
+# ╠═6fffcf11-0236-4e90-922b-34c6ae8796e6
+# ╠═3e229834-bc84-4eee-8ee5-b4c4955a9553
+# ╠═3d9560f0-3843-4f03-9b3f-2485c7605cc6
+# ╠═a2086714-5522-4d12-8fd7-34cb40fbbad8
+# ╠═84cb6d65-fbc8-4470-a4e7-3116532cba5b
+# ╠═8c711de5-2bd7-492d-8f20-a68538e3f51e
+# ╠═6d0d758e-1df3-4dec-b6cf-fb6cc453a6c1
+# ╠═3a73d079-aa41-4b61-90b8-a93b94d8159c
+# ╠═4c1c1493-f48a-49ff-8e49-bd850819d7f8
+# ╠═7c68e07a-29bf-48d2-b6c4-595df52abdf7
+# ╠═f85e9a18-df29-449a-bc7e-34a3024d03e0
+# ╠═e11b95a0-a96d-4f83-a61a-f9e8698368df
+# ╠═4d887c9a-02dc-471d-9299-f6b35ed77daf
+# ╠═21c94bfb-ee4b-40c7-ab73-40681c3f77d6
+# ╠═58f2a9ab-a24b-408d-80ab-8a9ca688d572
+# ╠═9ceb2c87-80e4-4dce-8cd9-7570567d4ecb
 # ╠═0a7000be-88dd-4cba-a0b8-6f82ff1c9c07
 # ╠═308ea3b1-8145-49a7-aa16-048666312620
 # ╠═d76052a6-92a3-416e-89f7-f37e160b7d54

@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.27
 
 using Markdown
 using InteractiveUtils
@@ -222,7 +222,7 @@ end
 md"## На обычной трассе"
 
 # ╔═╡ 71f5f92f-2bd7-4bd6-9b2b-0bdc98fa0928
-speeds_cubic, times_cubic, datetimes_cubic = calculate_speeds_cubic_solve(segments_peaks, 5100., DateTime(2023,1,1,10,0,0), 7.5)
+speeds_cubic, times_cubic, datetimes_cubic = calculate_speeds_cubic_solve(segments_peaks, 5100., DateTime(2023,1,1,10,0,0), 7.3)
 
 # ╔═╡ ba6a66df-c1c0-40ef-96b1-22ae1b142ac4
 simulate_run(
@@ -464,7 +464,7 @@ WebIO = "~0.8.20"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.1"
+julia_version = "1.9.2"
 manifest_format = "2.0"
 project_hash = "e06ee98de56c17403eccc717775b5b517c36835c"
 
@@ -562,7 +562,7 @@ weakdeps = ["Dates", "LinearAlgebra"]
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.2+0"
+version = "1.0.5+0"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
@@ -1162,7 +1162,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.9.0"
+version = "1.9.2"
 
 [[deps.PlotThemes]]
 deps = ["PlotUtils", "Statistics"]
