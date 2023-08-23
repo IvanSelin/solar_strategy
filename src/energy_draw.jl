@@ -62,7 +62,7 @@ function mechanical_power_calculation_alloc(speed_ms, slope, diff_distance)
     return mechanical_power
 end
 
-function electrical_power_calculation(speed_ms, diff_distance)
+function electrical_power_calculation(diff_distance, speed_ms)
     power_onboard = 40; # Wt, 0.04kWt
     return power_onboard .* diff_distance ./ speed_ms;
 end

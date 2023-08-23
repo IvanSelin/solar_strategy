@@ -546,7 +546,7 @@ plot(track_peaks.distance, segment_data_to_track_data(orig_peaks_use, 0.), title
 plot!(track_peaks_pl.distance, segment_data_to_track_data(new_peaks_use, 0.), title="Исходные и новые peaks траты энергии")
 
 # ╔═╡ 3e229834-bc84-4eee-8ee5-b4c4955a9553
-md"на графике не видно, будем искать по пересекающимся точкам"
+md"на графике не видно, будем искать по-другому"
 
 # ╔═╡ 3d9560f0-3843-4f03-9b3f-2485c7605cc6
 last(new_peaks_use)
@@ -559,23 +559,6 @@ last(orig_peaks_use) - last(new_peaks_use)
 
 # ╔═╡ 8c711de5-2bd7-492d-8f20-a68538e3f51e
 md"С новыми peaks ситуация стала даже немного хуже!"
-
-# ╔═╡ 6d0d758e-1df3-4dec-b6cf-fb6cc453a6c1
-# points_peaks - original peaks
-# peak_points - new peaks
-intersect_peaks = Set(points_peaks)
-
-# ╔═╡ 3a73d079-aa41-4b61-90b8-a93b94d8159c
-intersect!(intersect_peaks, Set(peak_points))
-
-# ╔═╡ 4c1c1493-f48a-49ff-8e49-bd850819d7f8
-intersect_array = sort(collect(intersect_peaks))
-
-# ╔═╡ 7c68e07a-29bf-48d2-b6c4-595df52abdf7
-length(intersect_array)
-
-# ╔═╡ f85e9a18-df29-449a-bc7e-34a3024d03e0
-length(new_peaks_income)
 
 # ╔═╡ e11b95a0-a96d-4f83-a61a-f9e8698368df
 md"Сравним с исходными данными"
@@ -595,6 +578,403 @@ md"Кризис пройден, стало лучше)
 Но расхождение всё равно есть
 
 И использование peaks приводит к СНИЖЕННЫМ оценкам по энергии"
+
+# ╔═╡ 7ca5507d-6083-41ae-a127-c23062f86766
+md"Но всё равно надо понять где и что идёт не так даже с новыми peaks.
+
+Опять есть какой-то скачок в начале, который надо исследовать"
+
+# ╔═╡ aed6dedd-5c3e-48df-aab2-c4f04b4209d5
+md"## Глубокое сравнение"
+
+# ╔═╡ 6aaa20a3-5d21-4819-b9be-b185d345a0dd
+md"### Подготовка данных"
+
+# ╔═╡ 8d1adddd-0c72-4831-9037-b9c7f9a7aa4c
+track_res = deepcopy(track);
+
+# ╔═╡ 3f4b7ad1-ee6a-4702-bc27-303e8e254e56
+track_res.index = 1:size(track,1)
+
+# ╔═╡ da6ac0a8-1d55-497d-95ab-bf8300c93c8b
+track_res.use = segment_data_to_track_data(use, 0.)
+
+# ╔═╡ d3b55c8c-0261-4a15-9667-08ed2ba43f91
+track_res.income = segment_data_to_track_data(income, 0.)
+
+# ╔═╡ 52f9b92d-f06d-410c-94b2-7475e20be328
+track_res.time = segment_data_to_track_data(time, 0.)
+
+# ╔═╡ 2f3e57a6-33e5-45b7-8998-52d6374a11d0
+track_res
+
+# ╔═╡ f167adc7-83ed-4e7c-9e93-374d0177f2fb
+track_peaks_new_res = deepcopy(track_peaks_pl);
+
+# ╔═╡ c75b72df-a899-4912-a7e5-c8900d75711c
+track_peaks_new_res.use = segment_data_to_track_data(new_peaks_use, 0.)
+
+# ╔═╡ a899b3e5-935b-43e2-8dc1-207b7bb9c657
+track_peaks_new_res.income = segment_data_to_track_data(new_peaks_income, 0.)
+
+# ╔═╡ 49d190ad-31a5-4ce9-9978-bf510e7890a1
+track_peaks_new_res.time = segment_data_to_track_data(new_peaks_time, 0.)
+
+# ╔═╡ 9f6fd121-d96f-4745-9283-f2e6b039b90a
+track_peaks_new_res
+
+# ╔═╡ ca505019-fb44-4ba2-a36d-457a5e9eccc4
+track_res_points = track_res[track_peaks_new_res.index,:]
+
+# ╔═╡ ece8624e-824c-4725-8d62-92e91cbc5e44
+md"Большая разница на участке 8-14"
+
+# ╔═╡ 9a568b18-bf33-42d4-b239-103417ce4075
+Plots.histogram(diff(track_res_points.use)-diff(track_peaks_new_res.use))
+
+# ╔═╡ 6859857f-fdd6-42b7-bde1-fce03961afb5
+md"Много маленьких отличий
+
+
+Смотрим подробней на участки"
+
+# ╔═╡ 4770ab6c-da5d-4e23-b99c-6c4540579ecd
+track_res[8:14,:]
+
+# ╔═╡ 57bfd811-eec2-4840-8f7b-d9dd0cf46359
+segments[8:13,:]
+
+# ╔═╡ 8747d2fa-3630-4301-8a37-9ed7182e5b10
+segments_peaks_pl[1:5,:]
+
+# ╔═╡ dd1803c3-b9df-400e-b796-eaf4fc96d499
+sum(segments.diff_distance[8:13])
+
+# ╔═╡ 0316cd3a-202c-447f-8396-0fc78abf97d4
+sum(segments.diff_altitude[8:13])
+
+# ╔═╡ 86ce26a7-5d56-46c6-bb39-d25e6f410b31
+sum(segments.altitude[8:13]) / 6.
+
+# ╔═╡ 1801c7c6-09fc-4b39-ba96-fca8be1fec28
+md"Немного неправильно считается средняя высота
+
+Но это по идее не сильно влияет на расчёт"
+
+# ╔═╡ 5ba67e15-0aa6-4bc8-b271-faef5dae0fe3
+md"длина совпадает
+
+Надо теперь пробовать считать энергию для обоих частей"
+
+# ╔═╡ 18cc16be-b957-4ad7-9f1f-f2a9bce8cb2e
+md"### Считаем для peaks"
+
+# ╔═╡ b0c8fafd-8b1f-4520-a05b-ba9a1424ad5f
+md"Сперва сравним, совпадает ли с ручным расчётом"
+
+# ╔═╡ b9d3ae44-95d0-4151-9d64-fb3f9f528577
+# for peaks
+mech_test_peaks = mechanical_power_calculation_alloc(opt_speed / 3.6, segments_peaks_pl.slope[3], segments_peaks_pl.diff_distance[3]) / 3600.
+
+# ╔═╡ b249b36a-d29c-416b-848d-293246ae5bfe
+mech_peaks_fact = track_peaks_new_res.use[4]-track_peaks_new_res.use[3]
+
+# ╔═╡ 88b6e352-fac5-4ba4-953b-cc1eb56b8c0c
+mech_test_peaks - mech_peaks_fact
+
+# ╔═╡ a68baf40-b94f-4f98-9bec-4f9c81d255fd
+md"Совпадает
+
+Теперь надо посчитать для обычной трассы" 
+
+# ╔═╡ 3ca7fc23-b918-4186-b6e2-7caa610a2a5f
+md"### Считаем для обычной трассы"
+
+# ╔═╡ 8bd276cb-e8ef-4279-80c5-fafb73d389cf
+md"Считаем по сегментам с точками с 8 по 14, то есть с 8 по 13 сегмент (т.к. он с 13 по 14 точку)"
+
+# ╔═╡ 81b78f75-7bd7-4699-8d61-0d1674aec5cd
+segments[8:13,:]
+
+# ╔═╡ e4f13a18-c617-4f2c-9e17-e692cd9b74d2
+md"Скармилваем эти сегменты в расчёт. Должно быть 6 сегментов (14-8=6)"
+
+# ╔═╡ 967129f5-9f09-4974-8bc5-57a53aca2aff
+mech_test = mechanical_power_calculation_alloc.(opt_speed / 3.6, segments.slope[8:13], segments.diff_distance[8:13]) / 3600.
+
+# ╔═╡ a6e9f63d-58f5-47b5-adb4-d489996bc2af
+md"Сумма по этим участкам должна быть такой же, как и в peaks трассе. Ну хотя бы примерно"
+
+# ╔═╡ 9c8e5ce4-dfc9-4b24-8d01-c20849221e37
+sum(mech_test)
+
+# ╔═╡ f0fa67df-0d75-40e8-beca-31b5e330de7c
+mech_test_peaks - sum(mech_test)
+
+# ╔═╡ 4ad1783a-afbc-4ab7-b043-4931569c330b
+md"Похоже на правду? разница в 9e-5, т.е. всё хорошо
+
+Но откуда берётся ошибка в итоге тогда?"
+
+# ╔═╡ 150106d9-ce77-4729-ad9c-20d48c6361b9
+md"Это мы сравнили ручные расчёты.
+
+А теперь надо сравнить с тем, что нам посчиталось по факту. Может ТАМ что-то не то? "
+
+# ╔═╡ bdc1c037-4295-4e09-95e7-a1837b7317da
+md"### Расчёт по факту для обычной трассы"
+
+# ╔═╡ b70dda56-903f-47c0-bd42-c6ecca40c8d2
+md"Смотрим результаты
+
+В результатах сегменты мапятся на трэк. Сегментов на 1 меньше, чем точек.
+
+Поэтому, например, в первом ряду будет 0 по энрегии, а во втором, сколько понадобилось от 1 к 2 точке."
+
+# ╔═╡ 016af154-833c-4024-96e1-97ba3de9e487
+track_res[7:14,:]
+
+# ╔═╡ 789c8b60-06d8-45f7-9131-8710d51f5c7f
+
+
+# ╔═╡ 1250bdfd-9111-494b-b823-208cdf0eb172
+track_res[9:14,:]
+
+# ╔═╡ 5f0169be-4363-42c3-9e12-315edcf37a7b
+md"Но здесь результаты указаны с учётом накопления энергии.
+
+А нам надо взять результаты без накопления. Для этого надо сделать diff.
+
+Diff производит массив размера на 1 меньше. Поэтому возмём результаты с 8 по 14-й и от них diff"
+
+# ╔═╡ b8f86151-a304-4d88-843d-85ba86908a72
+mech_fact = diff(track_res.use[8:14])
+
+# ╔═╡ 263b7313-2246-42bd-84ae-a032fe6e2a85
+md"Смотрим сколько получилось"
+
+# ╔═╡ be2ccdb1-b310-46d4-b319-ce51b45399a0
+sum(mech_fact)
+
+# ╔═╡ 0795f1c3-832c-4b38-a029-960b9f7099e5
+md"И в сравнении с ранее посчитанным"
+
+# ╔═╡ 4ea9933e-cef6-4638-98c9-7a77309916ac
+sum(mech_fact) - sum(mech_test)
+
+# ╔═╡ 404bd6e3-a8b0-4542-8ebe-810ef26dcb47
+mech_fact - mech_test
+
+# ╔═╡ ccc7eb5e-6275-4135-ba44-8fd6862f49e4
+md"Опа-па! почему-то есть расхождения, и причём серьёзные. Где-то что-то забыто, наверное
+
+Надо разбираться"
+
+# ╔═╡ d4ddfacd-d430-4a7d-b503-9b9f9a260cba
+md"Почему-то не совпадают ручные с не-ручными"
+
+# ╔═╡ dcc4bcde-ca0e-490b-a56f-96997f72e667
+md"### Разбираемся с расчётом для обычной трассы"
+
+# ╔═╡ 60db43d2-9e98-4e11-a3e9-12cd653190c9
+segments[8:13,:]
+
+# ╔═╡ 72f6f45f-2e89-4a4b-872a-d47f932effd4
+md"Проблемные сегменты - с 10 по 11, с 11 по 12, с 12 по 13"
+
+# ╔═╡ a6ef9143-0fcf-4af2-a80e-83b79ac50cd2
+md"Ещё раз как оно должно считаться"
+
+# ╔═╡ b1ddcaf2-fa92-4eda-a509-0c3792316572
+mech_test
+
+# ╔═╡ 00f748d3-ad88-42c5-9b2c-6b443bd655c1
+mechanical_power_calculation_alloc.(opt_speed / 3.6, segments.slope[8:13], segments.diff_distance[8:13]) / 3600.
+
+# ╔═╡ fa896da9-ff1f-4e62-8550-84bf958cd5f9
+mechanical_power_calculation_alloc.(fill(opt_speed / 3.6, 6), segments.slope[8:13], segments.diff_distance[8:13]) / 3600.
+
+# ╔═╡ e69786b0-8641-42b4-bd64-320787dff8a1
+md"### Гипотеза про segment data to track data" 
+
+# ╔═╡ dbd57c19-c91c-4407-b798-c9b1879a3c10
+md"Может проблема в segment data to track data?"
+
+# ╔═╡ 7ba1a20e-4a3c-4e3e-be3e-9b90ebc54d37
+use
+
+# ╔═╡ 52d2c069-6a8d-4bf4-be2b-223f6eb9e72e
+segment_data_to_track_data(use, 0.)
+
+# ╔═╡ 8a079fc0-6bee-48ef-93cc-27804134b935
+md"### Не учитываются электрические потери?"
+
+# ╔═╡ 1b9f27bc-934f-48c4-86b1-37f541cb8a0c
+md"не учитываются электрические потери? которые electrical power calculation"
+
+# ╔═╡ de02cc62-f6f4-450b-a002-c5349c7f8e01
+md"для peaks"
+
+# ╔═╡ 17cbf51c-645f-49fc-be63-ae60ce86923a
+mech_test_peaks_el_loss = mechanical_power_calculation_alloc(opt_speed / 3.6, segments_peaks_pl.slope[3], segments_peaks_pl.diff_distance[3]) / 3600. + electrical_power_calculation(segments_peaks_pl.diff_distance[3], opt_speed / 3.6) / 3600.
+
+# ╔═╡ e017637e-4885-4f32-92be-6b148c3e603b
+mech_test_peaks - mech_test_peaks_el_loss
+
+# ╔═╡ bb18bce4-140b-459d-b7c3-1bf29621ae37
+md"Разницы почти нет, но стоит попробовать дальше"
+
+# ╔═╡ 88f5c027-4568-4c80-83ee-b707d6f72e0f
+md"для обычной трассы"
+
+# ╔═╡ 61c98942-8299-4dea-bafb-b728fd567f28
+mech_test_el_loss = mechanical_power_calculation_alloc.(opt_speed / 3.6, segments.slope[8:13], segments.diff_distance[8:13]) / 3600. + electrical_power_calculation.(segments.diff_distance[8:13], opt_speed / 3.6) / 3600.
+
+# ╔═╡ 9b9746c3-096a-437a-be05-fa4daba0509a
+mech_test_el_loss - mech_test
+
+# ╔═╡ 938618cc-cf5b-45ff-8ad6-69a6dc0a99f0
+mech_test_el_loss - mech_fact
+
+# ╔═╡ 6776c519-95f8-4d7f-975c-6a78b8e9e6c6
+md"Вот и нашли расхождение в сравнении!
+
+Теперь надо понять, фигурирует ли оно в сравнении peaks и не peaks" 
+
+# ╔═╡ 8b03a23f-51a6-4a74-b6aa-1cf74c5a6677
+md"У нас есть несколько расчётов:
+
+peaks c потерями (mech_test_peaks_el_loss) и без (mech_test_peaks) руками, peaks методом (mech_peaks_fact)
+
+обычный с потерями (mech_test_el_loss) и без (mech_test) руками, обычный методом (mech_fact)
+
+что с чем сравнивать?"
+
+# ╔═╡ ceaae763-3a4f-401a-a980-ce0678f11d37
+md"проверяем расчёты руками без потерь, peaks и обычный"
+
+# ╔═╡ e6b48621-eb55-4f93-80fe-8bde497512b3
+sum(mech_test) - mech_test_peaks
+
+# ╔═╡ f434f5c1-16f5-47e0-b772-74da18fefbdb
+md"отлично, расхождения нет
+
+теперь надо сравнивать потери"
+
+# ╔═╡ d094bb28-ce6a-496f-a1b9-17e0db817085
+peaks_loss = electrical_power_calculation(segments_peaks_pl.diff_distance[3], opt_speed / 3.6) / 3600.
+
+# ╔═╡ 3a262d65-bd0d-470c-a738-f959e5e89143
+track_loss = electrical_power_calculation.(segments.diff_distance[8:13], opt_speed / 3.6) / 3600.
+
+# ╔═╡ 3c253f05-eb91-4e6f-a633-04912c36bb52
+sum(track_loss) - peaks_loss
+
+# ╔═╡ bedc9813-4204-4a9b-b784-55ea6fed5364
+md"вот она разница!"
+
+# ╔═╡ 6f83a0a8-f919-4830-90f9-5320914cba3c
+md"смотрим, такая ли же в целом разница, если сравнивать с итоговыми результатами (фактическими)"
+
+# ╔═╡ 81ccfc68-6dbc-402c-af18-871acf4022a5
+sum(mech_fact) - mech_peaks_fact
+
+# ╔═╡ eba5d743-da8d-4e2c-a908-961dacf24264
+(sum(mech_fact) - mech_peaks_fact) - (sum(track_loss) - peaks_loss)
+
+# ╔═╡ bf6b6f23-0878-4a52-bb13-b2faa5a2fa3b
+md"Такая же, дело именно в электрических потерях!
+
+Надо происследовать их!"
+
+# ╔═╡ d85603c0-1e4d-4a92-ba00-e1a602c533da
+# track
+electrical_power_calculation.(segments.diff_distance[8:13], opt_speed / 3.6) / 3600.
+
+# ╔═╡ 32356218-ecc6-4f2c-90a2-67244dcca04e
+# track not broadcasted
+electrical_power_calculation(segments.diff_distance[8:13], opt_speed / 3.6) / 3600.
+
+# ╔═╡ 7af934e0-7c7c-497a-852d-343200b6e5a0
+sum(electrical_power_calculation.(segments.diff_distance[8:13], opt_speed / 3.6) / 3600.)
+
+# ╔═╡ 4194b150-1874-4ae2-b153-e3761cb724e1
+segments.diff_distance[8:13]
+
+# ╔═╡ 80342fe0-397b-4681-9178-8ab2bde90323
+# peaks
+electrical_power_calculation(segments_peaks_pl.diff_distance[3], opt_speed / 3.6) / 3600.
+
+# ╔═╡ af2ed6ef-17ee-4613-9501-05f331bea410
+segments_peaks_pl.diff_distance[3]
+
+# ╔═╡ 31909481-bc95-49b3-8081-071cd888814f
+function electrical_power_calculation_as_is(speed_ms, diff_distance)
+    power_onboard = 40; # Wt, 0.04kWt
+    return power_onboard .* diff_distance ./ speed_ms;
+end
+
+# ╔═╡ f71f9b5e-9654-49ac-803b-169652cc78e9
+electrical_power_calculation_as_is(segments.diff_distance[8:13], opt_speed / 3.6) / 3600.
+
+# ╔═╡ 94145064-52b0-4688-8947-6a1b3b34c553
+function electrical_power_calculation_modified(speed_ms, diff_distance)
+    power_onboard = 40; # Wt, 0.04kWt
+    return power_onboard * diff_distance / speed_ms;
+end
+
+# ╔═╡ b027d115-648f-4c53-9448-0d1fbdd854fa
+electrical_power_calculation_modified.(segments.diff_distance[8:13], opt_speed / 3.6) / 3600.
+
+# ╔═╡ 304730fb-f35f-4cb6-969d-1349215ce8d7
+opt_speed / 3.6
+
+# ╔═╡ cf3fa8c1-3734-4a78-bb4b-a1d4f14c04e9
+electrical_power_calculation_modified(segments_peaks_pl.diff_distance[3], opt_speed / 3.6) / 3600.
+
+# ╔═╡ 04b5272f-3c0b-417a-bd3a-15b2716b94ec
+electrical_power_calculation_modified.(segments_peaks_pl.diff_distance[3], opt_speed / 3.6) / 3600.
+
+# ╔═╡ 886a3755-105b-42d3-97c1-2e3f4fdf8541
+md"скорее всего напутал с единицами измерения
+
+сейчас это Вт * м / (м/с) = Вт * с"
+
+# ╔═╡ aa84cb6b-f7d1-428b-be48-bb0752fdc71e
+40 * segments.diff_distance[8:13] / (opt_speed / 3.6) / 3600.
+
+# ╔═╡ 7d72b8eb-5f99-43c9-b540-5231f9a7d40f
+40. * segments_peaks_pl.diff_distance[3] / (opt_speed / 3.6) / 3600.
+
+# ╔═╡ da48268b-5875-4d70-bb11-c57f0680218e
+md"Был перепутан порядок аргументов. В функции было (speed_ms, diff_distance), а вызывалось как (diff_distance, speed_ms)"
+
+# ╔═╡ 06a27299-6c51-42a0-9c31-98587898d895
+
+
+# ╔═╡ f72e8f8f-b532-497e-892e-6708c83edab5
+md"Здесь будет результат"
+
+# ╔═╡ c3392f6c-5883-40e7-80e4-f6d752420837
+md"### Отдельный кусок трассы" 
+
+# ╔═╡ ca843464-5ba2-4d1c-ab64-5214b01fe305
+md"Попробуем взять только нужный кусок трассы и прогнать симуляцию там"
+
+# ╔═╡ 945c160f-ff97-428d-8a98-b8d59cb6afe9
+track_short = deepcopy(track[8:14,:]);
+
+# ╔═╡ 08b9835f-5600-409a-8d67-3fc599efbc03
+track_short.index = 8:14;
+
+# ╔═╡ de4ba031-9cc2-47b6-9cc9-45850ca3befd
+track_short
+
+# ╔═╡ e05889f7-d92a-4e11-b0fa-7dce89ad7f96
+start_datetime
+
+# ╔═╡ f138441b-410b-4ef3-85cf-3e052ce90351
+start_datetime_short = DateTime(2023,1,1,10,0,42)
 
 # ╔═╡ 0a7000be-88dd-4cba-a0b8-6f82ff1c9c07
 md"# На будущее"
@@ -1233,9 +1613,9 @@ version = "0.1.4"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
-git-tree-sha1 = "9ee1618cbf5240e6d4e0371d6f24065083f60c48"
+git-tree-sha1 = "42324d08725e200c23d4dfb549e0d5d89dede2d2"
 uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-version = "0.5.11"
+version = "0.5.10"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -2079,6 +2459,122 @@ version = "1.4.1+0"
 # ╠═21c94bfb-ee4b-40c7-ab73-40681c3f77d6
 # ╠═58f2a9ab-a24b-408d-80ab-8a9ca688d572
 # ╠═9ceb2c87-80e4-4dce-8cd9-7570567d4ecb
+# ╠═7ca5507d-6083-41ae-a127-c23062f86766
+# ╠═aed6dedd-5c3e-48df-aab2-c4f04b4209d5
+# ╠═6aaa20a3-5d21-4819-b9be-b185d345a0dd
+# ╠═8d1adddd-0c72-4831-9037-b9c7f9a7aa4c
+# ╠═3f4b7ad1-ee6a-4702-bc27-303e8e254e56
+# ╠═da6ac0a8-1d55-497d-95ab-bf8300c93c8b
+# ╠═d3b55c8c-0261-4a15-9667-08ed2ba43f91
+# ╠═52f9b92d-f06d-410c-94b2-7475e20be328
+# ╠═2f3e57a6-33e5-45b7-8998-52d6374a11d0
+# ╠═f167adc7-83ed-4e7c-9e93-374d0177f2fb
+# ╠═c75b72df-a899-4912-a7e5-c8900d75711c
+# ╠═a899b3e5-935b-43e2-8dc1-207b7bb9c657
+# ╠═49d190ad-31a5-4ce9-9978-bf510e7890a1
+# ╠═9f6fd121-d96f-4745-9283-f2e6b039b90a
+# ╠═ca505019-fb44-4ba2-a36d-457a5e9eccc4
+# ╠═ece8624e-824c-4725-8d62-92e91cbc5e44
+# ╠═9a568b18-bf33-42d4-b239-103417ce4075
+# ╠═6859857f-fdd6-42b7-bde1-fce03961afb5
+# ╠═4770ab6c-da5d-4e23-b99c-6c4540579ecd
+# ╠═57bfd811-eec2-4840-8f7b-d9dd0cf46359
+# ╠═8747d2fa-3630-4301-8a37-9ed7182e5b10
+# ╠═dd1803c3-b9df-400e-b796-eaf4fc96d499
+# ╠═0316cd3a-202c-447f-8396-0fc78abf97d4
+# ╠═86ce26a7-5d56-46c6-bb39-d25e6f410b31
+# ╠═1801c7c6-09fc-4b39-ba96-fca8be1fec28
+# ╠═5ba67e15-0aa6-4bc8-b271-faef5dae0fe3
+# ╠═18cc16be-b957-4ad7-9f1f-f2a9bce8cb2e
+# ╠═b0c8fafd-8b1f-4520-a05b-ba9a1424ad5f
+# ╠═b9d3ae44-95d0-4151-9d64-fb3f9f528577
+# ╠═b249b36a-d29c-416b-848d-293246ae5bfe
+# ╠═88b6e352-fac5-4ba4-953b-cc1eb56b8c0c
+# ╠═a68baf40-b94f-4f98-9bec-4f9c81d255fd
+# ╠═3ca7fc23-b918-4186-b6e2-7caa610a2a5f
+# ╠═8bd276cb-e8ef-4279-80c5-fafb73d389cf
+# ╠═81b78f75-7bd7-4699-8d61-0d1674aec5cd
+# ╠═e4f13a18-c617-4f2c-9e17-e692cd9b74d2
+# ╠═967129f5-9f09-4974-8bc5-57a53aca2aff
+# ╠═a6e9f63d-58f5-47b5-adb4-d489996bc2af
+# ╠═9c8e5ce4-dfc9-4b24-8d01-c20849221e37
+# ╠═f0fa67df-0d75-40e8-beca-31b5e330de7c
+# ╠═4ad1783a-afbc-4ab7-b043-4931569c330b
+# ╠═150106d9-ce77-4729-ad9c-20d48c6361b9
+# ╠═bdc1c037-4295-4e09-95e7-a1837b7317da
+# ╠═b70dda56-903f-47c0-bd42-c6ecca40c8d2
+# ╠═016af154-833c-4024-96e1-97ba3de9e487
+# ╠═789c8b60-06d8-45f7-9131-8710d51f5c7f
+# ╠═1250bdfd-9111-494b-b823-208cdf0eb172
+# ╠═5f0169be-4363-42c3-9e12-315edcf37a7b
+# ╠═b8f86151-a304-4d88-843d-85ba86908a72
+# ╠═263b7313-2246-42bd-84ae-a032fe6e2a85
+# ╠═be2ccdb1-b310-46d4-b319-ce51b45399a0
+# ╠═0795f1c3-832c-4b38-a029-960b9f7099e5
+# ╠═4ea9933e-cef6-4638-98c9-7a77309916ac
+# ╠═404bd6e3-a8b0-4542-8ebe-810ef26dcb47
+# ╠═ccc7eb5e-6275-4135-ba44-8fd6862f49e4
+# ╠═d4ddfacd-d430-4a7d-b503-9b9f9a260cba
+# ╠═dcc4bcde-ca0e-490b-a56f-96997f72e667
+# ╠═60db43d2-9e98-4e11-a3e9-12cd653190c9
+# ╠═72f6f45f-2e89-4a4b-872a-d47f932effd4
+# ╠═a6ef9143-0fcf-4af2-a80e-83b79ac50cd2
+# ╠═b1ddcaf2-fa92-4eda-a509-0c3792316572
+# ╠═00f748d3-ad88-42c5-9b2c-6b443bd655c1
+# ╠═fa896da9-ff1f-4e62-8550-84bf958cd5f9
+# ╠═e69786b0-8641-42b4-bd64-320787dff8a1
+# ╠═dbd57c19-c91c-4407-b798-c9b1879a3c10
+# ╠═7ba1a20e-4a3c-4e3e-be3e-9b90ebc54d37
+# ╠═52d2c069-6a8d-4bf4-be2b-223f6eb9e72e
+# ╠═8a079fc0-6bee-48ef-93cc-27804134b935
+# ╠═1b9f27bc-934f-48c4-86b1-37f541cb8a0c
+# ╠═de02cc62-f6f4-450b-a002-c5349c7f8e01
+# ╠═17cbf51c-645f-49fc-be63-ae60ce86923a
+# ╠═e017637e-4885-4f32-92be-6b148c3e603b
+# ╠═bb18bce4-140b-459d-b7c3-1bf29621ae37
+# ╠═88f5c027-4568-4c80-83ee-b707d6f72e0f
+# ╠═61c98942-8299-4dea-bafb-b728fd567f28
+# ╠═9b9746c3-096a-437a-be05-fa4daba0509a
+# ╠═938618cc-cf5b-45ff-8ad6-69a6dc0a99f0
+# ╠═6776c519-95f8-4d7f-975c-6a78b8e9e6c6
+# ╠═8b03a23f-51a6-4a74-b6aa-1cf74c5a6677
+# ╠═ceaae763-3a4f-401a-a980-ce0678f11d37
+# ╠═e6b48621-eb55-4f93-80fe-8bde497512b3
+# ╠═f434f5c1-16f5-47e0-b772-74da18fefbdb
+# ╠═d094bb28-ce6a-496f-a1b9-17e0db817085
+# ╠═3a262d65-bd0d-470c-a738-f959e5e89143
+# ╠═3c253f05-eb91-4e6f-a633-04912c36bb52
+# ╠═bedc9813-4204-4a9b-b784-55ea6fed5364
+# ╠═6f83a0a8-f919-4830-90f9-5320914cba3c
+# ╠═81ccfc68-6dbc-402c-af18-871acf4022a5
+# ╠═eba5d743-da8d-4e2c-a908-961dacf24264
+# ╠═bf6b6f23-0878-4a52-bb13-b2faa5a2fa3b
+# ╠═d85603c0-1e4d-4a92-ba00-e1a602c533da
+# ╠═32356218-ecc6-4f2c-90a2-67244dcca04e
+# ╠═7af934e0-7c7c-497a-852d-343200b6e5a0
+# ╠═4194b150-1874-4ae2-b153-e3761cb724e1
+# ╠═80342fe0-397b-4681-9178-8ab2bde90323
+# ╠═af2ed6ef-17ee-4613-9501-05f331bea410
+# ╠═31909481-bc95-49b3-8081-071cd888814f
+# ╠═f71f9b5e-9654-49ac-803b-169652cc78e9
+# ╠═94145064-52b0-4688-8947-6a1b3b34c553
+# ╠═b027d115-648f-4c53-9448-0d1fbdd854fa
+# ╠═304730fb-f35f-4cb6-969d-1349215ce8d7
+# ╠═cf3fa8c1-3734-4a78-bb4b-a1d4f14c04e9
+# ╠═04b5272f-3c0b-417a-bd3a-15b2716b94ec
+# ╠═886a3755-105b-42d3-97c1-2e3f4fdf8541
+# ╠═aa84cb6b-f7d1-428b-be48-bb0752fdc71e
+# ╠═7d72b8eb-5f99-43c9-b540-5231f9a7d40f
+# ╠═da48268b-5875-4d70-bb11-c57f0680218e
+# ╠═06a27299-6c51-42a0-9c31-98587898d895
+# ╠═f72e8f8f-b532-497e-892e-6708c83edab5
+# ╠═c3392f6c-5883-40e7-80e4-f6d752420837
+# ╠═ca843464-5ba2-4d1c-ab64-5214b01fe305
+# ╠═945c160f-ff97-428d-8a98-b8d59cb6afe9
+# ╠═08b9835f-5600-409a-8d67-3fc599efbc03
+# ╠═de4ba031-9cc2-47b6-9cc9-45850ca3befd
+# ╠═e05889f7-d92a-4e11-b0fa-7dce89ad7f96
+# ╠═f138441b-410b-4ef3-85cf-3e052ce90351
 # ╠═0a7000be-88dd-4cba-a0b8-6f82ff1c9c07
 # ╠═308ea3b1-8145-49a7-aa16-048666312620
 # ╠═d76052a6-92a3-416e-89f7-f37e160b7d54
