@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.27
 
 using Markdown
 using InteractiveUtils
@@ -34,6 +34,7 @@ begin
 	# using LinearAlgebra
 	# using Ranges
 	using Random
+	using ProgressMeter
 end
 
 # ╔═╡ 3e46a49b-7bb7-4889-8c94-b842977899e4
@@ -44,6 +45,7 @@ begin
 	include("src/track.jl")
 	include("src/utils.jl")
 	include("src/strategy_calculation.jl")
+	include("src//weather.jl")
 end
 
 # ╔═╡ 94da1f00-efe7-11ed-2d94-f9a905085f40
@@ -202,9 +204,9 @@ function regular_optim(track, segments, speeds, start_energy, start_datetime, up
 	    ,
 	    IPNewton(),
 	    Optim.Options(
-	        x_tol = 1e-6,
-	        f_tol = 1e-6,
-	        g_tol = 1e-6
+	        x_tol = 1e-8,
+	        f_tol = 1e-8,
+	        g_tol = 1e-8
 	    )
 	)
 
@@ -315,7 +317,7 @@ md"Получили одну скорость в 79.35 км/ч, на котор�
 regular_optim(
 	track_flat,
 	segments_flat,
-	fill(60., size(segments_flat,1)),
+	fill(75., size(segments_flat,1)),
 	75.,
 	DateTime(2022,1,1,10,0,0)
 )
@@ -545,10 +547,10 @@ single_optim(
 regular_optim(
 	track_aus,
 	segments_aus,
-	fill(50., size(segments_aus,1)),
+	fill(40., size(segments_aus,1)),
 	5100.,
 	DateTime(2022,1,1,10,0,0),
-	200.
+	150.
 )
 
 # ╔═╡ f8d9184d-e88e-430c-80e9-e2a660fce6ba
@@ -849,6 +851,9 @@ begin
 	)
 end
 
+# ╔═╡ 642a882f-de23-4414-a579-b61088e98bd9
+w_test2
+
 # ╔═╡ 78327f2d-7cf2-49e3-98fa-d90aeb479c45
 md"Density гораздо быстрее, его лучше использовать для анимаций"
 
@@ -861,6 +866,17 @@ md"А потом и к распространению во времени"
 # ╔═╡ a803b045-f7ce-4a14-b363-1c166e34fbe7
 md"## Обновлённый функционал со статичными осадками"
 
+# ╔═╡ e07dc08f-9cd8-46b6-8e92-062372b955a3
+weather_segm = calculate_weather_weights_for_segments(
+	w_test2,
+	edges_lat_test2,
+	edges_lon_test2,
+	segments_aus
+)
+
+# ╔═╡ 39e09aba-c4c5-46b1-8ef9-63403b0225eb
+
+
 # ╔═╡ f7d29865-473d-47f5-a40c-08f48b531401
 function solar_trip_weather(input_speed, segments, start_datetime,
 	weather_weights, weather_edges_lat, weather_edges_lon
@@ -869,7 +885,7 @@ function solar_trip_weather(input_speed, segments, start_datetime,
 	# @debug "func solar_trip_calculation_bounds input_speed size is $(size(input_speed, 1)), track size is $(size(track.distance, 1)))"
 
     # calculating time needed to spend to travel across distance
-    time_df = calculate_travel_time_datetime(input_speed, segments, start_datetime)
+    # time_df = calculate_travel_time_datetime(input_speed, segments, start_datetime)
 
     #### calculcations
     # mechanical calculations are now in separate file
@@ -885,11 +901,19 @@ function solar_trip_weather(input_speed, segments, start_datetime,
 
     # get solar energy income
 	# @debug "track size is $(size(track.latitude, 1))"
+
+	time_seconds = calculate_travel_time_seconds(input_speed, segments)
+	mean_seconds = get_mean_data(time_seconds)
+	pushfirst!(mean_seconds, 0.)
+	milliseconds = round.(mean_seconds .* 1000)
+	mean_segment_utc = start_datetime .+ Dates.Millisecond.(milliseconds)
+	
     solar_power = solar_power_income_alloc.(
 		segments.latitude,
 		segments.longitude, 
 		segments.altitude, 
-		time_df.utc_time,
+		# time_df.utc_time,
+		mean_segment_utc,
 		segments.diff_distance,
 		input_speed
 	)
@@ -900,9 +924,10 @@ function solar_trip_weather(input_speed, segments, start_datetime,
 		weather_coef[i] = 1 .- weather_weights[lat_index, lon_index]
 		# println("lat $(segments.latitude[i]), lon $(segments.longitude[i]), w is $(weather_coef[i])")
 	end
+	
 	solar_power_adjusted = solar_power .* weather_coef
 	# println()
-	# print(solar_power_adjusted)
+	# print(weather_coef)
     solar_power_accumulated = calculate_power_income_accumulated(solar_power_adjusted)
 
     # TODO: calculate night charging - do it later since it is not critical as of right now
@@ -921,7 +946,7 @@ pua_weather,spa_weather,ts_weather = solar_trip_weather(
 )
 
 # ╔═╡ 1e9d17e9-d9fb-4b25-8233-4fc2fa6ce23e
-plot(spa_weather, title="Наколенная солнечная энергия с учётом осадков")
+plot(spa_weather, title="Накопленная солнечная энергия с учётом осадков")
 
 # ╔═╡ 63bf3f77-6abe-4280-ab2f-520beb93a353
 pua_no_weather,spa_no_weather,ts_no_weather = solar_trip_boundaries(
@@ -931,7 +956,7 @@ pua_no_weather,spa_no_weather,ts_no_weather = solar_trip_boundaries(
 );
 
 # ╔═╡ ac2a21e4-491b-4b92-826c-5d4d74cf9ef1
-plot(spa_no_weather, title="Наколенная солнечная энергия без учёта осадков")
+plot(spa_no_weather, title="Накопленная солнечная энергия без учёта осадков")
 
 # ╔═╡ 8d5be066-4625-4b60-a789-557ff2bd4660
 plot(diff(spa_weather), title="Cолнечная энергия (абсолютная) с учётом осадков")
@@ -1632,6 +1657,7 @@ Peaks = "18e31ff7-3703-566c-8e60-38913d67486b"
 PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
@@ -1647,6 +1673,7 @@ Peaks = "~0.4.3"
 PlotlyJS = "~0.18.10"
 Plots = "~1.38.11"
 PlutoUI = "~0.7.51"
+ProgressMeter = "~1.7.2"
 StatsBase = "~0.33.21"
 TimeZones = "~1.9.2"
 WebIO = "~0.8.20"
@@ -1656,9 +1683,9 @@ WebIO = "~0.8.20"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.1"
+julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "2cca9a3ff7173e81ea908e6500ff5f7f04beddc9"
+project_hash = "53f1e4e9f960959315ecfa6b208c19e1fd9ae3e1"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1798,7 +1825,7 @@ weakdeps = ["Dates", "LinearAlgebra"]
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.2+0"
+version = "1.0.5+0"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
@@ -2482,7 +2509,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.9.0"
+version = "1.9.2"
 
 [[deps.PlotThemes]]
 deps = ["PlotUtils", "Statistics"]
@@ -2567,6 +2594,12 @@ version = "2.2.4"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[[deps.ProgressMeter]]
+deps = ["Distributed", "Printf"]
+git-tree-sha1 = "d7a7aef8f8f2d537104f170139553b14dfe39fe9"
+uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
+version = "1.7.2"
 
 [[deps.Qt5Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "xkbcommon_jll"]
@@ -3108,9 +3141,9 @@ version = "1.4.1+0"
 # ╠═e9a6a82a-ecde-4baf-ad2c-f0a858bb2ed0
 # ╠═9e47be95-5f9a-43d6-876e-abb33a67de0a
 # ╠═9de8094a-5d24-4b08-8879-c7853cf6954b
-# ╟─b965ae63-8e6b-4c0a-91b6-c29bae610590
+# ╠═b965ae63-8e6b-4c0a-91b6-c29bae610590
 # ╟─c892b78b-58dd-4a61-b731-6f4c1432ea1a
-# ╟─c9daaf07-3dc2-4bef-ae23-b69acd2cb513
+# ╠═c9daaf07-3dc2-4bef-ae23-b69acd2cb513
 # ╟─a4ebc847-08fd-4976-87a7-2c35ca7920be
 # ╟─8f1d25de-f4dd-481a-a7f5-b8691586e705
 # ╟─46a01c40-c920-483c-aa93-1297eb0cddc8
@@ -3177,10 +3210,13 @@ version = "1.4.1+0"
 # ╠═b1449601-ce61-4097-8b32-345275f859b8
 # ╠═aba59435-42d9-4ac8-b768-0f017591d788
 # ╠═63afb4e4-dc19-4106-8bb5-b51d0881675d
+# ╠═642a882f-de23-4414-a579-b61088e98bd9
 # ╠═78327f2d-7cf2-49e3-98fa-d90aeb479c45
 # ╠═760e7514-e3c4-4366-93fc-e1379f96c2ad
 # ╠═e24f1d14-e0d9-45e8-a415-172e56e7cc9c
 # ╠═a803b045-f7ce-4a14-b363-1c166e34fbe7
+# ╠═e07dc08f-9cd8-46b6-8e92-062372b955a3
+# ╠═39e09aba-c4c5-46b1-8ef9-63403b0225eb
 # ╠═f7d29865-473d-47f5-a40c-08f48b531401
 # ╠═525a59f1-e377-4bb4-a922-51fb940ad688
 # ╠═1e9d17e9-d9fb-4b25-8233-4fc2fa6ce23e

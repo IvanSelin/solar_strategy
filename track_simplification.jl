@@ -718,7 +718,7 @@ function make_comparison_peaks(track, segments, speed, start_energy, start_datet
 	last_diff = last(source) - last(new_energy)
 	number_of_segments = length(points_peaks)
 
-	push!(res_df, ("Regular peaks", last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments))
+	# push!(res_df, ("Regular peaks", last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments))
 
 	# добавить результаты нового peaks (параметрического)
 	track_mod_peaks, segments_mod_peaks = get_track_and_segments_for_selected_points_modified(track, points_peaks)
@@ -734,7 +734,7 @@ function make_comparison_peaks(track, segments, speed, start_energy, start_datet
 	last_diff = last(source) - last(new_energy)
 	number_of_segments = length(points_peaks)
 
-	push!(res_df, ("Modified peaks", last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments))
+	push!(res_df, ("Peaks", last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments))
 end
 
 # ╔═╡ e46f1433-f940-4b3c-a6c5-49a70c07f671
@@ -770,7 +770,8 @@ plot(
 	thr_df_large.Length,
 	[thr_df_large.Finish_diff thr_df_large.MAE thr_df_large.RMSE thr_df_large.R2 ],
 	labels=["Finish diff" "MAE" "RMSE" "R^2" ],
-	xscale=:log10
+	xscale=:log10,
+	xlabel="Length, segments"
 )
 
 # ╔═╡ b2c8b3cb-7f6f-4f1e-9ccd-605bd110756a
@@ -781,12 +782,6 @@ md"Больше 2 threshold брать точно не следует
 # ╔═╡ fc619c3a-556b-4bf7-bff9-28f9a9bc0fb2
 peaks_df = make_comparison_peaks(track, segments, opt_speed, start_energy, start_datetime)
 
-# ╔═╡ 294a598f-cc46-4d85-bd86-c424f469427f
-Plots.scatter(peaks_df.Length, peaks_df.Finish_diff)
-
-# ╔═╡ 5881ce06-5bf1-4187-8533-b8af70a02bec
-md"Подумать как изобразить на одном графике и peaks, и threshold"
-
 # ╔═╡ 15bc9488-d29d-468e-8995-1ff5df9487e6
 md"Свести оба фрейма вместе с thr в виде стринги"
 
@@ -796,11 +791,8 @@ names_series = vcat(string.(thr_df_large.Threshold[1:3]), peaks_df.Series, strin
 # ╔═╡ b7c1cde6-7d63-4497-8a3e-2df959ca6918
 total_df = vcat(thr_df_large[1:3,2:end], peaks_df[:,2:end], thr_df_large[4:end,2:end])
 
-# ╔═╡ 0c7d0ecc-d5fb-4f64-90a8-21d15ca00d62
+# ╔═╡ 9de59850-3bd2-46a9-a3f9-3b73055bdf1d
 total_df.name = names_series
-
-# ╔═╡ 9e6e53a7-1798-4f87-a048-349e911056d5
-
 
 # ╔═╡ 7b07a2b8-eb69-4da7-ada5-4d44503e4274
 Plots.scatter(
@@ -813,65 +805,14 @@ Plots.scatter(
 	]
 )
 
-# ╔═╡ 840b3ae6-b68c-4a6c-9816-a232e8dc8c82
-total_df
-
 # ╔═╡ 63c9378a-df62-41d1-b3a0-db5a1be3b3c5
-sort!(total_df, [:Length, :name], rev=[true, false])
+sort!(total_df, [:Length, :name], rev=[true, false]);
 
 # ╔═╡ 0902e42e-8435-4a45-ab7f-9d7969dce188
 total_df_short = copy(total_df[total_df.Length .> 2000,:])
 
-# ╔═╡ 1b4c7692-9cea-48b0-a412-a955662b6adb
-Plots.scatter(
-	total_df_short.Length,
-	[
-		 total_df_short.RMSE
-	],
-	# markersize=0.01,
-	# labels = [
-	# 	 "RMSE"
-	# ],
-	# xscale=:log10,
-	# xticks=(
-	# total_df_short.Length,
-	# total_df_short.name,
-	# ),
-	xlabel="Track Length",
-	ylabel="RMSE"
-	# series_annotations = text.(total_df_short.name, :top, 6)
-)
-
-# ╔═╡ 0c7263a3-1709-4b28-bb11-4c4b13cc6c43
-Plots.scatter!(
-	total_df_short.Length .+ 0.05e4,
-	total_df_short.RMSE,
-	markersize=0.01,
-	# labels = [
-	# 	 "RMSE"
-	# ],
-	# xscale=:log10,
-	# xticks=(
-	# total_df_short.Length,
-	# total_df_short.name,
-	# ),
-	xlabel="Track Length",
-	ylabel="RMSE",
-	series_annotations = text.(total_df_short.name, :left, 8),
-	legend=false
-)
-
 # ╔═╡ 9e6bd014-b57b-41a4-a170-9e466325d51e
 md"А теперь попробуем сделать так, чтобы каждая точка была отдельной серией"
-
-# ╔═╡ 380869c9-26e7-4788-9ab6-28339f2132d6
-total_df_short.Length
-
-# ╔═╡ 6618ea7b-8ae8-45b1-84c3-dad7867f76d5
-size(total_df_short.Length)
-
-# ╔═╡ b4986eea-3b4c-477b-9af0-d2b554d701b1
-size(total_df_short.Length')
 
 # ╔═╡ 2f655bd9-ad59-4114-95b5-d4fdfb6447e6
 Plots.scatter(
@@ -882,6 +823,48 @@ Plots.scatter(
 	xlabel="Track Length, pieces",
 	ylabel="RMSE",
 )
+
+# ╔═╡ e8edab4f-c2cd-41dd-9aa8-2140f1641e56
+Plots.scatter(
+	total_df_short.Length',
+	total_df_short.Finish_diff',
+	labels=permutedims(total_df_short.name),
+	markershapes=:auto,
+	xlabel="Track Length, pieces",
+	ylabel="Energy diff on finish",
+)
+
+# ╔═╡ 4ba9ce08-ef82-415a-bdcc-5c70b8d4a16e
+md"Теперь такая же картинка для полноты картины с большим количество thr"
+
+# ╔═╡ b50bbc59-dc26-4cec-b674-6d733f573421
+total_df_shorter = copy(total_df[total_df.Length .> 100,:])
+
+# ╔═╡ a7e2adf8-154b-4ad1-bc53-aed37c9846ad
+Plots.scatter(
+	total_df_shorter.Length',
+	total_df_shorter.RMSE',
+	labels=permutedims(total_df_shorter.name),
+	markershapes=:auto,
+	xlabel="Track Length, pieces",
+	ylabel="RMSE",
+)
+
+# ╔═╡ d679e948-8d30-4620-a4fb-f202c04117b8
+Plots.scatter(
+	total_df_shorter.Length',
+	total_df_shorter.Finish_diff',
+	labels=permutedims(total_df_shorter.name),
+	markershapes=:auto,
+	xlabel="Track Length, pieces",
+	ylabel="Energy diff on finish",
+)
+
+# ╔═╡ b018504c-bcfc-4c01-9b05-43936b43b615
+md"Видно, что брать threshold больше 2 смысла не имеет, т.к. начинается значительная потеря точности"
+
+# ╔═╡ 4f2abf90-3e70-422a-9a1f-a85083269a9a
+md"Можно взять вариант peaks, как наиболее логичный"
 
 # ╔═╡ 0a7000be-88dd-4cba-a0b8-6f82ff1c9c07
 md"# На будущее"
@@ -2370,24 +2353,22 @@ version = "1.4.1+0"
 # ╠═dd8cf5c2-ccb9-4e55-8b1a-7c5cde97c36a
 # ╠═b2c8b3cb-7f6f-4f1e-9ccd-605bd110756a
 # ╠═fc619c3a-556b-4bf7-bff9-28f9a9bc0fb2
-# ╠═294a598f-cc46-4d85-bd86-c424f469427f
-# ╠═5881ce06-5bf1-4187-8533-b8af70a02bec
 # ╠═15bc9488-d29d-468e-8995-1ff5df9487e6
 # ╠═0be83fa6-81c6-4d32-a2ff-db833750a3f1
 # ╠═b7c1cde6-7d63-4497-8a3e-2df959ca6918
-# ╠═0c7d0ecc-d5fb-4f64-90a8-21d15ca00d62
-# ╠═9e6e53a7-1798-4f87-a048-349e911056d5
+# ╠═9de59850-3bd2-46a9-a3f9-3b73055bdf1d
 # ╠═7b07a2b8-eb69-4da7-ada5-4d44503e4274
-# ╠═840b3ae6-b68c-4a6c-9816-a232e8dc8c82
 # ╠═63c9378a-df62-41d1-b3a0-db5a1be3b3c5
 # ╠═0902e42e-8435-4a45-ab7f-9d7969dce188
-# ╠═1b4c7692-9cea-48b0-a412-a955662b6adb
-# ╠═0c7263a3-1709-4b28-bb11-4c4b13cc6c43
 # ╠═9e6bd014-b57b-41a4-a170-9e466325d51e
-# ╠═380869c9-26e7-4788-9ab6-28339f2132d6
-# ╠═6618ea7b-8ae8-45b1-84c3-dad7867f76d5
-# ╠═b4986eea-3b4c-477b-9af0-d2b554d701b1
 # ╠═2f655bd9-ad59-4114-95b5-d4fdfb6447e6
+# ╠═e8edab4f-c2cd-41dd-9aa8-2140f1641e56
+# ╠═4ba9ce08-ef82-415a-bdcc-5c70b8d4a16e
+# ╠═b50bbc59-dc26-4cec-b674-6d733f573421
+# ╠═a7e2adf8-154b-4ad1-bc53-aed37c9846ad
+# ╠═d679e948-8d30-4620-a4fb-f202c04117b8
+# ╠═b018504c-bcfc-4c01-9b05-43936b43b615
+# ╠═4f2abf90-3e70-422a-9a1f-a85083269a9a
 # ╠═0a7000be-88dd-4cba-a0b8-6f82ff1c9c07
 # ╠═308ea3b1-8145-49a7-aa16-048666312620
 # ╠═d76052a6-92a3-416e-89f7-f37e160b7d54
