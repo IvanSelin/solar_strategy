@@ -278,3 +278,12 @@ end
 function get_segments_interval(segments, from_point, to_point)
     return @view segments[from_point : to_point - 1, :]
 end
+
+function get_average_on_segment(data_x, data_y, from, to)
+	integrated_value = 0
+	for i=from:to-1
+		integrated_value += (data_y[i] + data_y[i+1]) / 2 * (data_x[i+1] - data_x[i])
+	end
+	result = integrated_value / (data_x[to] - data_x[from])
+	return result
+end

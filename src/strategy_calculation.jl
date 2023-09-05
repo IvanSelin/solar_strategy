@@ -1183,123 +1183,134 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 
 
 		is_track_divisible_further = false
-		# is_there_single_subtask_where_track_is_divisible = false
-		Threads.@threads for subtask_index in eachindex(iteration.subtasks)
-		# for subtask_index in eachindex(iteration.subtasks)
-		# for subtask_index in eachindex(subtasks_splits_iteration)
-			# println("Subtask $subtask_index")
-			subtask = iteration.subtasks[subtask_index]
-			# println("Analyzing subtask from $(subtask.subtask_boundaries.from) to $(subtask.subtask_boundaries.to)")
+		# # is_there_single_subtask_where_track_is_divisible = false
+		# # Threads.@threads for subtask_index in eachindex(iteration.subtasks)
+		# # Threads.@threads for subtask in iteration.subtasks
+		# for subtask in iteration.subtasks
+		# # @floop for subtask in iteration.subtasks
+		# # for subtask_index in eachindex(iteration.subtasks)
+		# # for subtask_index in eachindex(subtasks_splits_iteration)
+		# 	# println("Subtask $subtask_index")
+		# 	# subtask = iteration.subtasks[subtask_index]
 
-			# 3. each subtask comes with its own chunks (variables)			
-			# split each task on parts
-			subtask.variables_boundaries = calculate_boundaries(
-				subtask.subtask_boundaries.from,
-				subtask.subtask_boundaries.to,
-				scaling_coef_variables
-			)
+		# 	# println("Analyzing subtask from $(subtask.subtask_boundaries.from) to $(subtask.subtask_boundaries.to)")
 
-			if (subtask.subtask_boundaries.size) >= scaling_coef_variables
-				# at least one subtask can be divided, so, there should be next iteration
-				is_track_divisible_further = true
-			end
+		# 	# 3. each subtask comes with its own chunks (variables)			
+		# 	# split each task on parts
+		# 	subtask.variables_boundaries = calculate_boundaries(
+		# 		subtask.subtask_boundaries.from,
+		# 		subtask.subtask_boundaries.to,
+		# 		scaling_coef_variables
+		# 	)
 
-			#######################
+		# 	if (subtask.subtask_boundaries.size) >= scaling_coef_variables
+		# 		# at least one subtask can be divided, so, there should be next iteration
+		# 		is_track_divisible_further = true
+		# 	end
 
-			# TODO: how to calculate amount of speeds?
-			vars_amount = size(subtask.variables_boundaries, 1)
+		# 	#######################
 
-			# TODO: change here
-			# write a function that repeats array values to get another array of bigger size
-			prev_iter_speeds = fill_array(
-				subtask.problem.initial_speeds, 
-				vars_amount
-			)
+		# 	# TODO: how to calculate amount of speeds?
+		# 	vars_amount = size(subtask.variables_boundaries, 1)
 
-			# prev_iter_speeds = fill(
-			# 	first(subtask.problem.initial_speeds), 
-			# 	vars_amount
-			# )
+		# 	# TODO: change here
+		# 	# write a function that repeats array values to get another array of bigger size
+		# 	prev_iter_speeds = fill_array(
+		# 		subtask.problem.initial_speeds, 
+		# 		vars_amount
+		# 	)
 
-			subtask_segments = get_segments_interval(
-				segments,
-				subtask.subtask_boundaries.from,
-				subtask.subtask_boundaries.to
-			)
+		# 	# prev_iter_speeds = fill(
+		# 	# 	first(subtask.problem.initial_speeds), 
+		# 	# 	vars_amount
+		# 	# )
 
-			# 4. solve optimization problem for every subtask with its chunks (variables)
-			# function f_iter(input_speeds)
-			# 	if iteration_num == 1
-			# 		return solar_partial_trip_wrapper_iter_with_low_energy(
-			# 		# return solar_partial_trip_wrapper_iter_with_low_energy(
-			# 			input_speeds, subtask_segments, subtask.variables_boundaries,
-			# 			subtask.problem.start_energy, subtask.problem.finish_energy,
-			# 			subtask.problem.start_datetime
-			# 		)
-			# 	else
-			# 		return solar_partial_trip_wrapper_iter(
-			# 		# return solar_partial_trip_wrapper_iter_with_low_energy(
-			# 			input_speeds, subtask_segments, subtask.variables_boundaries,
-			# 			subtask.problem.start_energy, subtask.problem.finish_energy,
-			# 			subtask.problem.start_datetime
-			# 		)
-			# 	end
-			# end
+		# 	subtask_segments = get_segments_interval(
+		# 		segments,
+		# 		subtask.subtask_boundaries.from,
+		# 		subtask.subtask_boundaries.to
+		# 	)
 
-			function f_iter(input_speeds)
-				return solar_partial_trip_wrapper_iter(
-				# return solar_partial_trip_wrapper_iter_with_low_energy(
-					input_speeds, subtask_segments, subtask.variables_boundaries,
-					subtask.problem.start_energy, subtask.problem.finish_energy,
-					subtask.problem.start_datetime
-				)
-			end
+		# 	# 4. solve optimization problem for every subtask with its chunks (variables)
+		# 	# function f_iter(input_speeds)
+		# 	# 	if iteration_num == 1
+		# 	# 		return solar_partial_trip_wrapper_iter_with_low_energy(
+		# 	# 		# return solar_partial_trip_wrapper_iter_with_low_energy(
+		# 	# 			input_speeds, subtask_segments, subtask.variables_boundaries,
+		# 	# 			subtask.problem.start_energy, subtask.problem.finish_energy,
+		# 	# 			subtask.problem.start_datetime
+		# 	# 		)
+		# 	# 	else
+		# 	# 		return solar_partial_trip_wrapper_iter(
+		# 	# 		# return solar_partial_trip_wrapper_iter_with_low_energy(
+		# 	# 			input_speeds, subtask_segments, subtask.variables_boundaries,
+		# 	# 			subtask.problem.start_energy, subtask.problem.finish_energy,
+		# 	# 			subtask.problem.start_datetime
+		# 	# 		)
+		# 	# 	end
+		# 	# end
 
-			function f_iter_low_energy(input_speeds)
-				# return solar_partial_trip_wrapper_iter(
-				return solar_partial_trip_wrapper_iter_with_low_energy(
-					input_speeds, subtask_segments, subtask.variables_boundaries,
-					subtask.problem.start_energy, subtask.problem.finish_energy,
-					subtask.problem.start_datetime
-				)
-			end
+		# 	function f_iter(input_speeds)
+		# 		return solar_partial_trip_wrapper_iter(
+		# 		# return solar_partial_trip_wrapper_iter_with_low_energy(
+		# 			input_speeds, subtask_segments, subtask.variables_boundaries,
+		# 			subtask.problem.start_energy, subtask.problem.finish_energy,
+		# 			subtask.problem.start_datetime
+		# 		)
+		# 	end
 
-			if iteration_num == 1
-				td = TwiceDifferentiable(f_iter_low_energy, prev_iter_speeds; autodiff = :forward)
-			else
-				td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)	
-			end
+		# 	function f_iter_low_energy(input_speeds)
+		# 		# return solar_partial_trip_wrapper_iter(
+		# 		return solar_partial_trip_wrapper_iter_with_low_energy(
+		# 			input_speeds, subtask_segments, subtask.variables_boundaries,
+		# 			subtask.problem.start_energy, subtask.problem.finish_energy,
+		# 			subtask.problem.start_datetime
+		# 		)
+		# 	end
 
-			# td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)
-			lower_bound = fill(0.0, vars_amount)
-			upper_bound = fill(100.0, vars_amount)
-			# upper_bound = fill(200.0, vars_amount)
-			tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
-			# line_search = LineSearches.BackTracking();
-			# result = optimize(td, fill(speed, vars_amount),
-				#Newton(; linesearch = line_search),
-			result = optimize(td, tdc, prev_iter_speeds 
-			.+ rand(vars_amount) .- 0.5
-				,
-				IPNewton(),
-				Optim.Options(
-					x_tol = 1e-12,
-					f_tol = 1e-12,
-					g_tol = 1e-12
-				)
-			)
-			minimized_speeds = Optim.minimizer(result)
-			# println(Optim.minimizer(result))
-			# println(Optim.minimum(result))
-			subtask.solution = minimized_speeds
+		# 	if iteration_num == 1
+		# 		td = TwiceDifferentiable(f_iter_low_energy, prev_iter_speeds; autodiff = :forward)
+		# 	else
+		# 		td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)	
+		# 	end
 
-			# TODO: check optimization procedure in compliance with article
-			# TODO: save result somewhere - in subtask struct
-			# OR, in subtaskResult struct
+		# 	# td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)
+		# 	lower_bound = fill(0.0, vars_amount)
+		# 	upper_bound = fill(100.0, vars_amount)
+		# 	# upper_bound = fill(200.0, vars_amount)
+		# 	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+		# 	# line_search = LineSearches.BackTracking();
+		# 	# result = optimize(td, fill(speed, vars_amount),
+		# 		#Newton(; linesearch = line_search),
+		# 	result = optimize(td, tdc, prev_iter_speeds 
+		# 	.+ rand(vars_amount) .- 0.5
+		# 		,
+		# 		IPNewton(),
+		# 		Optim.Options(
+		# 			x_tol = 1e-12,
+		# 			f_tol = 1e-12,
+		# 			g_tol = 1e-12
+		# 		)
+		# 	)
+		# 	minimized_speeds = Optim.minimizer(result)
+		# 	# println(Optim.minimizer(result))
+		# 	# println(Optim.minimum(result))
+		# 	subtask.solution = minimized_speeds
 
-		end
+		# 	# TODO: check optimization procedure in compliance with article
+		# 	# TODO: save result somewhere - in subtask struct
+		# 	# OR, in subtaskResult struct
+
+		# end
 		# is_track_divisible_further = !is_there_single_subtask_where_track_is_divisible
 		# push!(subtasks_splits_general, variables_split_iteration)
+
+		# @floop for subtask in iteration.subtasks
+		@showprogress for subtask in iteration.subtasks
+			is_divisible = process_subtask!(subtask, scaling_coef_variables, segments)
+			# @reduce(is_track_divisible_further |= is_divisible)
+			is_track_divisible_further |= is_divisible
+		end
 
 		println()
 		# 5. tie everything together (collect speeds to one array)
@@ -1394,6 +1405,82 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 	println("Calc done")
 	return iterations
 
+end
+
+function process_subtask!(subtask, scaling_coef_variables, segments)
+	# 3. each subtask comes with its own chunks (variables)			
+	# split each task on parts
+	subtask.variables_boundaries = calculate_boundaries(
+		subtask.subtask_boundaries.from,
+		subtask.subtask_boundaries.to,
+		scaling_coef_variables
+	)
+
+	is_track_divisible_further = false
+	if (subtask.subtask_boundaries.size) >= scaling_coef_variables
+		# at least one subtask can be divided, so, there should be next iteration
+		is_track_divisible_further = true
+	end
+
+	# TODO: how to calculate amount of speeds?
+	vars_amount = size(subtask.variables_boundaries, 1)
+
+	# TODO: change here
+	# write a function that repeats array values to get another array of bigger size
+	prev_iter_speeds = fill_array(
+		subtask.problem.initial_speeds, 
+		vars_amount
+	)
+
+	subtask_segments = get_segments_interval(
+		segments,
+		subtask.subtask_boundaries.from,
+		subtask.subtask_boundaries.to
+	)
+
+	function f_iter(input_speeds)
+		return solar_partial_trip_wrapper_iter(
+		# return solar_partial_trip_wrapper_iter_with_low_energy(
+			input_speeds, subtask_segments, subtask.variables_boundaries,
+			subtask.problem.start_energy, subtask.problem.finish_energy,
+			subtask.problem.start_datetime
+		)
+	end
+
+	function f_iter_low_energy(input_speeds)
+		# return solar_partial_trip_wrapper_iter(
+		return solar_partial_trip_wrapper_iter_with_low_energy(
+			input_speeds, subtask_segments, subtask.variables_boundaries,
+			subtask.problem.start_energy, subtask.problem.finish_energy,
+			subtask.problem.start_datetime
+		)
+	end
+
+	# if iteration_num == 1
+	if size(subtask.problem.initial_speeds, 1) == 2
+		td = TwiceDifferentiable(f_iter_low_energy, prev_iter_speeds; autodiff = :forward)
+	else
+		td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)	
+	end
+
+	lower_bound = fill(0.0, vars_amount)
+	upper_bound = fill(100.0, vars_amount)
+	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+	result = optimize(td, tdc, prev_iter_speeds 
+	.+ rand(vars_amount) .- 0.5
+		,
+		IPNewton(),
+		Optim.Options(
+			x_tol = 1e-12,
+			f_tol = 1e-12,
+			g_tol = 1e-12
+		)
+	)
+	minimized_speeds = Optim.minimizer(result)
+	# println(Optim.minimizer(result))
+	# println(Optim.minimum(result))
+	subtask.solution = minimized_speeds
+	return is_track_divisible_further
 end
 
 function minimize_single_speed(track, segments, start_energy, start_datetime, init_speed)

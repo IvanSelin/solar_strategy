@@ -15,6 +15,9 @@ using OhMyREPL
 using Distributions
 using Random
 using StatsBase
+# using FLoops
+using Distributed
+using ProgressMeter
 # using Alert
 # selecting a Plots backend
 plotly(ticks=:native)
@@ -59,8 +62,10 @@ plot(
 track_peaks, segments_peaks = keep_extremum_only_peaks_segments(track)
 plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data built w/ Peaks.jl")
 # TODO: track preprocessing
-track.altitude = track.altitude .* 10;
-track_peaks_high, segments_peaks_high = keep_extremum_only_peaks_segments(track)
+track_high = copy(track)
+track_high.altitude = track_high.altitude .* 10;
+segments_high = get_segments_for_track(track_high);
+track_peaks_high, segments_peaks_high = keep_extremum_only_peaks_segments(track_high)
 plot(track_peaks_high.distance, track_peaks_high.altitude, title="Track extremum only data built w/ Peaks.jl alt * 10")
 
 plot(
@@ -163,6 +168,41 @@ simulate_run_finish_time(
     DateTime(2023,1,1,10,0,0)
 )
 
+# full track
+weather_coeff_full = calculate_weather_weights_for_segments(
+    w,
+    elat,
+    elon,
+    segments
+);
+segments.weather_coeff = weather_coeff_full
+@time res_full = iterative_optimization(
+    track, segments,
+    5,
+    5,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+);
+plots_for_results(res_full, track, segments)
+
+simulate_run_finish_time(
+    fill(37.90363171504429, size(segments.diff_distance, 1)),
+    track,
+    segments,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+)
+
+# full high track
+segments_high.weather_coeff = weather_coeff_full
+@time res_full_high = iterative_optimization(
+    track_high, segments_high,
+    5,
+    5,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+);
+plots_for_results(res_full_high, track_high, segments_high)
 
 
 
