@@ -4,6 +4,16 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
 # ╔═╡ cff82de0-3d15-11ee-37ff-035acc6e8e4a
 begin
 	using DataFrames
@@ -16,6 +26,9 @@ begin
 	using Peaks
 	using Metrics
 	using ProgressMeter
+	using BenchmarkTools
+	using CurveFit
+	using ProgressLogging
 end
 
 # ╔═╡ 9ce6e2c1-69e4-47c6-830c-3c0eb13d784e
@@ -548,7 +561,9 @@ md"Надо сравнить с предыдущей версией peaks"
 segments_new_peaks.altitude - segments_peaks_pl.altitude
 
 # ╔═╡ 09dddfde-100f-43d9-ad48-65eecb39923b
-md"Как ни странно, получается хуже"
+md"Как ни странно, получается хуже
+
+Не хуже, а по-другому. Выходят другие высоты"
 
 # ╔═╡ 91cae49c-bd36-473f-a23b-d15ecd1ac073
 sum(segments_new_peaks.altitude - segments_peaks_pl.altitude)
@@ -649,12 +664,15 @@ md"Сделать таблицу сравнения, где будет коли�
 function make_comparison_df(track, segments, thresholds, speed, start_energy, start_datetime)
 	# 1. reference result
 	full_energy, full_time = simulate_run_energies(speed, track, segments, start_energy, start_datetime)
-	res_df = DataFrame(Threshold=Float64[], Finish_diff=Float64[], MAE=Float64[], MSE=Float64[], RMSE=Float64[], R2=Float64[], Length=Int64[])
+	res_df = DataFrame(Threshold=Float64[], Finish_diff=Float64[], MAE=Float64[], MSE=Float64[], RMSE=Float64[], R2=Float64[], Length=Int64[], ExecTime=Float64[])
 	
 	for thr in thresholds
 		track_thr, points_thr = parametrized_track_simplification(track, thr);
 		segments_thr = get_segments_for_track(track_thr);
+		t_start = time()
 		reduced_energy, reduced_time = simulate_run_energies(speed, track_thr, segments_thr, start_energy, start_datetime)
+		t_finish = time()
+		exec_time = t_finish - t_start
 		energy_diff = full_energy[points_thr] - reduced_energy;
 		source = full_energy[points_thr];
 		new_energy = reduced_energy;
@@ -668,7 +686,7 @@ function make_comparison_df(track, segments, thresholds, speed, start_energy, st
 		last_diff = last(source) - last(new_energy)
 		number_of_segments = length(points_thr)
 
-		push!(res_df, (thr, last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments))
+		push!(res_df, (thr, last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments, exec_time))
 		
 		# energies_thr = compare_track_energies(
 		# 	track, segments,
@@ -702,11 +720,14 @@ function make_comparison_peaks(track, segments, speed, start_energy, start_datet
 	# 1. reference result
 	full_energy, full_time = simulate_run_energies(speed, track, segments, start_energy, start_datetime)
 
-	res_df = DataFrame(Series=String[], Finish_diff=Float64[], MAE=Float64[], MSE=Float64[], RMSE=Float64[], R2=Float64[], Length=Int64[])
+	res_df = DataFrame(Series=String[], Finish_diff=Float64[], MAE=Float64[], MSE=Float64[], RMSE=Float64[], R2=Float64[], Length=Int64[], ExecTime=Float64[])
 	
 	# добавить результаты обычного peaks (не параметрического)
 	track_peaks, segments_peaks, points_peaks = keep_extremum_only_peaks_segments_with_points(track);
+	t_start = time()
 	reduced_energy, reduced_time = simulate_run_energies(speed, track_peaks, segments_peaks, start_energy, start_datetime)
+	t_finish = time()
+	exec_time = t_finish - t_start
 	# energy_diff_peaks = full_energy[points_peaks] - reduced_energy;
 
 	source = full_energy[points_peaks];
@@ -734,7 +755,7 @@ function make_comparison_peaks(track, segments, speed, start_energy, start_datet
 	last_diff = last(source) - last(new_energy)
 	number_of_segments = length(points_peaks)
 
-	push!(res_df, ("Peaks", last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments))
+	push!(res_df, ("Peaks", last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments, exec_time))
 end
 
 # ╔═╡ e46f1433-f940-4b3c-a6c5-49a70c07f671
@@ -746,7 +767,7 @@ thr_df = make_comparison_df(track, segments, [.0:.01:.1; .15:.025:1.5], opt_spee
 # ╔═╡ e8944e65-f0e0-4169-bcb1-3d6aa2b30bf5
 plot(
 	thr_df.Threshold,
-	Matrix(thr_df)[:,2:end-1],
+	Matrix(thr_df)[:,2:end-2],
 	labels=["Finish diff" "MAE" "MSE" "RMSE" "R^2"]
 )
 
@@ -866,6 +887,498 @@ md"Видно, что брать threshold больше 2 смысла не им
 # ╔═╡ 4f2abf90-3e70-422a-9a1f-a85083269a9a
 md"Можно взять вариант peaks, как наиболее логичный"
 
+# ╔═╡ cb6f30e9-bd84-494a-856e-7dc284124a22
+md"# Влияние длины трассы на производительность"
+
+# ╔═╡ 66c7f41c-ba84-4522-9b9a-27b6cc3a6893
+md"## Для симуляции"
+
+# ╔═╡ d08e325e-5d2a-486c-87e5-cb0833e3882b
+@time simulate_run_finish_time(
+	fill(opt_speed, size(segments_dict[0.05], 1)),
+	tracks[0.05],
+	segments_dict[0.05],
+	start_energy,
+	start_datetime
+)
+
+# ╔═╡ 53ce657b-1dd9-49c6-a152-fd3358d17b8f
+function make_comparison_times_df(track, segments, thresholds, speed, start_energy, start_datetime)
+	# 1. reference result
+	full_energy, full_time = simulate_run_energies(speed, track, segments, start_energy, start_datetime)
+	res_df = DataFrame(Threshold=Float64[], Finish_diff=Float64[], MAE=Float64[], MSE=Float64[], RMSE=Float64[], R2=Float64[], Length=Int64[], MedTime=Float64[], MeanTime=Float64[])
+
+	N = length(thresholds);
+	# p = Progress(N);
+	# update!(p,0)
+	jj = Threads.Atomic{Int}(0)
+	l = Threads.SpinLock()
+	# @withprogress name="iterating" begin
+	# @Threads.threads for thr in thresholds
+	for thr in thresholds
+		track_thr, points_thr = parametrized_track_simplification(track, thr);
+		segments_thr = get_segments_for_track(track_thr);
+		# t_start = time()
+		reduced_energy, reduced_time = simulate_run_energies(speed, track_thr, segments_thr, start_energy, start_datetime)
+		bench_info = @benchmark tmp1, tmp2 = simulate_run_energies($speed, $track_thr, $segments_thr, $start_energy, $start_datetime) samples=50 evals=10
+		# t_finish = time()
+		# exec_time = t_finish - t_start
+		med_time = median(bench_info.times)
+		mean_time = mean(bench_info.times)
+		energy_diff = full_energy[points_thr] - reduced_energy;
+		source = full_energy[points_thr];
+		new_energy = reduced_energy;
+		# это вся разница
+		# считаем от неё метрики: r^2, MSE, RMSE разница на финише
+		# sqrt(sum((arr1 .- arr2).^2) / length(arr1)) 
+		mae_val = mae(source, new_energy)
+		mse_val = mse(source, new_energy)
+		rmse_val = sqrt(mse_val)
+		r2_val = r2_score(source, new_energy)
+		last_diff = last(source) - last(new_energy)
+		number_of_segments = length(points_thr)
+
+		# Threads.atomic_add!(jj, 1)
+		# Threads.lock(l)
+		push!(res_df, (thr, last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments, med_time, mean_time))
+		# index = findfirst(x -> x==thr, thresholds)
+		# @logprogress index/length(thresholds)
+		
+		# update!(p, jj[])
+		# @logprogress jj[]/N
+		# Threads.unlock(l) 
+		
+		# energies_thr = compare_track_energies(
+		# 	track, segments,
+		# 	track_thr, segments_thr, points_thr,
+		# 	speed, start_energy, start_datetime
+		# )
+	end
+	# end
+
+	# посчитать в отдельной функции
+	# # добавить результаты обычного peaks (не параметрического)
+	# track_peaks, segments_peaks, points_peaks2 = keep_extremum_only_peaks_segments_with_points(track);
+	# energies_peaks = compare_track_energies(
+	# 	track, segments,
+	# 	track_peaks, segments_peaks, points_peaks2,
+	# 	speed, start_energy, start_datetime
+	# )
+
+	# # добавить результаты нового peaks (параметрического)
+	# track_mod_peaks, segments_mod_peaks = get_track_and_segments_for_selected_points_modified(track, points_peaks2)
+	# energies_mod_peaks = compare_track_energies(
+	# 	track, segments,
+	# 	track_mod_peaks, segments_mod_peaks, points_peaks2,
+	# 	speed, start_energy, start_datetime
+	# )
+	
+	return res_df
+end
+
+# ╔═╡ 95f02f1c-914b-4363-a100-eb34512ee911
+thr_df_large_times = make_comparison_times_df(track, segments, .0:.25:5, opt_speed, start_energy, start_datetime)
+
+# ╔═╡ df9ec094-a2ae-428d-aacb-f53a91c4eff8
+Plots.scatter(
+	thr_df_large_times.Length,
+	[
+		thr_df_large_times.MedTime thr_df_large_times.MeanTime
+	],
+	labels=["Median time" "Mean time"],
+	xlabel="Length (segments)",
+	ylabel="Time (ns)"
+)
+
+# ╔═╡ b59f861e-8ced-4900-9fdf-d59eef82e9e3
+md"Линейная зависимость скорости симуляции"
+
+# ╔═╡ 5955727b-40f1-4eb4-b868-2ae7788c1625
+md"## Для отптимизации"
+
+# ╔═╡ 44fa6c8e-9e64-4262-9324-272a133e302e
+md"Будем проводить не на полном размере трассы, а на её начале. Т.е. сперва трасса из одного участка, потом из 2-х, 3-х и т.д.
+
+Затем будет аппроксимация сложности вычислений"
+
+# ╔═╡ 0a4a6191-c3dd-4551-b104-dd0595dd684e
+md"Проводить будем 2 эксперимента:
+1. Число переменных=число сегментов (берём первые n сегментов трассы, сегменты 1:1)
+2. Число переменных!=число сегментов (берём всю трассу, делим на n сегментов) "
+
+# ╔═╡ e7c9704d-e310-4b11-aa88-f41d6692635e
+md"## Короткие трассы (по числу сегментов)"
+
+# ╔═╡ 1a956d44-14c6-41a9-8015-3691051d0cb6
+md"Надо сделать:
+
+1. Сделать benchmark на одной оптимизации
+2. Обернуть в цикл и записывать результаты в датафрейм"
+
+# ╔═╡ daa0b062-f7e4-4684-8a42-d85bc9043b71
+md"### Бенчим одну оптимизацию"
+
+# ╔═╡ f4d510db-3b37-4f06-bc27-99447fd4fefe
+@bind short_track_segments confirm(NumberField(1:size(segments_peaks_pl,1), default=5))
+
+# ╔═╡ c8117fcf-3dfa-4064-8adb-509b17e0280b
+segments_short = segments_peaks_pl[1:short_track_segments,:]
+
+# ╔═╡ 80a489d8-277d-412d-92ad-2c54dc98fbdc
+track_short = track_peaks_pl[1:short_track_segments+1,:]
+
+# ╔═╡ 2639bd8b-d88c-42f4-b34c-fd206525d3c3
+start_energy_short = start_energy * last(track_short.distance) / last(track.distance)
+
+# ╔═╡ b6d30924-90d8-4155-882e-8a72e0c7e797
+function f_wrap_short_track(input_speeds)
+	speeds_ms = convert_kmh_to_ms(input_speeds)
+	power_use_short, solar_power_short, time_s_short = solar_trip_boundaries(
+		speeds_ms, segments_short, start_datetime
+	)
+
+	energy_in_system = start_energy_short .+ solar_power_short .- power_use_short
+
+	# energy_capacity = start_energy_short
+
+	cost = sum(segments_short.diff_distance ./ speeds_ms) + 100 * (0. - last(energy_in_system))^2;
+
+	# cost = last(time_s) + (
+	# 	10000 * (finish_energy - last(energy_in_system))^2 +
+	# 	100 * max(0, maximum(energy_in_system) - energy_capacity)
+	# )
+	return cost
+end
+
+# ╔═╡ 2321ad16-58d0-4332-9108-dfde9e6ec6cf
+init_speeds_short = fill(30., short_track_segments)
+
+# ╔═╡ 3ddfebdc-7b41-4a17-8cd1-9169ad4ecf07
+begin
+	td_short = TwiceDifferentiable(f_wrap_short_track, init_speeds_short; autodiff = :forward)
+	lower_bound_short = fill(0.0, short_track_segments)
+	upper_bound_short = fill(100.0, short_track_segments)
+	tdc_short = TwiceDifferentiableConstraints(lower_bound_short, upper_bound_short)
+end
+
+# ╔═╡ 16887603-f096-46fe-9fa1-601d1dc2605d
+@time res_short = optimize(td_short, tdc_short, init_speeds_short 
+# .+ rand(vars_amount) .- 0.5
+    ,
+    IPNewton(),
+    Optim.Options(
+        x_tol = 1e-6,
+        f_tol = 1e-6,
+        g_tol = 1e-6
+    )
+)
+
+# ╔═╡ ed06d8f1-a22e-4da2-a31c-50ae7176b31d
+speeds_short = Optim.minimizer(res_short)
+
+# ╔═╡ e5d77450-c22b-4f63-8adb-0dc1854e3b8c
+simulate_run(
+	speeds_short,
+	track_short,
+	segments_short,
+	start_energy_short,
+	start_datetime
+)
+
+# ╔═╡ 05599d8f-82bd-4e3c-98e1-42473e7887ad
+md"Получается 80 милисекунд (для 50 участков), что-то маловато
+
+Скорее всего что-то не то с измерением.
+
+Либо только первый прогон длинный почему-то
+
+Первый длинный, второй и далее - быстрые"
+
+# ╔═╡ 9f5f1f2c-498f-460b-b6b4-a58b5c9f5804
+md"1900 секунд для трассы в 1000 кусочков"
+
+# ╔═╡ 08e0976a-7652-4b8b-ad07-c0b8505e086c
+md"### Бенчим в цикле"
+
+# ╔═╡ 34f706ea-918d-43fc-a653-92d311b7df18
+short_segments_sizes = 10:10:500
+
+# ╔═╡ 01ca48c3-e201-4ad5-87fe-cbec83b7a009
+md"Многопоточное исполнение коверкает результаты, либо я его неправильно делаю. Поэтому тесты в однопотоке, зато с прогрессом)"
+
+# ╔═╡ 1cc1735a-7b11-4ecf-9b11-d0aac8a79c7a
+function benchmark_optimizations(segment_sizes::Vector{<:Number}, track, segments, start_energy, start_datetime)
+	res_df = DataFrame(Length=Int64[], Mean=Float64[], Median=Float64[])
+	# @progress @Threads.threads for size in segment_sizes
+	@progress for i in 1:length(segment_sizes)
+		size = segment_sizes[i]
+		track_short = track[1:(size+1),:]
+		segments_short = segments[1:size,:]
+		start_energy_short = start_energy * last(track_short.distance) / last(track.distance)
+
+		function f_wrap_short_track_inner(input_speeds)
+			speeds_ms = convert_kmh_to_ms(input_speeds)
+			power_use_short, solar_power_short, time_s_short = solar_trip_boundaries(
+				speeds_ms, segments_short, start_datetime
+			)
+		
+			energy_in_system = start_energy_short .+ solar_power_short .- power_use_short
+		
+			# energy_capacity = start_energy_short
+		
+			cost = sum(segments_short.diff_distance ./ speeds_ms) + 100 * (0. - last(energy_in_system))^2;
+		
+			# cost = last(time_s) + (
+			# 	10000 * (finish_energy - last(energy_in_system))^2 +
+			# 	100 * max(0, maximum(energy_in_system) - energy_capacity)
+			# )
+			return cost
+		end
+
+		init_speeds_short = fill(30., size)
+
+		td_short = TwiceDifferentiable(f_wrap_short_track_inner, init_speeds_short; autodiff = :forward)
+		lower_bound_short = fill(0.0, size)
+		upper_bound_short = fill(100.0, size)
+		tdc_short = TwiceDifferentiableConstraints(lower_bound_short, upper_bound_short)
+
+		bench_info_short = @benchmark res_short = optimize($td_short, $tdc_short, $init_speeds_short 
+		# .+ rand(vars_amount) .- 0.5
+		    ,
+		    IPNewton(),
+		    Optim.Options(
+		        x_tol = 1e-6,
+		        f_tol = 1e-6,
+		        g_tol = 1e-6
+		    )
+		) samples=3 evals=1 seconds=10
+		
+		med_time = median(bench_info_short.times) * 1e-6 # to ms
+		mean_time = mean(bench_info_short.times) * 1e-6
+		push!(res_df, (size, mean_time, med_time))
+	end
+	return res_df
+end
+
+# ╔═╡ 8a195f8f-c9ff-4f24-aca1-5b85d7421383
+optim_times_df = CSV.read("optim_times.csv", DataFrame)
+
+# ╔═╡ ec3eb92f-9232-4309-8564-d8c9b620293b
+mean_fit = curve_fit(Polynomial, optim_times_df.Length, optim_times_df.Mean, 3)
+
+# ╔═╡ 4592706f-7f90-41c4-bf11-4254fa6450a2
+median_fit = curve_fit(Polynomial, optim_times_df.Length, optim_times_df.Median, 3)
+
+# ╔═╡ c4c9f140-086a-483e-9bb8-5af8e452181e
+plot(
+	optim_times_df.Length,
+	[ optim_times_df.Mean  mean_fit.(optim_times_df.Length)],
+	# labels=["Mean" "Median" "Mean (fit):"*text(mean_fit).str "Median (fit):"*text(median_fit).str],
+	labels=["Mean" "Mean (fit)"],
+	xlabel="Length",
+	ylabel="Time(ms)",
+	seriestypes=[:scatter :path ]
+)
+
+# ╔═╡ 67de2dbd-3633-4728-a6e4-53e2ddfb2625
+plot(
+	optim_times_df.Length,
+	[ optim_times_df.Mean optim_times_df.Median mean_fit.(optim_times_df.Length) median_fit.(optim_times_df.Length)],
+	# labels=["Mean" "Median" "Mean (fit):"*text(mean_fit).str "Median (fit):"*text(median_fit).str],
+	labels=["Mean" "Median" "Mean (fit)" "Median (fit)"],
+	xlabel="Length",
+	ylabel="Time(ms)",
+	seriestypes=[:scatter :scatter :path :path]
+)
+
+# ╔═╡ e9821459-f1b6-4884-8d0c-3017ac2d776d
+md"Выглядит как квадратичная зависимость, составляющая куба очень мала"
+
+# ╔═╡ 5c493ed5-e368-4550-88da-bf6c7338b879
+mean_fit(1000)
+
+# ╔═╡ 89641cc8-72b2-4a4a-9fcb-e48bdf7a778b
+md"Посмотрим, что будет на полной трассе" 
+
+# ╔═╡ f5419815-56ef-4485-b72f-ee3bf2d3461b
+mean_fit(
+	size(
+		segments_peaks_pl,
+		1
+	)
+) / 1000. / 3600.
+
+# ╔═╡ 2a341070-a64e-41dc-b41b-c8e68730dc9f
+md"Вышло 771 час"
+
+# ╔═╡ da45b3b3-c3c2-4fe8-a0ba-2530ec2a6e84
+md"Должно быть 1900 секунд, а не 661"
+
+# ╔═╡ 85376195-8c5e-42a1-a307-a7f0721556b9
+md"Плоховато сходится, надо больше измерений. Запустить на ночь с шагом в 100-200 до 1.5 тысяч"
+
+# ╔═╡ d04b0d6a-96ba-4aba-b943-74cf46f8855c
+md"В любом случае, какая-то зависимость есть, теперь пора делать для полной трассы"
+
+# ╔═╡ c99b3c6a-c29d-475d-bb79-ff23d505fe0a
+md"## Вся трасса с разным числом сегментов"
+
+# ╔═╡ 7b6dd0b4-6e9c-44bf-baf7-6dcc0709086d
+md"Здесь не будем даже делать без цикла, сразу в нём" 
+
+# ╔═╡ 1938c38a-5dfa-43a2-8810-cc987a34cce4
+segments_amount = 200:10:200
+
+# ╔═╡ cdefdb31-f6fe-4f86-9f12-e01f068f1108
+function benchmark_optimizations_whole(segment_sizes, track, segments, start_energy, start_datetime)
+	res_df = DataFrame(Length=Int64[], Mean=Float64[], Median=Float64[])
+	# @progress @Threads.threads for size in segment_sizes
+	@progress for i in 1:length(segment_sizes)
+		splits_amount = segment_sizes[i]
+		# track_short = track[1:(size+1),:]
+		# segments_short = segments[1:size,:]
+		# start_energy_short = start_energy * last(track_short.distance) / last(track.distance)
+
+		boundaries = calculate_boundaries(
+			1,
+			size(track, 1),
+			splits_amount
+		)
+
+		function f_wrap_track_inner(input_speeds)
+			speeds_ms = convert_kmh_to_ms(input_speeds)
+			speed_vector = set_speeds_boundaries(speeds_ms, boundaries)
+			power_use, solar_power, time_s = solar_trip_boundaries(
+				speed_vector, segments, start_datetime
+			)
+		
+			energy_in_system = start_energy .+ solar_power .- power_use
+		
+			# energy_capacity = start_energy_short
+		
+			cost = sum(segments.diff_distance ./ speed_vector) + 100 * (0. - last(energy_in_system))^2;
+		
+			# cost = last(time_s) + (
+			# 	10000 * (finish_energy - last(energy_in_system))^2 +
+			# 	100 * max(0, maximum(energy_in_system) - energy_capacity)
+			# )
+			return cost
+		end
+
+		init_speeds = fill(30., splits_amount)
+
+		td = TwiceDifferentiable(f_wrap_track_inner, init_speeds; autodiff = :forward)
+		lower_bound = fill(0.0, splits_amount)
+		upper_bound = fill(100.0, splits_amount)
+		tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+
+
+		
+		# bench_info = @benchmark res = optimize($td, $tdc, $init_speeds 
+		# # .+ rand(vars_amount) .- 0.5
+		#     ,
+		#     IPNewton(),
+		#     Optim.Options(
+		#         x_tol = 1e-6,
+		#         f_tol = 1e-6,
+		#         g_tol = 1e-6
+		#     )
+		# ) samples=3 evals=1 seconds=10
+
+		t_start = time()
+		res = optimize(td, tdc, init_speeds 
+		# .+ rand(vars_amount) .- 0.5
+		    ,
+		    IPNewton(),
+		    Optim.Options(
+		        x_tol = 1e-6,
+		        f_tol = 1e-6,
+		        g_tol = 1e-6
+		    )
+		)
+		t_finish = time()
+		exec_time = t_finish - t_start
+		
+		# med_time = median(bench_info.times) * 1e-6 # to ms
+		# mean_time = mean(bench_info.times) * 1e-6
+		med_time = exec_time
+		mean_time = exec_time
+		push!(res_df, (splits_amount, mean_time, med_time))
+	end
+	return res_df
+end
+
+# ╔═╡ e47485f7-a7ee-465f-a708-332e3875e309
+# ╠═╡ disabled = true
+#=╠═╡
+CSV.write("optim_times_whole.csv", optim_times_whole_df);
+  ╠═╡ =#
+
+# ╔═╡ fca157a2-743b-452f-b035-44fe7363764b
+md"Очень долго считается
+
+Значит мой speed propagation уж очеень сильно вредит оптимизации (что логично). "
+
+# ╔═╡ 53a4439c-3714-4c95-a0db-9f4ca9d1105b
+opt_time_fit = curve_fit(Polynomial, optim_times_whole_df.Length, optim_times_whole_df.OptTime, 2)
+
+# ╔═╡ 3188f726-5bd3-46d7-bb7a-760ed1fcff05
+td_time_fit = curve_fit(Polynomial, optim_times_whole_df.Length, optim_times_whole_df.TdTime, 3)
+
+# ╔═╡ 95c2de46-2634-4ab3-a7c8-d4251cdabd32
+plot(
+	optim_times_whole_df.Length,
+	[ optim_times_whole_df.OptTime  opt_time_fit.(optim_times_whole_df.Length)],
+	# labels=["Mean" "Median" "Mean (fit):"*text(mean_fit).str "Median (fit):"*text(median_fit).str],
+	labels=["Data" "Fit"],
+	xlabel="Length",
+	ylabel="Time(s)",
+	seriestypes=[:scatter :path ]
+)
+
+# ╔═╡ 51a64f33-e0e9-4365-bab8-6d134f27517d
+plot(
+	optim_times_whole_df.Length,
+	[ optim_times_whole_df.OptTime optim_times_whole_df.TdTime opt_time_fit.(optim_times_whole_df.Length) td_time_fit.(optim_times_whole_df.Length)],
+	# labels=["Mean" "Median" "Mean (fit):"*text(mean_fit).str "Median (fit):"*text(median_fit).str],
+	labels=["OptTime" "TdTime" "OptTime (fit)" "TdTime (fit)"],
+	xlabel="Length",
+	ylabel="Time(s)",
+	seriestypes=[:scatter :scatter :path :path]
+)
+
+# ╔═╡ d154ace4-9a83-4b9a-8dce-3b2d1b569200
+md"Получается очень медленно с распределением переменных"
+
+# ╔═╡ f6b131d4-05eb-4005-b55c-5fad152f5090
+md"Пробуем сколько примерно выйдет для полного размера задачи"
+
+# ╔═╡ a8f062ed-659f-49d5-9cac-cdc47393e90a
+full_time = opt_time_fit(
+	size( # количество участков на трассе
+		segments_peaks_pl,
+		1
+	)
+)
+
+# ╔═╡ 815e44dd-57cf-4104-95d9-1632ddc4ead4
+full_time / 3600.
+
+# ╔═╡ 4a69919b-38e3-4a05-9299-8e6c50b5bd25
+md"Получается 1869 часов для полного размера трассы"
+
+# ╔═╡ 80a26e90-77aa-4cb1-88de-856e8f366453
+md"НО! Получается довольно быстро для нормальной оптимизации до примерно 200 переменных (но это трасса короткая)" 
+
+# ╔═╡ 765971bf-1ff6-453e-b90c-a00126c2095c
+md"Что это значит - использовать подстановку переменных только для первых итераций"
+
+# ╔═╡ 1b4d58ea-ae61-4994-95c4-00fdfb2f4b75
+md"Надо подумать, как изменить код итеративной оптимизации, чтобы работало быстрее" 
+
+# ╔═╡ be87100b-a5c7-4050-b4ab-ad065b97091a
+
+
 # ╔═╡ 0a7000be-88dd-4cba-a0b8-6f82ff1c9c07
 md"# На будущее"
 
@@ -878,10 +1391,24 @@ md"Идеи на будущее:
 # ╔═╡ d76052a6-92a3-416e-89f7-f37e160b7d54
 
 
+# ╔═╡ aa0db854-c097-4df4-b139-058869a6be8f
+optim_times_whole_df = CSV.read("optim_times_whole.csv", DataFrame)
+
+# ╔═╡ 7df7acba-380e-4b54-b085-a97f270ca0cd
+# ╠═╡ disabled = true
+#=╠═╡
+optim_times_whole_df = benchmark_optimizations_whole(
+	collect(segments_amount) ,
+	track_peaks_pl, segments_peaks_pl, start_energy, start_datetime
+)
+  ╠═╡ =#
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+CurveFit = "5a033b19-8c74-5913-a970-47c3779ef25c"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Metrics = "cb9f3049-315b-4f05-b90c-a8adaec4da78"
@@ -890,10 +1417,13 @@ Peaks = "18e31ff7-3703-566c-8e60-38913d67486b"
 PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+ProgressLogging = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 
 [compat]
+BenchmarkTools = "~1.3.2"
 CSV = "~0.10.11"
+CurveFit = "~0.5.0"
 DataFrames = "~1.6.1"
 Metrics = "~0.1.2"
 Optim = "~1.7.7"
@@ -901,6 +1431,7 @@ Peaks = "~0.4.4"
 PlotlyBase = "~0.8.19"
 Plots = "~1.38.17"
 PlutoUI = "~0.7.52"
+ProgressLogging = "~0.1.4"
 ProgressMeter = "~1.7.2"
 """
 
@@ -910,7 +1441,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "c2b5662f0ec433ab59a37cfcf35492a9cebaef19"
+project_hash = "0d26fd02ca2063f5e9f3aa2cd9654fd748aba60f"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -961,6 +1492,12 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "d9a9701b899b30332bbcb3e1679c41cce81fb0e8"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.3.2"
 
 [[deps.BitFlags]]
 git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
@@ -1069,6 +1606,12 @@ version = "0.6.2"
 git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
 uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 version = "4.1.1"
+
+[[deps.CurveFit]]
+deps = ["LinearAlgebra", "Polynomials"]
+git-tree-sha1 = "074cb8efc989bfd1ba869160889b15037560a341"
+uuid = "5a033b19-8c74-5913-a970-47c3779ef25c"
+version = "0.5.0"
 
 [[deps.DataAPI]]
 git-tree-sha1 = "8da84edb865b0b5b0100c0666a9bc9a0b71c553c"
@@ -1698,6 +2241,22 @@ git-tree-sha1 = "e47cd150dbe0443c3a3651bc5b9cbd5576ab75b7"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 version = "0.7.52"
 
+[[deps.Polynomials]]
+deps = ["LinearAlgebra", "RecipesBase"]
+git-tree-sha1 = "3aa2bb4982e575acd7583f01531f241af077b163"
+uuid = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
+version = "3.2.13"
+
+    [deps.Polynomials.extensions]
+    PolynomialsChainRulesCoreExt = "ChainRulesCore"
+    PolynomialsMakieCoreExt = "MakieCore"
+    PolynomialsMutableArithmeticsExt = "MutableArithmetics"
+
+    [deps.Polynomials.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    MakieCore = "20f20a25-4f0e-4fdf-b5d1-57303727442b"
+    MutableArithmetics = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
+
 [[deps.PooledArrays]]
 deps = ["DataAPI", "Future"]
 git-tree-sha1 = "a6062fe4063cdafe78f4a0a81cfffb89721b30e7"
@@ -1731,6 +2290,16 @@ version = "2.2.7"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[[deps.Profile]]
+deps = ["Printf"]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+
+[[deps.ProgressLogging]]
+deps = ["Logging", "SHA", "UUIDs"]
+git-tree-sha1 = "80d919dee55b9c50e8d9e2da5eeafff3fe58b539"
+uuid = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
+version = "0.1.4"
 
 [[deps.ProgressMeter]]
 deps = ["Distributed", "Printf"]
@@ -2369,6 +2938,69 @@ version = "1.4.1+0"
 # ╠═d679e948-8d30-4620-a4fb-f202c04117b8
 # ╠═b018504c-bcfc-4c01-9b05-43936b43b615
 # ╠═4f2abf90-3e70-422a-9a1f-a85083269a9a
+# ╠═cb6f30e9-bd84-494a-856e-7dc284124a22
+# ╠═66c7f41c-ba84-4522-9b9a-27b6cc3a6893
+# ╠═d08e325e-5d2a-486c-87e5-cb0833e3882b
+# ╠═53ce657b-1dd9-49c6-a152-fd3358d17b8f
+# ╠═95f02f1c-914b-4363-a100-eb34512ee911
+# ╠═df9ec094-a2ae-428d-aacb-f53a91c4eff8
+# ╠═b59f861e-8ced-4900-9fdf-d59eef82e9e3
+# ╠═5955727b-40f1-4eb4-b868-2ae7788c1625
+# ╠═44fa6c8e-9e64-4262-9324-272a133e302e
+# ╠═0a4a6191-c3dd-4551-b104-dd0595dd684e
+# ╠═e7c9704d-e310-4b11-aa88-f41d6692635e
+# ╠═1a956d44-14c6-41a9-8015-3691051d0cb6
+# ╠═daa0b062-f7e4-4684-8a42-d85bc9043b71
+# ╠═f4d510db-3b37-4f06-bc27-99447fd4fefe
+# ╠═c8117fcf-3dfa-4064-8adb-509b17e0280b
+# ╠═80a489d8-277d-412d-92ad-2c54dc98fbdc
+# ╠═2639bd8b-d88c-42f4-b34c-fd206525d3c3
+# ╠═b6d30924-90d8-4155-882e-8a72e0c7e797
+# ╠═2321ad16-58d0-4332-9108-dfde9e6ec6cf
+# ╠═3ddfebdc-7b41-4a17-8cd1-9169ad4ecf07
+# ╠═16887603-f096-46fe-9fa1-601d1dc2605d
+# ╠═ed06d8f1-a22e-4da2-a31c-50ae7176b31d
+# ╠═e5d77450-c22b-4f63-8adb-0dc1854e3b8c
+# ╠═05599d8f-82bd-4e3c-98e1-42473e7887ad
+# ╠═9f5f1f2c-498f-460b-b6b4-a58b5c9f5804
+# ╠═08e0976a-7652-4b8b-ad07-c0b8505e086c
+# ╠═34f706ea-918d-43fc-a653-92d311b7df18
+# ╠═01ca48c3-e201-4ad5-87fe-cbec83b7a009
+# ╠═1cc1735a-7b11-4ecf-9b11-d0aac8a79c7a
+# ╠═8a195f8f-c9ff-4f24-aca1-5b85d7421383
+# ╠═ec3eb92f-9232-4309-8564-d8c9b620293b
+# ╠═4592706f-7f90-41c4-bf11-4254fa6450a2
+# ╠═c4c9f140-086a-483e-9bb8-5af8e452181e
+# ╠═67de2dbd-3633-4728-a6e4-53e2ddfb2625
+# ╠═e9821459-f1b6-4884-8d0c-3017ac2d776d
+# ╠═5c493ed5-e368-4550-88da-bf6c7338b879
+# ╠═da45b3b3-c3c2-4fe8-a0ba-2530ec2a6e84
+# ╠═89641cc8-72b2-4a4a-9fcb-e48bdf7a778b
+# ╠═f5419815-56ef-4485-b72f-ee3bf2d3461b
+# ╠═2a341070-a64e-41dc-b41b-c8e68730dc9f
+# ╠═85376195-8c5e-42a1-a307-a7f0721556b9
+# ╠═d04b0d6a-96ba-4aba-b943-74cf46f8855c
+# ╠═c99b3c6a-c29d-475d-bb79-ff23d505fe0a
+# ╠═7b6dd0b4-6e9c-44bf-baf7-6dcc0709086d
+# ╠═1938c38a-5dfa-43a2-8810-cc987a34cce4
+# ╠═cdefdb31-f6fe-4f86-9f12-e01f068f1108
+# ╠═7df7acba-380e-4b54-b085-a97f270ca0cd
+# ╠═e47485f7-a7ee-465f-a708-332e3875e309
+# ╠═aa0db854-c097-4df4-b139-058869a6be8f
+# ╠═fca157a2-743b-452f-b035-44fe7363764b
+# ╠═53a4439c-3714-4c95-a0db-9f4ca9d1105b
+# ╠═3188f726-5bd3-46d7-bb7a-760ed1fcff05
+# ╠═95c2de46-2634-4ab3-a7c8-d4251cdabd32
+# ╠═51a64f33-e0e9-4365-bab8-6d134f27517d
+# ╠═d154ace4-9a83-4b9a-8dce-3b2d1b569200
+# ╠═f6b131d4-05eb-4005-b55c-5fad152f5090
+# ╠═a8f062ed-659f-49d5-9cac-cdc47393e90a
+# ╠═815e44dd-57cf-4104-95d9-1632ddc4ead4
+# ╠═4a69919b-38e3-4a05-9299-8e6c50b5bd25
+# ╠═80a26e90-77aa-4cb1-88de-856e8f366453
+# ╠═765971bf-1ff6-453e-b90c-a00126c2095c
+# ╠═1b4d58ea-ae61-4994-95c4-00fdfb2f4b75
+# ╠═be87100b-a5c7-4050-b4ab-ad065b97091a
 # ╠═0a7000be-88dd-4cba-a0b8-6f82ff1c9c07
 # ╠═308ea3b1-8145-49a7-aa16-048666312620
 # ╠═d76052a6-92a3-416e-89f7-f37e160b7d54
