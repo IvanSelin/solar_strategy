@@ -6,7 +6,7 @@ function convert_kmh_to_ms(speed_kmh)
     return speed_kmh / 3.6;
 end
 
-function convert_kmh_to_ms(speed_kmh :: Vector{<: Real})
+function convert_kmh_to_ms_typed(speed_kmh :: Vector{<: Real}) :: Vector{<: Real}
     return speed_kmh ./ 3.6;
 end
 

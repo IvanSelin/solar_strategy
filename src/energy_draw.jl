@@ -63,12 +63,12 @@ function mechanical_power_calculation_alloc(speed_ms, slope, diff_distance)
 end
 
 function mechanical_power_calculation_alloc_typed(
-    speed_ms :: Real, slope :: Real, diff_distance :: Real)
+    speed_ms :: Real, slope :: Real, diff_distance :: Real) :: Real
     drag = 0.18
-    frontal_area = 1 # m^2
+    frontal_area = 1. # m^2
     ro = 1.18 # air density
 
-    mass = 390 # kg
+    mass = 390. # kg
     g = 9.8019 # at start: [41.2646201567207,-95.9244249307473,301.540649414063];
     # 9.80147 at finish: [43.9660024736000,-121.345052439700,1229.07763671875]
     friction_1 = 0.0023;

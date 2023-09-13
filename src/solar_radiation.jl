@@ -650,7 +650,7 @@ function solar_radiation_alloc_typed_vector(
     # minutes_from_start_of_the_day = Dates.hour.(data_df.utc_time) * 60 .+ Dates.minute.(data_df.utc_time);
     hour_angle = 15 .* ((Dates.hour.(utc_time) .* 60 .+ Dates.minute.(utc_time)) ./60 .- 12)
 
-    sun_declination_angle = -23.45 .* cosd.(360 / 365 * (Dates.dayofyear.(utc_time) .+ 10))
+    sun_declination_angle = -23.45 .* cosd.(360 ./ 365 .* (Dates.dayofyear.(utc_time) .+ 10))
 
     elevation = asin.(
         sind.(sun_declination_angle) .* sind.(latitude) .+

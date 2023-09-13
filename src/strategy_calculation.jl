@@ -4,9 +4,9 @@ include("utils.jl")
 
 
 mutable struct Boundaries
-	from::Integer
-	to::Integer
-	size::Integer
+	from::Int64
+	to::Int64
+	size::Int64
 	# points::DataFrame # maybe better another sub-struct or arrays?
 	# segments::DataFrame
 	# there is no sense in placing points(track) and segments here, 
@@ -20,21 +20,21 @@ end
 
 
 mutable struct SubtaskProblem
-	start_energy::AbstractFloat
-	finish_energy::AbstractFloat
-	initial_speeds::Vector{AbstractFloat}
+	start_energy::Float64
+	finish_energy::Float64
+	initial_speeds::Vector{Float64}
 	start_datetime::DateTime
 end
 
 mutable struct SubtaskVariable
 	boundaries::Boundaries
-	speed::AbstractFloat
+	speed::Float64
 end
 
 struct IterationSolution
-	speeds::Vector{AbstractFloat} # n-1 speeds (for segments)
-	energies::Vector{AbstractFloat} # n energies (for points)
-	seconds::Vector{AbstractFloat} # n-1 times (for segments)
+	speeds::Vector{Float64} # n-1 speeds (for segments)
+	energies::Vector{Float64} # n energies (for points)
+	seconds::Vector{Float64} # n-1 times (for segments)
 	times::Vector{DateTime} # n times (for points)
 end
 
@@ -42,12 +42,12 @@ mutable struct Subtask
 	subtask_boundaries::Boundaries
 	variables_boundaries::Vector{Boundaries}
 	problem::SubtaskProblem
-	solution::Vector{AbstractFloat} # n-1 speeds (for segments)
+	solution::Vector{Float64} # n-1 speeds (for segments)
 end
 
 mutable struct Iteration
 	subtasks::Vector{Subtask}
-	number::Integer
+	number::Int64
 	solution::IterationSolution
 end
 
@@ -657,7 +657,7 @@ function solar_trip_boundaries_typed(
     # power_use = calculate_power_use(mechanical_power, electrical_power)
     power_use_accumulated_wt_h = mechanical_power + electrical_power
 	cumsum!(power_use_accumulated_wt_h, power_use_accumulated_wt_h)
-	power_use_accumulated_wt_h = power_use_accumulated_wt_h / 3600.
+	power_use_accumulated_wt_h = power_use_accumulated_wt_h ./ 3600.
 
 	# time_seconds = calculate_travel_time_seconds(input_speed, segments)
 	# intervals_seconds = calculate_travel_time_seconds_intervals_typed(input_speed, segments.diff_distance)
@@ -737,7 +737,7 @@ function set_speeds_boundaries_typed(
 	speeds :: Vector{T},
 	variables_boundaries::Vector{Boundaries},
 	output_length :: Integer
-	) where {T <: Real} 
+	) :: Vector{T} where {T <: Real} 
 	# still having GC issues!
 	if size(speeds,1) != size(variables_boundaries,1)
 		throw(BoundsError("Input speeds and segments info mismatch!"))
@@ -841,9 +841,9 @@ function solar_partial_trip_wrapper_iter_typed(
 		start_energy :: Real,
 		finish_energy :: Real,
 		start_datetime :: DateTime
-	)
-	speeds_ms = convert_kmh_to_ms(speeds)
-	speed_vector = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
+	) :: Real
+	speeds_ms :: Vector{<: Real} = convert_kmh_to_ms_typed(speeds)
+	speed_vector :: Vector{<: Real} = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
 	power_use, solar_power, time_s = solar_trip_boundaries_typed(
 		speed_vector, segments, start_datetime
 	)
@@ -853,7 +853,8 @@ function solar_partial_trip_wrapper_iter_typed(
 
 	# energy_capacity = 5100.
 
-	cost = sum(segments.diff_distance ./ speed_vector) + 100 * (finish_energy - last_energy_in_system)^2;
+	# cost = sum(segments.diff_distance ./ speed_vector) + 100 * (finish_energy - last_energy_in_system)^2;
+	cost = last(time_s) + 10000 * abs(finish_energy - last_energy_in_system);
 
 	# cost = last(time_s) + (
 	# 	10000 * (finish_energy - last(energy_in_system))^2 +
@@ -893,16 +894,23 @@ function solar_partial_trip_wrapper_iter_with_low_energy_typed(
 		start_energy :: Real,
 		finish_energy :: Real,
 		start_datetime :: DateTime
-	)
-	speeds_ms = convert_kmh_to_ms(speeds)
-	speed_vector = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
+	) :: Real
+	speeds_ms :: Vector{<: Real} = convert_kmh_to_ms_typed(speeds)
+	speed_vector :: Vector{<: Real} = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
+	# speeds_ms = convert_kmh_to_ms(speeds)
+	# speed_vector = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
 	power_use, solar_power, time_s = solar_trip_boundaries_typed(
 		speed_vector, segments, start_datetime
 	)
 	# track points, not segments, that's why it is size is +1 
-	energy_in_system = Vector{}(undef, size(segments, 1))
-	energy_in_system = start_energy .+ solar_power .- power_use
-	pushfirst!(energy_in_system, start_energy)
+	# energy_in_system = Vector{}(undef, size(segments, 1))
+	# energy_in_system = start_energy .+ solar_power .- power_use
+	last_energy = last(solar_power) - last(power_use) + start_energy
+	solar_power -= power_use
+	min_penalty = abs(minimum(solar_power) + start_energy)
+	# not adding first energy element, since it is not needed for cost function
+	# only last and minimum is needed
+	# pushfirst!(energy_in_system, start_energy)
 
 	# final_size = size(segments, 1) + 1
 	# energy_in_system = Vector{}(undef, final_size)
@@ -914,7 +922,8 @@ function solar_partial_trip_wrapper_iter_with_low_energy_typed(
 	# energy_capacity = 5100.
 
 	# cost = sum(segments.diff_distance ./ speed_vector) + 10000 * abs(minimum(energy_in_system)) + 100 * (finish_energy - last(energy_in_system));
-	cost = sum(segments.diff_distance ./ speed_vector) + 150000 * abs(minimum(energy_in_system))^2 + 10000 * (finish_energy - last(energy_in_system))^2;
+	# cost = sum(segments.diff_distance ./ speed_vector) + 150000 * abs(minimum(energy_in_system))^2 + 10000 * (finish_energy - last(energy_in_system))^2;
+	cost = sum(segments.diff_distance ./ speed_vector) + 150000 * min_penalty^2 + 10000 * (finish_energy - last_energy)^2;
 	# println("f cost min energy $((minimum(energy_in_system)))")
 	# cost = last(time_s) + (
 	# 	10000 * (finish_energy - last(energy_in_system))^2 +
@@ -1805,11 +1814,11 @@ function minimize_speeds_split_points_typed(
 		start_energy :: Float64,
 		start_datetime :: DateTime,
 		init_speed :: Float64
-	)
+	) :: Vector{<: Real}
 	boundaries = calculate_boundaries_from_split_points(1, size(track, 1), split_points)
 	n_variables = size(boundaries, 1)
 	
-	function f_speeds(input_speeds :: Vector{<: Real})
+	function f_speeds(input_speeds :: Vector{<: Real}) :: Real
 		# return solar_partial_trip_wrapper_iter(
 		return solar_partial_trip_wrapper_iter_with_low_energy_typed(
 			input_speeds, segments, boundaries,
