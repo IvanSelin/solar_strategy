@@ -18,6 +18,7 @@ using StatsBase
 # using FLoops
 using Distributed
 using ProgressMeter
+using BenchmarkTools
 # using Alert
 # selecting a Plots backend
 plotly(ticks=:native)

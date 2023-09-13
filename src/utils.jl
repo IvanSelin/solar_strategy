@@ -6,6 +6,14 @@ function convert_kmh_to_ms(speed_kmh)
     return speed_kmh / 3.6;
 end
 
+function convert_kmh_to_ms(speed_kmh :: Vector{<: Real})
+    return speed_kmh ./ 3.6;
+end
+
+function convert_kmh_to_ms!(speed_kmh :: Vector{<: Real})
+    return speed_kmh .= speed_kmh ./ 3.6;
+end
+
 function propagate_speeds(speed_ms, track)
     if length(speed_ms) == size(track, 1)
         return speed_ms

@@ -166,6 +166,16 @@ function get_mean_data(series)
     return mean[2:end]
 end
 
+function get_mean_data_typed(series :: Vector{T}) where {T <: Real} 
+    new_series_size = size(series,1)
+    new_series = Vector{T}(undef, new_series_size)
+    new_series[1] = 0.
+    for i=2:new_series_size
+        new_series[i] = (series[i-1] + series[i] ) / 2.
+    end
+    return new_series
+end
+
 function get_segments_for_track(track)
     segments_df = DataFrame(
         from = 1:size(track.distance,1) - 1,
@@ -277,6 +287,10 @@ end
 
 function get_segments_interval(segments, from_point, to_point)
     return @view segments[from_point : to_point - 1, :]
+end
+
+function get_segments_interval_typed(segments::DataFrame, from_point::Integer, to_point::Integer)::DataFrame
+    return segments[from_point : to_point - 1, :]
 end
 
 function get_average_on_segment(data_x, data_y, from, to)

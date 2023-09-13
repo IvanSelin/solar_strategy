@@ -105,6 +105,14 @@ function calculate_travel_time_seconds(speed_vector, track_df)
     return cumsum(time_s_intervals)
 end
 
+function calculate_travel_time_seconds_intervals_typed(
+    speed_vector :: Vector{<: Real},
+    diff_distance :: Vector{<: Real})
+    #### time manipulation
+    # time needed to spend on each part of the track
+    return diff_distance ./ speed_vector
+end
+
 function calculate_travel_time_datetime(speed_vector, segments, start_datetime)
     time_s = calculate_travel_time_seconds(speed_vector, segments)
 	time_utc = travel_time_to_datetime(time_s, start_datetime)

@@ -627,6 +627,81 @@ function solar_trip_boundaries(input_speed, segments, start_datetime)
     return power_use_accumulated_wt_h, solar_power_accumulated, time_seconds
 end
 
+"Returns arrays of segments size (so, for task from 13 to 16th point, it will yield a size of 3)"
+function solar_trip_boundaries_typed(
+		input_speed :: Vector{<: Real},
+		segments :: DataFrame,
+		start_datetime :: DateTime
+	)
+    # input speed in m/s
+	# @debug "func solar_trip_calculation_bounds input_speed size is $(size(input_speed, 1)), track size is $(size(track.distance, 1)))"
+
+    # calculating time needed to spend to travel across distance
+    # time_df = calculate_travel_time_datetime(input_speed, segments, start_datetime)
+	# utc_time, time_seconds = calculate_travel_time_datetime_and_seconds_no_gaps(
+	# 	input_speed,
+	# 	segments,
+	# 	start_datetime
+	# )
+    #### calculcations
+    # mechanical calculations are now in separate file
+    # mechanical_power = mechanical_power_calculation_alloc.(input_speed, segments.slope, segments.diff_distance)
+	mechanical_power = mechanical_power_calculation_alloc_typed.(input_speed, segments.slope, segments.diff_distance)
+
+	# mechanical_power = mechanical_power_calculation_typed(input_speed, segments.slope, segments.diff_distance)
+
+    # electical losses
+    # electrical_power = electrical_power_calculation(segments.diff_distance, input_speed)
+	electrical_power = electrical_power_calculation_typed(segments.diff_distance, input_speed)
+    # converting mechanical work to elecctrical power and then power use
+    # power_use = calculate_power_use(mechanical_power, electrical_power)
+    power_use_accumulated_wt_h = mechanical_power + electrical_power
+	cumsum!(power_use_accumulated_wt_h, power_use_accumulated_wt_h)
+	power_use_accumulated_wt_h = power_use_accumulated_wt_h / 3600.
+
+	# time_seconds = calculate_travel_time_seconds(input_speed, segments)
+	# intervals_seconds = calculate_travel_time_seconds_intervals_typed(input_speed, segments.diff_distance)
+	intervals_seconds = segments.diff_distance ./ input_speed
+
+	time_seconds = cumsum(intervals_seconds)
+
+	mean_seconds = get_mean_data_typed(time_seconds)
+	# mean_seconds = get_mean_data(time_seconds)
+	# pushfirst!(mean_seconds, 0.)
+	# println(mean_seconds)
+	milliseconds = round.(mean_seconds .* 1000)
+	# println(milliseconds)
+	mean_segment_utc = Vector{DateTime}(undef, size(input_speed, 1))
+	mean_segment_utc .= start_datetime .+ Dates.Millisecond.(milliseconds)
+
+    # get solar energy income
+	# @debug "track size is $(size(track.latitude, 1))"
+    # solar_power = solar_power_income_alloc_typed.(
+	# 	segments.latitude,
+	# 	segments.altitude, 
+	# 	# time_df.utc_time,
+	# 	mean_segment_utc,
+	# 	intervals_seconds
+	# )
+
+	solar_power = solar_power_income_alloc_typed_vector(
+		segments.latitude,
+		segments.altitude, 
+		mean_segment_utc,
+		intervals_seconds
+	)
+	# println("solar power len $(size(solar_power, 1))")
+    # solar_power_accumulated = calculate_power_income_accumulated(solar_power)
+	# println("modified trip with weather")
+	solar_power_adjusted = solar_power .* segments.weather_coeff
+    # solar_power_accumulated = calculate_power_income_accumulated(solar_power_adjusted)
+	calculate_power_income_accumulated!(solar_power_adjusted)
+
+    # TODO: calculate night charging - do it later since it is not critical as of right now
+    # return power_use_accumulated_wt_h, solar_power_accumulated, time_seconds
+	return power_use_accumulated_wt_h, solar_power_adjusted, time_seconds
+end
+
 function set_speeds(speeds, track, divide_at)
 	println("set speed line 507")
 	output_speeds = fill(last(speeds), size(track.distance, 1))
@@ -655,6 +730,41 @@ function set_speeds_boundaries(speeds, variables_boundaries::Vector{Boundaries})
 				)
 			)
 	end
+	return output_speeds
+end
+
+function set_speeds_boundaries_typed(
+	speeds :: Vector{T},
+	variables_boundaries::Vector{Boundaries},
+	output_length :: Integer
+	) where {T <: Real} 
+	# still having GC issues!
+	if size(speeds,1) != size(variables_boundaries,1)
+		throw(BoundsError("Input speeds and segments info mismatch!"))
+	end
+	output_speeds = Vector{T}(undef, output_length)
+	counter_index::Int64 = 1
+	counter_size::Int64 = 0
+
+	for i in eachindex(variables_boundaries)
+		# for j = 1:variables_boundaries[i].size
+		# 	output_speeds[counter_index]=speeds[i]
+		# 	counter_index += 1
+		# end
+		counter_size = variables_boundaries[i].size
+		output_speeds[counter_index:(counter_index + counter_size - 1)] .= speeds[i]
+		counter_index += counter_size
+	end
+
+	# for i in eachindex(variables_boundaries)
+	# 	append!(
+	# 		output_speeds,
+	# 		fill(
+	# 			speeds[i],
+	# 			variables_boundaries[i].size
+	# 			)
+	# 		)
+	# end
 	return output_speeds
 end
 
@@ -724,6 +834,35 @@ function solar_partial_trip_wrapper_iter(speeds, segments, variables_boundaries,
 	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
 end
 
+function solar_partial_trip_wrapper_iter_typed(
+		speeds :: Vector{<: Real},
+		segments :: DataFrame,
+		variables_boundaries :: Vector{Boundaries},
+		start_energy :: Real,
+		finish_energy :: Real,
+		start_datetime :: DateTime
+	)
+	speeds_ms = convert_kmh_to_ms(speeds)
+	speed_vector = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
+	power_use, solar_power, time_s = solar_trip_boundaries_typed(
+		speed_vector, segments, start_datetime
+	)
+	# track points, not segments, that's why it is size is +1 
+	# energy_in_system = start_energy .+ solar_power .- power_use
+	last_energy_in_system = start_energy + last(solar_power) - last(power_use)
+
+	# energy_capacity = 5100.
+
+	cost = sum(segments.diff_distance ./ speed_vector) + 100 * (finish_energy - last_energy_in_system)^2;
+
+	# cost = last(time_s) + (
+	# 	10000 * (finish_energy - last(energy_in_system))^2 +
+	# 	100 * max(0, maximum(energy_in_system) - energy_capacity)
+	# )
+	return cost
+	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
+end
+
 function solar_partial_trip_wrapper_iter_with_low_energy(speeds, segments, variables_boundaries, start_energy, finish_energy, start_datetime)
 	speeds_ms = convert_kmh_to_ms(speeds)
 	speed_vector = set_speeds_boundaries(speeds_ms, variables_boundaries)
@@ -735,6 +874,44 @@ function solar_partial_trip_wrapper_iter_with_low_energy(speeds, segments, varia
 	pushfirst!(energy_in_system, start_energy)
 
 	energy_capacity = 5100.
+
+	# cost = sum(segments.diff_distance ./ speed_vector) + 10000 * abs(minimum(energy_in_system)) + 100 * (finish_energy - last(energy_in_system));
+	cost = sum(segments.diff_distance ./ speed_vector) + 150000 * abs(minimum(energy_in_system))^2 + 10000 * (finish_energy - last(energy_in_system))^2;
+	# println("f cost min energy $((minimum(energy_in_system)))")
+	# cost = last(time_s) + (
+	# 	10000 * (finish_energy - last(energy_in_system))^2 +
+	# 	100 * max(0, maximum(energy_in_system) - energy_capacity)
+	# )
+	return cost
+	# return solar_partial_trip_cost(speed_vector, track, start_energy, finish_energy, start_datetime)
+end
+
+function solar_partial_trip_wrapper_iter_with_low_energy_typed(
+		speeds :: Vector{<: Real},
+		segments :: DataFrame,
+		variables_boundaries :: Vector{Boundaries},
+		start_energy :: Real,
+		finish_energy :: Real,
+		start_datetime :: DateTime
+	)
+	speeds_ms = convert_kmh_to_ms(speeds)
+	speed_vector = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
+	power_use, solar_power, time_s = solar_trip_boundaries_typed(
+		speed_vector, segments, start_datetime
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system = Vector{}(undef, size(segments, 1))
+	energy_in_system = start_energy .+ solar_power .- power_use
+	pushfirst!(energy_in_system, start_energy)
+
+	# final_size = size(segments, 1) + 1
+	# energy_in_system = Vector{}(undef, final_size)
+	# energy_in_system[1] = start_energy
+	# for i=2:final_size
+	# 	energy_in_system[i] = start_energy + solar_power[i-1] - power_use[i-1]
+	# end
+
+	# energy_capacity = 5100.
 
 	# cost = sum(segments.diff_distance ./ speed_vector) + 10000 * abs(minimum(energy_in_system)) + 100 * (finish_energy - last(energy_in_system));
 	cost = sum(segments.diff_distance ./ speed_vector) + 150000 * abs(minimum(energy_in_system))^2 + 10000 * (finish_energy - last(energy_in_system))^2;
@@ -1066,9 +1243,13 @@ function fill_array(source_array, desired_size)
 	return Float64.(output_array)
 end
 
-function iterative_optimization(track, segments, scaling_coef_subtasks,
-		scaling_coef_subtask_input_speeds,
-		start_energy, start_datetime=DateTime(2022,7,1,0,0,0)
+function iterative_optimization(
+		track :: DataFrame,
+		segments :: DataFrame,
+		scaling_coef_subtasks :: Integer,
+		scaling_coef_subtask_input_speeds :: Integer,
+		start_energy :: Real,
+		start_datetime=DateTime(2022,7,1,0,0,0)::DateTime
 	)
 	# general algorithm:
 	# 0. data setup
@@ -1407,7 +1588,7 @@ function iterative_optimization(track, segments, scaling_coef_subtasks,
 
 end
 
-function process_subtask!(subtask, scaling_coef_variables, segments)
+function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segments::DataFrame)
 	# 3. each subtask comes with its own chunks (variables)			
 	# split each task on parts
 	subtask.variables_boundaries = calculate_boundaries(
@@ -1432,14 +1613,14 @@ function process_subtask!(subtask, scaling_coef_variables, segments)
 		vars_amount
 	)
 
-	subtask_segments = get_segments_interval(
+	subtask_segments = get_segments_interval_typed(
 		segments,
 		subtask.subtask_boundaries.from,
 		subtask.subtask_boundaries.to
 	)
 
-	function f_iter(input_speeds)
-		return solar_partial_trip_wrapper_iter(
+	function f_iter(input_speeds :: Vector{<: Real})
+		return solar_partial_trip_wrapper_iter_typed(
 		# return solar_partial_trip_wrapper_iter_with_low_energy(
 			input_speeds, subtask_segments, subtask.variables_boundaries,
 			subtask.problem.start_energy, subtask.problem.finish_energy,
@@ -1447,9 +1628,9 @@ function process_subtask!(subtask, scaling_coef_variables, segments)
 		)
 	end
 
-	function f_iter_low_energy(input_speeds)
+	function f_iter_low_energy(input_speeds :: Vector{<: Real})
 		# return solar_partial_trip_wrapper_iter(
-		return solar_partial_trip_wrapper_iter_with_low_energy(
+		return solar_partial_trip_wrapper_iter_with_low_energy_typed(
 			input_speeds, subtask_segments, subtask.variables_boundaries,
 			subtask.problem.start_energy, subtask.problem.finish_energy,
 			subtask.problem.start_datetime
@@ -1527,6 +1708,110 @@ function minimize_n_speeds(track, segments, n_variables, start_energy, start_dat
 	function f_speeds(input_speeds)
 		# return solar_partial_trip_wrapper_iter(
 		return solar_partial_trip_wrapper_iter_with_low_energy(
+			input_speeds, segments, boundaries,
+			start_energy, 0.,
+			start_datetime
+		)
+	end
+	speeds = fill(init_speed, n_variables)
+	println("Calculating best speeds")
+	td_0 = TwiceDifferentiable(f_speeds, speeds; autodiff = :forward)
+	lower_bound_0 = fill(10.0, n_variables)
+	upper_bound_0 = fill(100.0, n_variables)
+	tdc_0 = TwiceDifferentiableConstraints(lower_bound_0, upper_bound_0)
+	# line_search = LineSearches.BackTracking();
+	# result = optimize(td, fill(speed, 1),
+		#Newton(; linesearch = line_search),
+	result = optimize(td_0, tdc_0, speeds 
+	# .+ rand(1) .- 0.5
+		,
+		IPNewton(),
+		Optim.Options(
+			x_tol = 1e-12,
+			f_tol = 1e-12,
+			g_tol = 1e-12
+		)
+	)
+	minimized_speeds = Optim.minimizer(result)
+	println("Got $(minimized_speeds) km/h")
+	return minimized_speeds
+end
+
+function calculate_boundaries_from_split_points(start_point, end_point, split_points)::Vector{Boundaries}
+	splits_set = Set(split_points)
+	push!(splits_set, start_point)
+	push!(splits_set, end_point)
+
+	splits_array = collect(splits_set)
+	sort!(splits_array)
+
+	boundaries_array::Vector{Boundaries} = []
+
+	for i=2:length(splits_array)
+		segment = Boundaries(splits_array[i-1], splits_array[i], splits_array[i] - splits_array[i-1]);
+		push!(boundaries_array, segment)
+	end
+	# return array of tuples?
+	return boundaries_array
+end
+
+function minimize_speeds_split_points(
+		track,
+		segments,
+		split_points,
+		start_energy,
+		start_datetime,
+		init_speed
+	)
+	boundaries = calculate_boundaries_from_split_points(1, size(track, 1), split_points)
+	n_variables = size(boundaries, 1)
+	
+	function f_speeds(input_speeds)
+		# return solar_partial_trip_wrapper_iter(
+		return solar_partial_trip_wrapper_iter_with_low_energy(
+			input_speeds, segments, boundaries,
+			start_energy, 0.,
+			start_datetime
+		)
+	end
+	speeds = fill(init_speed, n_variables)
+	println("Calculating best speeds")
+	td_0 = TwiceDifferentiable(f_speeds, speeds; autodiff = :forward)
+	lower_bound_0 = fill(10.0, n_variables)
+	upper_bound_0 = fill(100.0, n_variables)
+	tdc_0 = TwiceDifferentiableConstraints(lower_bound_0, upper_bound_0)
+	# line_search = LineSearches.BackTracking();
+	# result = optimize(td, fill(speed, 1),
+		#Newton(; linesearch = line_search),
+	result = optimize(td_0, tdc_0, speeds 
+	# .+ rand(1) .- 0.5
+		,
+		IPNewton(),
+		Optim.Options(
+			x_tol = 1e-12,
+			f_tol = 1e-12,
+			g_tol = 1e-12
+		)
+	)
+	minimized_speeds = Optim.minimizer(result)
+	println("Got $(minimized_speeds) km/h")
+	return minimized_speeds
+end
+
+function minimize_speeds_split_points_typed(
+		track :: DataFrame,
+		segments :: DataFrame,
+		split_points :: Vector{Int64},
+		start_energy :: Float64,
+		start_datetime :: DateTime,
+		init_speed :: Float64
+	)
+	boundaries = calculate_boundaries_from_split_points(1, size(track, 1), split_points)
+	n_variables = size(boundaries, 1)
+	
+	function f_speeds(input_speeds :: Vector{<: Real})
+		# return solar_partial_trip_wrapper_iter(
+		return solar_partial_trip_wrapper_iter_with_low_energy_typed(
 			input_speeds, segments, boundaries,
 			start_energy, 0.,
 			start_datetime
