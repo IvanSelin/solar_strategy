@@ -33,12 +33,12 @@ end
 
 # ╔═╡ 9ce6e2c1-69e4-47c6-830c-3c0eb13d784e
 begin
-	include("src//energy_draw.jl")
-	include("src//time.jl")
-	include("src//solar_radiation.jl")
-	include("src//track.jl")
-	include("src//utils.jl")
-	include("src//strategy_calculation.jl")
+	include("..//src//energy_draw.jl")
+	include("..//src//time.jl")
+	include("..//src//solar_radiation.jl")
+	include("..//src//track.jl")
+	include("..//src//utils.jl")
+	include("..//src//strategy_calculation.jl")
 end
 
 # ╔═╡ 7c89a14e-f6c7-4a09-8825-a81d1ba9b824
@@ -60,7 +60,7 @@ TableOfContents()
 md"# Loading data"
 
 # ╔═╡ d6fb7d82-6bd9-4da9-b183-67fb16ab9f66
-track,segments = get_track_and_segments("data//data_australia.csv");
+track,segments = get_track_and_segments("..//data//data_australia.csv");
 
 # ╔═╡ aef61af9-31df-4757-95bd-7fdfc0edbc1a
 track
@@ -1097,6 +1097,12 @@ md"Получается 80 милисекунд (для 50 участков), ч
 # ╔═╡ 9f5f1f2c-498f-460b-b6b4-a58b5c9f5804
 md"1900 секунд для трассы в 1000 кусочков"
 
+# ╔═╡ de4dee93-24e5-463b-96fd-078f1ac8f9c9
+md"### Бенчим одну быструю оптимизацию"
+
+# ╔═╡ 65fceae5-cc43-4208-b6c5-ae77fdc238ea
+
+
 # ╔═╡ 08e0976a-7652-4b8b-ad07-c0b8505e086c
 md"### Бенчим в цикле"
 
@@ -1197,6 +1203,9 @@ md"Выглядит как квадратичная зависимость, со
 # ╔═╡ 5c493ed5-e368-4550-88da-bf6c7338b879
 mean_fit(1000)
 
+# ╔═╡ da45b3b3-c3c2-4fe8-a0ba-2530ec2a6e84
+md"Должно быть 1900 секунд, а не 661"
+
 # ╔═╡ 89641cc8-72b2-4a4a-9fcb-e48bdf7a778b
 md"Посмотрим, что будет на полной трассе" 
 
@@ -1210,9 +1219,6 @@ mean_fit(
 
 # ╔═╡ 2a341070-a64e-41dc-b41b-c8e68730dc9f
 md"Вышло 771 час"
-
-# ╔═╡ da45b3b3-c3c2-4fe8-a0ba-2530ec2a6e84
-md"Должно быть 1900 секунд, а не 661"
 
 # ╔═╡ 85376195-8c5e-42a1-a307-a7f0721556b9
 md"Плоховато сходится, надо больше измерений. Запустить на ночь с шагом в 100-200 до 1.5 тысяч"
@@ -1308,11 +1314,23 @@ function benchmark_optimizations_whole(segment_sizes, track, segments, start_ene
 	return res_df
 end
 
+# ╔═╡ 7df7acba-380e-4b54-b085-a97f270ca0cd
+# ╠═╡ disabled = true
+#=╠═╡
+optim_times_whole_df = benchmark_optimizations_whole(
+	collect(segments_amount) ,
+	track_peaks_pl, segments_peaks_pl, start_energy, start_datetime
+)
+  ╠═╡ =#
+
 # ╔═╡ e47485f7-a7ee-465f-a708-332e3875e309
 # ╠═╡ disabled = true
 #=╠═╡
 CSV.write("optim_times_whole.csv", optim_times_whole_df);
   ╠═╡ =#
+
+# ╔═╡ aa0db854-c097-4df4-b139-058869a6be8f
+optim_times_whole_df = CSV.read("optim_times_whole.csv", DataFrame)
 
 # ╔═╡ fca157a2-743b-452f-b035-44fe7363764b
 md"Очень долго считается
@@ -1390,18 +1408,6 @@ md"Идеи на будущее:
 
 # ╔═╡ d76052a6-92a3-416e-89f7-f37e160b7d54
 
-
-# ╔═╡ aa0db854-c097-4df4-b139-058869a6be8f
-optim_times_whole_df = CSV.read("optim_times_whole.csv", DataFrame)
-
-# ╔═╡ 7df7acba-380e-4b54-b085-a97f270ca0cd
-# ╠═╡ disabled = true
-#=╠═╡
-optim_times_whole_df = benchmark_optimizations_whole(
-	collect(segments_amount) ,
-	track_peaks_pl, segments_peaks_pl, start_energy, start_datetime
-)
-  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1671,6 +1677,12 @@ version = "0.9.3"
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.6.0"
+
+[[deps.EpollShim_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "8e9441ee83492030ace98f9789a654a6d0b1f643"
+uuid = "2702e6a9-849d-5ed8-8c21-79e8b8f9ee43"
+version = "0.0.20230411+0"
 
 [[deps.ExceptionUnwrapping]]
 deps = ["Test"]
@@ -2539,7 +2551,7 @@ uuid = "41fe7b60-77ed-43a1-b4f0-825fd5a5650d"
 version = "0.2.0"
 
 [[deps.Wayland_jll]]
-deps = ["Artifacts", "Expat_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg", "XML2_jll"]
+deps = ["Artifacts", "EpollShim_jll", "Expat_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg", "XML2_jll"]
 git-tree-sha1 = "ed8d92d9774b077c53e1da50fd81a36af3744c1c"
 uuid = "a2964d1f-97da-50d4-b82a-358c7fce9d89"
 version = "1.21.0+0"
@@ -2963,6 +2975,8 @@ version = "1.4.1+0"
 # ╠═e5d77450-c22b-4f63-8adb-0dc1854e3b8c
 # ╠═05599d8f-82bd-4e3c-98e1-42473e7887ad
 # ╠═9f5f1f2c-498f-460b-b6b4-a58b5c9f5804
+# ╠═de4dee93-24e5-463b-96fd-078f1ac8f9c9
+# ╠═65fceae5-cc43-4208-b6c5-ae77fdc238ea
 # ╠═08e0976a-7652-4b8b-ad07-c0b8505e086c
 # ╠═34f706ea-918d-43fc-a653-92d311b7df18
 # ╠═01ca48c3-e201-4ad5-87fe-cbec83b7a009
