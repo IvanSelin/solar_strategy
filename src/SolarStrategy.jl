@@ -19,6 +19,16 @@ using StatsBase
 using Distributed
 using ProgressMeter
 using BenchmarkTools
+using JSON
+
+# using Revise
+# includet("energy_draw.jl")
+# includet("time.jl")
+# includet("solar_radiation.jl")
+# includet("track.jl")
+# includet("utils.jl")
+# includet("weather.jl")
+# includet("strategy_calculation.jl")
 # using Alert
 # selecting a Plots backend
 plotly(ticks=:native)

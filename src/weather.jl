@@ -43,6 +43,28 @@ function generate_clouds(
 	#hist.weights, hist.edges[1], hist.egdes[2]
 end
 
+function write_weather_json(weather, edges_lat, edges_lon, filename)
+	weather_dict = Dict("weather"=>weather,"edges_lat"=>edges_lat,"edges_lon"=>edges_lon)
+	open(joinpath("data",filename*".json"), "w") do f
+		write(f, JSON.json(weather_dict))
+	end
+end
+
+function read_weather_json(filename)
+	# result_dict = Dict()
+	# open(joinpath("data",filename*".json"), "r") do f
+	# 	text_content = readall(f)  # file information to string
+	# 	result_dict=JSON.parse(text_content)  # parse and transform data
+	# end
+	# return result_dict
+	read_dict = JSON.parsefile(joinpath("data",filename*".json"))
+	edges_lat = convert(Vector{Float64}, read_dict["edges_lat"])
+	edges_lon = convert(Vector{Float64}, read_dict["edges_lon"])
+	# weather_coeff = convert(Array{Float64,2}, read_dict["weather"])
+	weather_coeff = reduce(hcat, convert(Vector{Vector{Float64}}, read_dict["weather"]))
+	return weather_coeff, edges_lat, edges_lon
+end
+
 
 function calculate_weather_weights_for_segments(
     weather_weights, weather_edges_lat, weather_edges_lon, segments

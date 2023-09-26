@@ -1597,6 +1597,415 @@ function iterative_optimization(
 
 end
 
+function iterative_optimization_overlap(track :: DataFrame,
+	segments :: DataFrame,
+	scaling_coef_subtasks :: Integer,
+	scaling_coef_subtask_input_speeds :: Integer,
+	start_energy :: Real,
+	start_datetime=DateTime(2022,7,1,0,0,0)::DateTime
+	)
+	# В чём суть:
+	# Сейчас от итерации к итерации лучше не становится
+	# А должно бы!
+	# В качестве идей, что с этим можно делать:
+	# 1. Рандомизируем - уже сделано, выходит не очень
+	# 2. Попробовать по-другому получать новые участки, чтобы они не были подмножеством участка сверху.
+	# Т.е. чтобы были пересечения
+	# В качестве идеи: сдвигать границы участков
+	# Или же идти не жесткой иерархии количества участков на итерацию: n, x*n, x*x*n ..., а умышленно делать
+	# их с перекрытием
+	# Например, сперва было 2 участка, а потом стало x*n+1 участка
+	# И пересечений тогда не будет
+	# НО, энергии надо будет брать не с предыдущих краёв участков, а с других
+	# ПРОБУЕМ!
+
+
+	# general algorithm:
+	# 0. data setup
+	# 1. exit loop check
+	# 2. 	split the track into subtasks
+	# 3. 		each subtask comes with its own chunks (variables)
+	# 4. 		solve optimization problem for every subtask with its chunks (variables)
+	# 5. 	tie everything together (collect speeds to one array)
+	# 6. 	make full simulation with said speeds
+	# 7. 	prepare data for next iteration. should be subtask's chunks as subtasks
+	# 8. 	go to 2:
+	# 9. final calculations?
+
+	# 0. data setup
+	track_size = size(track,1)
+	scaling_coef_variables = scaling_coef_subtasks * scaling_coef_subtask_input_speeds
+
+	start_n_speeds = minimize_n_speeds(
+		track,
+		segments,
+		2,
+		start_energy,
+		start_datetime,
+		first(start_speeds)
+	)
+
+
+	zero_subtask = Subtask(
+		Boundaries(1, track_size),
+		# calculate_boundaries(1, track_size, scaling_coef),
+		[],
+		SubtaskProblem(
+			start_energy,
+			0.,
+			start_n_speeds,
+			start_datetime
+		),
+		[]
+	)
+
+	iteration_1 = Iteration(
+		[ zero_subtask ],
+		1,
+		IterationSolution(
+			[],
+			[],
+			[],
+			[]
+		)
+	);
+
+	iterations::Vector{Iteration} = []
+	push!(iterations, iteration_1)
+
+	iteration_num = 1;
+	# 1. exit loop check
+	is_track_divisible_further = true
+	# while iteration_num <= 2
+	while is_track_divisible_further # && iteration_num <= 2
+
+		iteration = iterations[iteration_num]
+		println("Iteration $(iteration.number)")
+		
+		# 2. split the track into subtasks
+		# or grab the result of previous division for subtasks
+		# подумать где у меня точки, где участки, а где трассы по результатам деления
+		# и ещё подумать как получаются подзадачи и их переменные на разных итерациях
+		# № итерации, подзадачи, количество переменных
+		# 1			1			scale
+		# 2			scale		scale^2
+		# ...
+		# n			scale^(n-1)	scale^n - но не совсем, где как места хватит
+
+		# по идее достаточно делить трассу, когда определяемся с участками для подзадач
+		# потом в конце итерации после всех оптимизаций склеивать единый массив из точек разделения
+		# и на следующей итерации использовать уже его
+
+
+		is_track_divisible_further = false
+		# @floop for subtask in iteration.subtasks
+		@showprogress for subtask in iteration.subtasks
+			is_divisible = process_subtask!(subtask, scaling_coef_variables, segments)
+			# @reduce(is_track_divisible_further |= is_divisible)
+			is_track_divisible_further |= is_divisible
+		end
+
+		println()
+		# 5. tie everything together (collect speeds to one array)
+		iteration_speeds = []
+		for subtask in iteration.subtasks
+			speed_vector = set_speeds_boundaries(subtask.solution, subtask.variables_boundaries)
+			append!(iteration_speeds, speed_vector)
+		end
+
+		# 6. make full simulation with said speeds
+		power_use, solar_power, time_seconds = solar_trip_boundaries(
+			convert_kmh_to_ms(iteration_speeds),
+			segments,
+			start_datetime
+		)
+
+		println("solar sum $(sum(solar_power))")
+		println("use sum $(sum(power_use))")
+		
+
+		energy_in_system = []
+		push!(energy_in_system, start_energy)
+		total_energy = start_energy .+ solar_power .- power_use
+		append!(energy_in_system, total_energy)
+		println("min energy $(minimum(energy_in_system))")
+
+		times = start_datetime .+ Dates.Millisecond.(round.(time_seconds .* 1000))
+		pushfirst!(times, start_datetime)
+		# times = travel_time_to_datetime(time_seconds, start_datetime)
+		iteration.solution = IterationSolution(
+			iteration_speeds,
+			energy_in_system,
+			time_seconds,
+			times
+		)
+		# 7. 	prepare data for next iteration. should be subtask's chunks as subtasks
+
+		# TODO: re-split on new subtasks
+		# we can't use variables boundaries anymore
+
+		if is_track_divisible_further
+			iteration_num += 1;
+			next_iteration = Iteration(
+				[],
+				iteration_num,
+				IterationSolution(
+					[],
+					[],
+					[],
+					[]
+				)
+			)
+			for subtask in iteration.subtasks
+				new_subtasks_boundaries = calculate_boundaries(
+					subtask.subtask_boundaries.from,
+					subtask.subtask_boundaries.to,
+					scaling_coef_subtasks
+				)
+				solution_index_counter = 0
+				for new_subtask_index in eachindex(new_subtasks_boundaries)
+					new_subtask_boundaries = new_subtasks_boundaries[new_subtask_index]
+					variables_boundaries = calculate_boundaries(
+						new_subtask_boundaries.from,
+						new_subtask_boundaries.to,
+						scaling_coef_subtask_input_speeds
+					)
+					# println(subtask.solution)
+					# TODO: make proper speed selecting function
+					input_speeds_subtask = subtask.solution[ solution_index_counter + 1 : solution_index_counter + length(variables_boundaries)]
+					solution_index_counter += length(variables_boundaries)
+					# input_speeds_subtask = subtask.solution[(variables_index-1)*scaling_coef_subtask_input_speeds+1:variables_index*scaling_coef_subtask_input_speeds]
+					# println(input_speeds_subtask)
+					new_subtask = Subtask(
+						new_subtask_boundaries,
+						[],
+						SubtaskProblem(
+							energy_in_system[new_subtask_boundaries.from],
+							energy_in_system[new_subtask_boundaries.to],
+							input_speeds_subtask,
+							times[new_subtask_boundaries.from]
+						),
+						[]
+					)
+					push!(next_iteration.subtasks, new_subtask)
+				end
+			end
+
+			push!(iterations, next_iteration)
+		end
+	end # 8. 	go to 2:
+	# 9. final calculations?
+	println("Calc done")
+	return iterations
+end
+
+function two_step_optimization(
+	track :: DataFrame,
+	segments :: DataFrame,
+	n_variables :: Integer,
+	initial_speed :: Real,
+	start_energy :: Real,
+	start_datetime=DateTime(2023,1,1,10,0,0)::DateTime
+)
+
+	# Ещё варианты: делать подсчёт с распределением скоростей только сперва
+	# А потом сразу без распределения на довольно большие участки
+
+	initial_boundaries = calculate_boundaries(
+		1,
+		size(track,1),
+		n_variables
+	)
+
+	function first_step(input_speeds :: Vector{<: Real}) :: Real
+
+		speeds_ms_first_step :: Vector{<: Real} = convert_kmh_to_ms_typed(input_speeds)
+		speed_vector_first_step :: Vector{<: Real} = set_speeds_boundaries_typed(speeds_ms_first_step, initial_boundaries, size(segments, 1))
+		# speeds_ms = convert_kmh_to_ms(speeds)
+		# speed_vector = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
+		power_use_first_step, solar_power_first_step, time_s_first_step = solar_trip_boundaries_typed(
+			speed_vector_first_step, segments, start_datetime
+		)
+		# track points, not segments, that's why it is size is +1 
+		# energy_in_system = Vector{}(undef, size(segments, 1))
+		# energy_in_system = start_energy .+ solar_power .- power_use
+		last_energy_first_step = last(solar_power_first_step) - last(power_use_first_step) + start_energy
+		# solar_power -= power_use
+		# min_penalty = abs(minimum(solar_power) + start_energy)
+		energy_in_system = start_energy .+ solar_power_first_step .- power_use_first_step
+		minimum_energy = minimum(energy_in_system)
+
+
+		# not adding first energy element, since it is not needed for cost function
+		# only last and minimum is needed
+		# pushfirst!(energy_in_system, start_energy)
+
+		# cost = sum(segments.diff_distance ./ speed_vector) + 10000 * abs(minimum(energy_in_system)) + 100 * (finish_energy - last(energy_in_system));
+		# cost = sum(segments.diff_distance ./ speed_vector) + 150000 * abs(minimum(energy_in_system))^2 + 10000 * (finish_energy - last(energy_in_system))^2;
+		# cost = sum(segments.diff_distance ./ speed_vector) + 150000 * min_penalty^2 + 10000 * (finish_energy - last_energy)^2;
+
+		# только финишная энергия
+		# cost = last(time_s_first_step) + 10000 * abs(0. - last_energy_first_step);
+		
+		# только энергия не меньше нуля
+		# получается медленно, энергия на финише не равна 0
+		# с более правильной начальной скоростью результат лучше
+		# cost = last(time_s_first_step) + 150000 * abs(minimum_energy);
+		# хорошо работает с меньшим количеством переменных в начальные
+		# т.е. не 50, а 10-20
+		# cost = last(time_s_first_step) + 1500 * abs(minimum_energy);
+
+		# всё вместе
+		cost = last(time_s_first_step) + 100000 * abs(0. - last_energy_first_step) + 150000 * abs(minimum_energy);
+		
+
+		```
+		лонг стори шорт: всё плохо работает. опять нет разницы от итерации к итерации
+		надо пробовать переразбивать участки по-другому
+		рабочий вариант на
+		two_step_optimization
+			track_peaks_high, segments_peaks_high, 20, 32., 5100., DateTime 2023,1,1,10,0,0
+		```
+		# НЕ НАДО СОХРАНЯТЬ СКОРОСТИ С ПРОШЛЫХ ИТЕРАЦИЙ, ТОЛЬКО ЭНЕРГИИ/ВРЕМЯ
+
+		# println("f cost min energy $((minimum(energy_in_system)))")
+		# cost = last(time_s) + (
+		# 	10000 * (finish_energy - last(energy_in_system))^2 +
+		# 	100 * max(0, maximum(energy_in_system) - energy_capacity)
+		# )
+		return cost
+
+		# # return solar_partial_trip_wrapper_iter(
+		# return solar_partial_trip_wrapper_iter_with_low_energy_typed(
+		# 	input_speeds, segments, initial_boundaries,
+		# 	start_energy, 0.,
+		# 	start_datetime
+		# )
+	end
+	println("revised code")
+	initial_speeds = fill(initial_speed, n_variables)
+
+	td_0 = TwiceDifferentiable(first_step, initial_speeds; autodiff = :forward)
+	lower_bound_0 = fill(10.0, n_variables)
+	upper_bound_0 = fill(100.0, n_variables)
+	tdc_0 = TwiceDifferentiableConstraints(lower_bound_0, upper_bound_0)
+
+	@time result_first_step = optimize(td_0, tdc_0, initial_speeds 
+	# .+ rand(1) .- 0.5
+		,
+		IPNewton(),
+		Optim.Options(
+			x_tol = 1e-12,
+			f_tol = 1e-12,
+			g_tol = 1e-12
+		)
+	)
+	minimized_speeds_first_step = Optim.minimizer(result_first_step)
+
+	speeds_ms :: Vector{<: Real} = convert_kmh_to_ms_typed(minimized_speeds_first_step)
+	speed_vector :: Vector{<: Real} = set_speeds_boundaries_typed(speeds_ms, initial_boundaries, size(segments, 1))
+	println("init speeds: $initial_speeds")
+	println("minimized speeds: $minimized_speeds_first_step")
+
+	# return simulate_run_finish_time(
+	# 	speed_vector * 3.6,
+	# 	track,
+	# 	segments,
+	# 	start_energy,
+	# 	start_datetime
+	# )
+
+	# здесь надо сделать симуляцию и получить энергии, времена для следующего этапа
+
+	power_use, solar_power, time_seconds = solar_trip_boundaries_typed(
+		speed_vector,
+		segments,
+		start_datetime
+	)
+
+	println("solar sum $(sum(solar_power))")
+	println("use sum $(sum(power_use))")
+	energy_in_system = []
+	push!(energy_in_system, start_energy)
+	total_energy = start_energy .+ solar_power .- power_use
+	append!(energy_in_system, total_energy)
+	println("min energy $(minimum(energy_in_system))")
+
+	times = start_datetime .+ Dates.Millisecond.(round.(time_seconds .* 1000))
+	pushfirst!(times, start_datetime)
+	# times = travel_time_to_datetime(time_seconds, start_datetime)
+	# iteration.solution = IterationSolution(
+	# 	iteration_speeds,
+	# 	energy_in_system,
+	# 	time_seconds,
+	# 	times
+	# )
+	output_speeds = []
+
+	for (boundary, speed) in zip(initial_boundaries, minimized_speeds_first_step)
+		println("optimizing track from $(boundary.from) to $(boundary.to)")
+		subtask_segments = get_segments_interval_typed(
+			segments,
+			boundary.from,
+			boundary.to
+		)
+		start_energy_second_step = energy_in_system[boundary.from]
+		finish_energy_second_step = energy_in_system[boundary.to]
+		start_time_second_step = times[boundary.from]
+		segments_length_second_step = size(subtask_segments, 1)
+
+
+		function f_second_step(input_speeds :: Vector{<: Real})
+			speeds_ms_second :: Vector{<: Real} = convert_kmh_to_ms_typed(input_speeds)
+				power_use_second_step, solar_power_second_step, time_s_second_step = solar_trip_boundaries_typed(
+					speeds_ms_second, subtask_segments, start_time_second_step
+			)
+
+			last_energy = last(solar_power_second_step) - last(power_use_second_step) + start_energy_second_step
+			# проверить, такой ли должна быть штрафная функция
+			# по идее, не должно быть меньше нуля
+			# т.е. должно штрафовать только если меньше нуля
+			# попробуем сперва без этого, соблюдая только начальные и конечные энергии
+			# solar_power_second_step -= power_use_second_step
+			# min_penalty = abs(minimum(solar_power_second_step) + start_energy_second_step)
+			# cost = sum(subtask_segments.diff_distance ./ speed_vector) + 150000 * min_penalty^2 + 10000 * (finish_energy_second_step - last_energy)^2;
+
+			cost = last(time_s_second_step) + 10000 * abs(finish_energy_second_step - last_energy);
+
+			return cost
+		end
+
+		# speeds_second_step = fill(speed, segments_length_second_step)
+		speeds_second_step = fill(initial_speed, segments_length_second_step)
+		td_short = TwiceDifferentiable(f_second_step, speeds_second_step; autodiff = :forward)
+		lower_bound_short = fill(0.0, segments_length_second_step)
+		upper_bound_short = fill(100.0, segments_length_second_step)
+		tdc_short = TwiceDifferentiableConstraints(lower_bound_short, upper_bound_short)
+		@time res_short = optimize(td_short, tdc_short, speeds_second_step 
+		# .+ rand(segments_length_second_step) .- 0.5
+			,
+			IPNewton(),
+			Optim.Options(
+				x_tol = 1e-6,
+				f_tol = 1e-6,
+				g_tol = 1e-6
+			)
+		)
+		speeds_short = Optim.minimizer(res_short)
+		# println(speeds_short)
+		append!(output_speeds, speeds_short)
+	end
+
+	return simulate_run_finish_time(
+		output_speeds,
+		track,
+		segments,
+		start_energy,
+		start_datetime
+	)
+
+end
+
 function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segments::DataFrame)
 	# 3. each subtask comes with its own chunks (variables)			
 	# split each task on parts
@@ -1617,10 +2026,17 @@ function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segme
 
 	# TODO: change here
 	# write a function that repeats array values to get another array of bigger size
+	# if size(subtask.problem.initial_speeds, 1) == 2
 	prev_iter_speeds = fill_array(
 		subtask.problem.initial_speeds, 
 		vars_amount
 	)
+	# else
+	# 	prev_iter_speeds = fill_array(
+	# 	35., 
+	# 	vars_amount
+	# 	)
+	# end
 
 	subtask_segments = get_segments_interval_typed(
 		segments,
@@ -1657,7 +2073,7 @@ function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segme
 	upper_bound = fill(100.0, vars_amount)
 	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
 	result = optimize(td, tdc, prev_iter_speeds 
-	.+ rand(vars_amount) .- 0.5
+	# .+ rand(vars_amount) .- 0.5
 		,
 		IPNewton(),
 		Optim.Options(
@@ -1710,13 +2126,19 @@ function minimize_single_speed(track, segments, start_energy, start_datetime, in
 	return minimized_speeds
 end
 
-function minimize_n_speeds(track, segments, n_variables, start_energy, start_datetime, init_speed)
+function minimize_n_speeds(
+	track :: DataFrame,
+	segments :: DataFrame,
+	n_variables :: Int64,
+	start_energy :: Float64,
+	start_datetime :: DateTime,
+	init_speed :: Float64)
 
 	boundaries = calculate_boundaries(1, size(track, 1), n_variables)
 
-	function f_speeds(input_speeds)
+	function f_speeds(input_speeds :: Vector{<: Real}) :: Real
 		# return solar_partial_trip_wrapper_iter(
-		return solar_partial_trip_wrapper_iter_with_low_energy(
+		return solar_partial_trip_wrapper_iter_with_low_energy_typed(
 			input_speeds, segments, boundaries,
 			start_energy, 0.,
 			start_datetime
@@ -1848,4 +2270,60 @@ function minimize_speeds_split_points_typed(
 	minimized_speeds = Optim.minimizer(result)
 	println("Got $(minimized_speeds) km/h")
 	return minimized_speeds
+end
+
+function minimize_for_length(
+	track :: DataFrame,
+	segments :: DataFrame,
+	length_segments :: Int64,
+	start_energy :: Float64,
+	start_datetime :: DateTime,
+	init_speed :: Float64
+)
+	track_short = track[1:(length_segments + 1),:]
+	segments_short = segments[1:length_segments,:]
+	start_energy_short = start_energy * last(track_short.distance) / last(track.distance)
+
+	function f_wrap_short_track(input_speeds :: Vector{<: Real}) :: Real
+		speeds_ms :: Vector{<: Real} = convert_kmh_to_ms_typed(input_speeds)
+		power_use, solar_power, time_s = solar_trip_boundaries_typed(
+			speeds_ms, segments_short, start_datetime
+		)
+
+		last_energy_in_system = start_energy_short + last(solar_power) - last(power_use)
+
+		# energy_capacity = 5100.
+
+		# cost = sum(segments.diff_distance ./ speed_vector) + 100 * (finish_energy - last_energy_in_system)^2;
+		cost = last(time_s) + 10000 * abs(0. - last_energy_in_system);
+		return cost
+	end
+
+	init_speeds_short = fill(init_speed, length_segments)
+
+	td_short = TwiceDifferentiable(f_wrap_short_track, init_speeds_short; autodiff = :forward)
+	lower_bound_short = fill(0.0, length_segments)
+	upper_bound_short = fill(100.0, length_segments)
+	tdc_short = TwiceDifferentiableConstraints(lower_bound_short, upper_bound_short)
+
+	@time res_short = optimize(td_short, tdc_short, init_speeds_short 
+	# .+ rand(vars_amount) .- 0.5
+		,
+		IPNewton(),
+		Optim.Options(
+			x_tol = 1e-6,
+			f_tol = 1e-6,
+			g_tol = 1e-6
+		)
+	)
+
+	speeds_short = Optim.minimizer(res_short)
+	# return speeds_short
+	return simulate_run_finish_time(
+		speeds_short,
+		track_short,
+		segments_short,
+		start_energy_short,
+		start_datetime
+	)
 end
