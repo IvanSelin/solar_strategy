@@ -73,8 +73,8 @@ function calculate_weather_weights_for_segments(
     for i in eachindex(weather_coef)
         _, lat_index = findmin(abs.(weather_edges_lat .- segments.latitude[i]))
         _, lon_index = findmin(abs.(weather_edges_lon .- segments.longitude[i]))
-        lat_index = min(lat_index, size(w,1))
-        lon_index = min(lon_index, size(w,1))
+        lat_index = min(lat_index, size(weather_weights,1))
+        lon_index = min(lon_index, size(weather_weights,1))
         weather_coef[i] = 1 .- weather_weights[lat_index, lon_index]
         # println("lat $(segments.latitude[i]), lon $(segments.longitude[i]), w is $(weather_coef[i])")
     end
