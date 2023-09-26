@@ -6,19 +6,19 @@ using CSV
 using Plots # default
 using PlotlyBase
 # using PlotlySave
-using TimeZones
+# using TimeZones
 using Dates
 using Optim
-using LineSearches
-using ProtoStructs
-using OhMyREPL
+# using LineSearches
+# using ProtoStructs
+# using OhMyREPL
 using Distributions
 using Random
 using StatsBase
 # using FLoops
 using Distributed
 using ProgressMeter
-using BenchmarkTools
+# using BenchmarkTools
 using JSON
 
 # using Revise
@@ -45,8 +45,7 @@ include("weather.jl")
 include("strategy_calculation.jl")
 
 export get_track_and_segments, keep_extremum_only_peaks_segments, get_segments_for_track
-export generate_clouds
-export calculate_weather_weights_for_segments
+export generate_clouds, calculate_weather_weights_for_segments, read_weather_json, write_weather_json
 export iterative_optimization
 export plots_for_results
 export simulate_run_finish_time

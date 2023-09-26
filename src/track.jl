@@ -25,7 +25,9 @@ function get_track_and_segments(path_to_data)
     track_csv.distance = track_csv.distance * 1000
 
     # select everything except sin column
-    points_df = select(track_csv, Not(:sin))
+    # points_df = select(track_csv, Not(:sin))
+    points_df = select(track_csv, names(track_csv, x -> x!="sin"))
+    
 
     return points_df, get_segments_for_track(points_df)
 end
@@ -95,8 +97,8 @@ function keep_extremum_only_peaks_segments(track)
     # also https://juliapackages.com/p/findpeaks
 
     # track_copy = copy(track)
-    max_altitude_peaks_indexes, max_altitude_peaks = findmaxima(track.altitude)
-    min_altitude_peaks_indexes, min_altitude_peaks = findminima(track.altitude)
+    max_altitude_peaks_indexes = argmaxima(track.altitude)
+    min_altitude_peaks_indexes = argminima(track.altitude)
     peaks_indexes = []
     append!(peaks_indexes, max_altitude_peaks_indexes)
     append!(peaks_indexes, min_altitude_peaks_indexes)
@@ -124,8 +126,8 @@ function keep_extremum_only_peaks_segments_with_points(track)
     # also https://juliapackages.com/p/findpeaks
 
     # track_copy = copy(track)
-    max_altitude_peaks_indexes, max_altitude_peaks = findmaxima(track.altitude)
-    min_altitude_peaks_indexes, min_altitude_peaks = findminima(track.altitude)
+    max_altitude_peaks_indexes = argmaxima(track.altitude)
+    min_altitude_peaks_indexes = argminima(track.altitude)
     peaks_indexes = []
     append!(peaks_indexes, max_altitude_peaks_indexes)
     append!(peaks_indexes, min_altitude_peaks_indexes)
@@ -199,8 +201,8 @@ function get_peak_points(track)
     # то есть находит только первый элемент плоского плато, но не последний
 
     # переписал, стало чуть лучше, но всё равно находит не все плато
-    max_altitude_peaks_indexes, max_altitude_peaks = findmaxima(track.altitude)
-    min_altitude_peaks_indexes, min_altitude_peaks = findminima(track.altitude)
+    max_altitude_peaks_indexes = argmaxima(track.altitude)
+    min_altitude_peaks_indexes = argminima(track.altitude)
     reverse_alt = track.altitude[end:-1:1];
     reverse_max = argmaxima(reverse_alt);
     reverse_min = argminima(reverse_alt);

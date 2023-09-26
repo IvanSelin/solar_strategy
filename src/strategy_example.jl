@@ -34,6 +34,7 @@ using .SolarStrategy
 
 using Plots
 using Dates
+# using CSV
 plotly(ticks=:native)
 
 
@@ -65,6 +66,10 @@ start with stub, develop proper models later
 # preparing the track data
 # track = get_track_data("data/data_australia.csv")
 track, segments = get_track_and_segments("data/data_australia.csv")
+track_peaks_file, segments_peaks_file = get_track_and_segments("data/data_australia_peaks.csv")
+# peaks_temp = copy(track_peaks)
+# peaks_temp.distance = peaks_temp.distance / 1000.
+# CSV.write("data/data_australia_peaks.csv", peaks_temp)
 plot(
     track.distance / 1000., track.altitude, title="Гоночный маршрут",
     xlabel="Дистанция (км)",
