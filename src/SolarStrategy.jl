@@ -46,6 +46,7 @@ include("strategy_calculation.jl")
 
 export get_track_and_segments, keep_extremum_only_peaks_segments, get_segments_for_track
 export generate_clouds, calculate_weather_weights_for_segments, read_weather_json, write_weather_json
+export generate_density_data
 export iterative_optimization
 export plots_for_results
 export simulate_run_finish_time

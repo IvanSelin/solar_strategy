@@ -50,14 +50,14 @@ function write_weather_json(weather, edges_lat, edges_lon, filename)
 	end
 end
 
-function read_weather_json(filename)
+function read_weather_json(path_to_file)
 	# result_dict = Dict()
 	# open(joinpath("data",filename*".json"), "r") do f
 	# 	text_content = readall(f)  # file information to string
 	# 	result_dict=JSON.parse(text_content)  # parse and transform data
 	# end
 	# return result_dict
-	read_dict = JSON.parsefile(joinpath("data",filename*".json"))
+	read_dict = JSON.parsefile(path_to_file)
 	edges_lat = convert(Vector{Float64}, read_dict["edges_lat"])
 	edges_lon = convert(Vector{Float64}, read_dict["edges_lon"])
 	# weather_coeff = convert(Array{Float64,2}, read_dict["weather"])
@@ -80,4 +80,123 @@ function calculate_weather_weights_for_segments(
     end
 
     return weather_coef
+end
+
+function generate_density_mapbox(w, edges_lat, edges_lon)
+	ndims = size(w,1)
+	w_arr = collect(Iterators.flatten(w))
+	edges_lat_rep = repeat(get_mean_data(edges_lat), outer=ndims)
+	edges_lon_rep = repeat(get_mean_data(edges_lon), inner=ndims)
+
+	df = DataFrame(lat=edges_lat_rep, lon=edges_lon_rep, z=w_arr)
+	traces_vector::AbstractVector{plotjs.AbstractTrace} = [];
+
+	push!(
+		traces_vector,
+		plotjs.densitymapbox(
+			lat=df.lat,
+			lon=df.lon,
+			z=df.z,
+			opacity=0.5
+		)
+	)
+	
+	push!(
+		traces_vector,
+		plotjs.scattermapbox(
+			lat=track_aus.latitude,
+			lon=track_aus.longitude,
+			marker_color="red",
+			marker_size=1,
+			mode="lines"
+		)
+	)
+	
+	plotjs.Plot(
+		traces_vector,
+		plotjs.Layout(
+			width=650,
+			height=600,
+			geo_fitbounds="locations",
+			autosize=true,
+			# mapbox_style="stamen-terrain"
+			mapbox_style=mapbox_style,
+			mapbox_center_lat=-25.0,
+			mapbox_center_lon=132.0,
+			mapbox_zoom=3
+		)
+	)
+end
+
+function generate_density_data(w, edges_lat, edges_lon)
+	ndims = size(w,1)
+	w_arr = collect(Iterators.flatten(w))
+	edges_lat_rep = repeat(get_mean_data(edges_lat), outer=ndims)
+	edges_lon_rep = repeat(get_mean_data(edges_lon), inner=ndims)
+
+	df = DataFrame(lat=edges_lat_rep, lon=edges_lon_rep, z=w_arr)
+	return df
+end
+
+function generate_heatmap_traces(w, edges_lat, edges_lon)
+	traces_vector::AbstractVector{plotjs.AbstractTrace} = [];
+	push!(
+		traces_vector,
+		plotjs.scattermapbox(
+			lat=track_aus.latitude,
+			lon=track_aus.longitude,
+			marker_color="red",
+			marker_size=1,
+			mode="lines"
+		)
+	)
+	for i=1:length(edges_lat)-1
+		for j=1:length(edges_lon)-1
+			# println("lat: $(edges_lat[i]), lon: $(edges_lon[j]), w: $(w[i,j])")
+			# println("lat+1: $(edges_lat[i+1]), lon+1: $(edges_lon[j+1]), w+1: $(w[i,j])")
+			trace = plotjs.scattermapbox(
+				fill="toself",
+				lat = [
+					edges_lat[i],
+					edges_lat[i],
+					edges_lat[i+1],
+					edges_lat[i+1],
+					edges_lat[i]
+				],
+				lon = [
+					edges_lon[j],
+					edges_lon[j+1],
+					edges_lon[j+1],
+					edges_lon[j],
+					edges_lon[j]
+				],
+				# lat=[-11.,-11.,-12.,-12.5,-12., -12.],
+				# lon=[130.,131.,131.,130.5,130., 130.],
+				marker_size=1,
+				# marker_color="orange",
+				opacity=0.5,
+				showlegend=false,
+				# marker_colorscale=w[i,j]
+				# marker_colorscale="Viridis",
+				# marker_color=w[i,j]
+				marker_color="rgb($(w[i,j]*255),$((1-w[i,j])*255),0)",
+				name="$(w[i,j])"
+			);
+			push!(traces_vector, trace)
+		end
+		# println()
+	end
+	plotjs.Plot(
+		traces_vector,
+		plotjs.Layout(
+			width=700,
+			height=600,
+			geo_fitbounds="locations",
+			mapbox_style=mapbox_style,
+			autosize=true,
+			mapbox_center_lat=-25.0,
+			mapbox_center_lon=132.0,
+			mapbox_zoom=3
+		)
+	)
 end
