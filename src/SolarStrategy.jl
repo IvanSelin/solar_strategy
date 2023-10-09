@@ -50,6 +50,7 @@ export generate_density_data
 export iterative_optimization
 export plots_for_results
 export simulate_run_finish_time
+export get_mean_data
 # #### concept
 # #=
 # overall concept of modelling:
