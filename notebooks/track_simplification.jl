@@ -29,6 +29,7 @@ begin
 	using BenchmarkTools
 	using CurveFit
 	using ProgressLogging
+	using Plots.PlotMeasures
 end
 
 # ╔═╡ 9ce6e2c1-69e4-47c6-830c-3c0eb13d784e
@@ -78,7 +79,7 @@ plot(track_peaks.distance, track_peaks.altitude, title="Peaks track data")
 md"# Parametrized merging"
 
 # ╔═╡ 16405fa9-f44a-4b60-9b87-84bfd8aa8ed2
-thresholds = 0:0.05:1
+thresholds = 0:0.05:3.
 
 # ╔═╡ 7513698b-e1cf-4dc1-a461-ede112a76180
 collect(thresholds)
@@ -279,12 +280,12 @@ test_income, test_use, test_time, test_energy = compare_track_energies_income_us
 # ╔═╡ f61f4da9-0689-4752-ae25-27415a95c10d
 function plot_differences(income,use,time,energy, track, points)
 	track_points = track[points, :];
-	income_plot = plot(track_points.distance, income, title="Power income");
-	use_plot = plot(track_points.distance, use, title="Power use");
-	time_plot = plot(track_points.distance, time, title="Time");
-	energy_plot = plot(track_points.distance, energy, title="Energy");
+	income_plot = plot(track_points.distance, income, title="Разница в получении энергии (Вт*ч)");
+	use_plot = plot(track_points.distance, use, title="Разница в тратах энергии (Вт*ч)");
+	time_plot = plot(track_points.distance, time, title="Разница во времени (с)", xlabel="Дистанция (м)");
+	energy_plot = plot(track_points.distance, energy, title="Итоговая разница в энергии (Вт*ч)");
 
-	plot(income_plot, use_plot, time_plot, energy_plot, layout=(4,1), size=(1000,700), legend=false)
+	plot(income_plot, use_plot, energy_plot, time_plot, layout=(4,1), size=(1000,700), legend=false)
 end
 
 # ╔═╡ 0aeeb368-896e-4bc8-ad1c-d92b0c324392
@@ -823,8 +824,114 @@ Plots.scatter(
 	],
 	labels = [
 		"Finish diff" "MAE" "RMSE" "R^2" "Number of segments"
-	]
+	],
+	xlabel="K"
 )
+
+# ╔═╡ 5d239b82-f341-446b-9aaf-64076385723f
+begin
+	Plots.scatter(
+		total_df.name,
+		total_df.Length,
+		label="Length",
+		xlabel="K",
+		color=:red,
+		ylabel="Количество участков",
+		# legend = :outertopright
+		legend=false
+	)
+	Plots.scatter!(
+		twinx(),
+		total_df.name,
+		total_df.R2,
+		label="R^2",
+		# xlabel="K",
+		ylabel="R^2",
+		# legend = :outerbottomright
+		legend=false
+	)
+end
+
+# ╔═╡ 6a4bf9a3-fbb9-494a-b48e-000553cf5460
+begin
+	Plots.scatter(
+		total_df.name,
+		total_df.Length,
+		xlabel="K",
+		color=:red,
+		ylabel="Количество участков",
+		# legend = :outertopright
+		legend=false
+	)
+	Plots.scatter!(
+		twinx(),
+		total_df.name,
+		total_df.RMSE,
+		# xlabel="K",
+		ylabel="RMSE",
+		# legend = :outerbottomright
+		legend=false
+	)
+end
+
+# ╔═╡ 4b17b7fd-3a5d-4560-bcaf-bffb1d096ab5
+Plots.scatter(
+	total_df.name,
+	[
+		total_df.Finish_diff total_df.Length
+	],
+	labels = [
+		"Ошибка на финише (Вт*ч)" "Количество участков"
+	],
+	xlabel="K"
+)
+
+# ╔═╡ aac0c842-14b6-48e3-bde1-30e32713046f
+Plots.scatter(
+	total_df.name,
+	[
+		total_df.Finish_diff./start_energy total_df.Length
+	],
+	labels = [
+		"Ошибка на финише (нормировано)" "Количество участков"
+	],
+	xlabel="K"
+)
+
+# ╔═╡ 27ffc2b1-9239-4fa4-b575-bab651196be6
+begin
+	length_k_plot = Plots.scatter(
+		total_df.name,
+		total_df.Length,
+		xlabel="K",
+		# color=:red,
+		ylabel=" Количество участков",
+		# legend = :outertopright
+		legend=false
+	)
+	r_squared_k_plot = Plots.scatter(
+		total_df.name,
+		total_df.R2,
+		xlabel="K",
+		color=:red,
+		ylabel="R^2",
+		# legend = :outertopright
+		legend=false
+	)
+	finish_diff_k_plot = Plots.scatter(
+		total_df.name,
+		total_df.Finish_diff./start_energy*100,
+		xlabel="K",
+		color=:yellow,
+		ylabel=" Относительная ошибка %",
+		# yscale=:log10,
+		# legend = :outertopright
+		legend=false
+		# title=""
+	)
+	
+	plot(length_k_plot, r_squared_k_plot, finish_diff_k_plot, layout=(3,1), size=(900,700), legend=false, left_margin = 20px)
+end
 
 # ╔═╡ 63c9378a-df62-41d1-b3a0-db5a1be3b3c5
 sort!(total_df, [:Length, :name], rev=[true, false]);
@@ -841,7 +948,7 @@ Plots.scatter(
 	total_df_short.RMSE',
 	labels=permutedims(total_df_short.name),
 	markershapes=:auto,
-	xlabel="Track Length, pieces",
+	xlabel="Количество участков",
 	ylabel="RMSE",
 )
 
@@ -882,10 +989,110 @@ Plots.scatter(
 )
 
 # ╔═╡ b018504c-bcfc-4c01-9b05-43936b43b615
-md"Видно, что брать threshold больше 2 смысла не имеет, т.к. начинается значительная потеря точности"
+md"Видно, что брать threshold больше 2.5 смысла не имеет, т.к. начинается значительная потеря точности"
 
 # ╔═╡ 4f2abf90-3e70-422a-9a1f-a85083269a9a
 md"Можно взять вариант peaks, как наиболее логичный"
+
+# ╔═╡ 3304d896-71d8-4e81-9fb9-eb84a63d52c3
+md"### А теперь для трассы высотой в 10 раз больше"
+
+# ╔═╡ ca2d64b3-4398-4f5d-a5c0-70d73999ae02
+begin
+	track_high = copy(track)
+	track_high.altitude = track_high.altitude .* 10;
+	segments_high = get_segments_for_track(track_high);
+end
+
+# ╔═╡ 2d082f91-5208-45ac-93e4-f45ce7d5fe66
+md"Сперва надо узнать какая скорость оптимальная"
+
+# ╔═╡ d7b60c09-d97f-4a78-9c1e-98dbf9da1372
+opt_speed_high = 29.5
+
+# ╔═╡ 407f122d-01ae-4e6b-9ae0-b25b15cf23f8
+simulate_run_finish_time(
+	fill(opt_speed_high, size(segments_high, 1)),
+	track_high,
+	segments_high,
+	start_energy,
+	start_datetime
+)
+
+# ╔═╡ e7134856-8988-4ae9-bec2-53ab57124541
+thr_df_high_large = make_comparison_df(track_high, segments_high, .0:.5:20, opt_speed_high, start_energy, start_datetime)
+
+# ╔═╡ b47c0f30-933c-47a4-8691-46c4d3d48ed7
+md"Прям сильно отличается. Здесь уже до k=4.5 можно упрощать"
+
+# ╔═╡ b6887cf2-dfd0-43f4-860f-31b18935caef
+md"## Сравнение самих трасс"
+
+# ╔═╡ a8b3097c-d965-435e-8712-2df777def9b6
+# исходная трасса
+plot(track.distance, track.altitude, title="Track data")
+
+# ╔═╡ 342e32ee-5343-4b4b-b008-9f2cdb44e9b6
+md"Сперва найдём какие-нибудь точки, от и до которых будем смотреть трассу (по длине)" 
+
+# ╔═╡ 4efd0ae0-1322-4488-b80b-d7c5aa067d9d
+from_distance = 500
+
+# ╔═╡ 8cb42e3c-b5b9-4d0e-ae84-f7b9304920b0
+to_distance = 2000
+
+# ╔═╡ cdd5190e-1cb4-4cc6-96af-09d149a06f82
+track_dist = track[from_distance .< track.distance .< to_distance,:]
+
+# ╔═╡ c41e20bf-70b3-433d-add3-97ed29c98c84
+plot(track_dist.distance, track_dist.altitude, title="Track data from to")
+
+# ╔═╡ 2ff0a042-f411-4994-b777-fa9bb2ce8c6b
+size(track, 1)
+
+# ╔═╡ a0a42d56-1dc3-4701-80ee-ff80078e7734
+size(track_peaks, 1)
+
+# ╔═╡ ccef9339-201e-4ea3-9eda-06972be2919a
+size(track, 1) / size(track_peaks, 1)
+
+# ╔═╡ a8f4478d-37b8-4483-b8f1-d541f65f7b5d
+track_peaks_dist = track_peaks[from_distance .< track_peaks.distance .< to_distance,:]
+
+# ╔═╡ 5f4819b9-3b5b-4700-8b1f-230e38a1cf28
+plot(track_peaks_dist.distance, track_peaks_dist.altitude, title="Track peaks data from to")
+
+# ╔═╡ ed85fb2c-b35b-42fa-8933-b740ceb8f392
+track_1_75, points_1_75 = parametrized_track_simplification(track, 1.75)
+
+# ╔═╡ 5d6f15de-3c56-446b-8afa-9a688804ce4e
+md"Всего 1032 точки, как-то маловато
+
+Надо проверить, нормальные ли получаются результаты" 
+
+# ╔═╡ 092a1984-5515-4de6-b936-06344281d932
+draw_comparison_for_parametrized_peaks([0., 1.75], track, segments)
+
+# ╔═╡ f6bea570-3934-4c3b-8a73-d196e105479b
+draw_comparison_for_parametrized_peaks([0.,2.], track, segments)
+
+# ╔═╡ d3937387-d7df-4228-8f3d-ff325a1b3d53
+segments_1_75 = get_segments_for_track(track_1_75);
+
+# ╔═╡ 76428346-cbff-4745-afd0-31a479ca2494
+compare_track_energies_plot_thr(track, segments, opt_speed, 1.75)
+
+# ╔═╡ ffe7d1a9-6c55-45a1-abd6-c4610d922dd0
+compare_track_energies_plot_thr(track, segments, opt_speed, 2.25)
+
+# ╔═╡ 8c1bc363-0825-496a-bc35-d03d34a54220
+md"Нормально выходит, погрешность меньше процента для 1.75"
+
+# ╔═╡ fad5c87a-2611-40ea-a6d7-a98975ddd7ed
+track_1_75_dist = track_1_75[from_distance .< track_1_75.distance .< to_distance,:]
+
+# ╔═╡ 12ec6787-9a6b-4797-9296-fd8cbeb3c1b0
+plot(track_1_75_dist.distance, track_1_75_dist.altitude, title="Track 1.75 data from to")
 
 # ╔═╡ cb6f30e9-bd84-494a-856e-7dc284124a22
 md"# Влияние длины трассы на производительность"
@@ -956,6 +1163,8 @@ function make_comparison_times_df(track, segments, thresholds, speed, start_ener
 	end
 	# end
 
+	
+
 	# посчитать в отдельной функции
 	# # добавить результаты обычного peaks (не параметрического)
 	# track_peaks, segments_peaks, points_peaks2 = keep_extremum_only_peaks_segments_with_points(track);
@@ -990,11 +1199,49 @@ Plots.scatter(
 	ylabel="Time (ns)"
 )
 
+# ╔═╡ f1dd564a-1a34-4945-bba4-f142760ea533
+mean_linear_fit = curve_fit(Polynomial, thr_df_large_times.Length, thr_df_large_times.MedTime, 1)
+
+# ╔═╡ 23dffd9a-4fd3-41ce-9645-943b6166d7f2
+Plots.scatter(
+	thr_df_large_times.Length,
+	[
+		thr_df_large_times.MeanTime/1e9
+	],
+	label="Время моделирования",
+	xlabel="Количество участков",
+	ylabel="Время (с)"
+)
+
+# ╔═╡ 4f52c0d5-e11c-45e9-94d6-1d99de3479e0
+vcat(thr_df_large_times.Length, 2222)
+
 # ╔═╡ b59f861e-8ced-4900-9fdf-d59eef82e9e3
 md"Линейная зависимость скорости симуляции"
 
+# ╔═╡ 5ef24d5a-e279-4ba0-83d0-4ac348df6290
+md"Теперь надо посчитать фактический выигрыш"
+
+# ╔═╡ e426497b-55c1-4792-803f-012636c7559f
+thr_df_large_times[thr_df_large_times.Threshold .== 0.0, :].MedTime / thr_df_large_times[thr_df_large_times.Threshold .== 1.75, :].MedTime
+
+# ╔═╡ 20f36ba5-02a8-4883-b9ad-e9339b139b73
+md"40.25 раз, абсолютно линейный рост производительности, ровно во сколько сократилось число участков" 
+
+# ╔═╡ 84b3df87-33ae-4c0f-836d-a8b225e52a4e
+md"Теперь добавим замер с peaks" 
+
+# ╔═╡ 24ee0cfe-af10-4287-8265-4638ba20d042
+bench_peaks_info = @benchmark tmp1, tmp2 = simulate_run_energies(opt_speed, track_peaks, segments_peaks, start_energy, start_datetime) samples=50 evals=10
+
+# ╔═╡ bd90358f-6190-4358-a25f-1a3a85a1a944
+med_peaks_time = median(bench_peaks_info.times)
+
+# ╔═╡ 30503dc1-e9e7-4876-9bbe-df8ddbb50c93
+thr_df_large_times[thr_df_large_times.Threshold .== 0.0, :].MedTime / med_peaks_time
+
 # ╔═╡ 5955727b-40f1-4eb4-b868-2ae7788c1625
-md"## Для отптимизации"
+md"## Для оптимизации"
 
 # ╔═╡ 44fa6c8e-9e64-4262-9324-272a133e302e
 md"Будем проводить не на полном размере трассы, а на её начале. Т.е. сперва трасса из одного участка, потом из 2-х, 3-х и т.д.
@@ -1180,10 +1427,11 @@ plot(
 	optim_times_df.Length,
 	[ optim_times_df.Mean  mean_fit.(optim_times_df.Length)],
 	# labels=["Mean" "Median" "Mean (fit):"*text(mean_fit).str "Median (fit):"*text(median_fit).str],
-	labels=["Mean" "Mean (fit)"],
-	xlabel="Length",
-	ylabel="Time(ms)",
-	seriestypes=[:scatter :path ]
+	labels=["Среднее время по замеру" "Аппроксимация:"*text(mean_fit).str],
+	xlabel="Количество участков",
+	ylabel="Время (мс)",
+	seriestypes=[:scatter :path ],
+	title="Время оптимизации"
 )
 
 # ╔═╡ 67de2dbd-3633-4728-a6e4-53e2ddfb2625
@@ -1219,6 +1467,17 @@ mean_fit(
 
 # ╔═╡ 2a341070-a64e-41dc-b41b-c8e68730dc9f
 md"Вышло 771 час"
+
+# ╔═╡ f33a007e-2e91-4206-bb80-65d1997247a3
+md"И для вообще полной дистанции"
+
+# ╔═╡ 4ad15809-2bac-4c25-8139-66fb55311f9c
+mean_fit(
+	size(
+		segments,
+		1
+	)
+) / 1000. / 3600.
 
 # ╔═╡ 85376195-8c5e-42a1-a307-a7f0721556b9
 md"Плоховато сходится, надо больше измерений. Запустить на ночь с шагом в 100-200 до 1.5 тысяч"
@@ -1408,6 +1667,93 @@ md"Идеи на будущее:
 
 # ╔═╡ d76052a6-92a3-416e-89f7-f37e160b7d54
 
+
+# ╔═╡ e2342368-eaa0-41e1-be5f-0cfce2403c34
+begin
+	xlim_left=3000
+	xlim_right=4000
+	ylim_bottom=minimum(track[xlim_left .< track.distance .< xlim_right, :].altitude)
+	ylim_top=maximum(track[xlim_left .< track.distance .< xlim_right, :].altitude)
+	original_track_plot = plot(
+		track.distance, track.altitude,
+		title="Исходное представление маршрута",
+		# xlabel="Дистанция (м)",
+		ylabel="Высота (м)",
+		legend=false,
+		xlim=[xlim_left, xlim_right], 
+		ylim=[ylim_bottom, ylim_top]
+	)
+
+	peaks_track_plot = plot(
+		track_peaks.distance, track_peaks.altitude,
+		title="Сокращённое представление, по подъёмам",
+		# xlabel="Дистанция (м)",
+		ylabel="Высота (м)",
+		legend=false,
+		xlim=[xlim_left, xlim_right], 
+		ylim=[ylim_bottom, ylim_top]
+	)
+
+	k_1_75_track_plot = plot(
+		track_1_75.distance, track_1_75.altitude,
+		title="Сокращённое представление, параметрическое, k=1.75",
+		xlabel="Дистанция (м)",
+		ylabel="Высота (м)",
+		legend=false,
+		xlim=[xlim_left, xlim_right], 
+		ylim=[ylim_bottom, ylim_top]
+	)
+	
+	plot(original_track_plot, peaks_track_plot, k_1_75_track_plot, layout=(3,1),
+		size=(1000,700),
+		legend=false,
+		left_margin=20px,
+		right_margin=20px
+	)
+end
+
+# ╔═╡ f439cddf-427b-4185-a482-615524ba9e23
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	original_track_plot = plot(
+		track_dist.distance, track_dist.altitude,
+		title="Исходное представление маршрута",
+		# xlabel="Дистанция (м)",
+		ylabel="Высота (м)",
+		legend=false,
+		xlim=[590, 1000], 
+		ylim=[26.5, 29]
+	)
+
+	peaks_track_plot = plot(
+		track_peaks_dist.distance, track_peaks_dist.altitude,
+		title="Сокращённое представление, по подъёмам",
+		# xlabel="Дистанция (м)",
+		ylabel="Высота (м)",
+		legend=false,
+		xlim=[590, 1000],
+		ylim=[26.5, 29]
+	)
+
+	k_1_75_track_plot = plot(
+		track_1_75_dist.distance, track_1_75_dist.altitude,
+		title="Сокращённое представление, параметрическое, k=1.75",
+		xlabel="Дистанция (м)",
+		ylabel="Высота (м)",
+		legend=false,
+		xlim=[590, 1000],
+		ylim=[26.5, 29]
+	)
+	
+	plot(original_track_plot, peaks_track_plot, k_1_75_track_plot, layout=(3,1),
+		size=(1000,700),
+		legend=false,
+		left_margin=20px,
+		right_margin=20px
+	)
+end
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2939,6 +3285,11 @@ version = "1.4.1+0"
 # ╠═b7c1cde6-7d63-4497-8a3e-2df959ca6918
 # ╠═9de59850-3bd2-46a9-a3f9-3b73055bdf1d
 # ╠═7b07a2b8-eb69-4da7-ada5-4d44503e4274
+# ╠═5d239b82-f341-446b-9aaf-64076385723f
+# ╠═6a4bf9a3-fbb9-494a-b48e-000553cf5460
+# ╠═4b17b7fd-3a5d-4560-bcaf-bffb1d096ab5
+# ╠═aac0c842-14b6-48e3-bde1-30e32713046f
+# ╠═27ffc2b1-9239-4fa4-b575-bab651196be6
 # ╠═63c9378a-df62-41d1-b3a0-db5a1be3b3c5
 # ╠═0902e42e-8435-4a45-ab7f-9d7969dce188
 # ╠═9e6bd014-b57b-41a4-a170-9e466325d51e
@@ -2950,13 +3301,54 @@ version = "1.4.1+0"
 # ╠═d679e948-8d30-4620-a4fb-f202c04117b8
 # ╠═b018504c-bcfc-4c01-9b05-43936b43b615
 # ╠═4f2abf90-3e70-422a-9a1f-a85083269a9a
+# ╠═3304d896-71d8-4e81-9fb9-eb84a63d52c3
+# ╠═ca2d64b3-4398-4f5d-a5c0-70d73999ae02
+# ╠═2d082f91-5208-45ac-93e4-f45ce7d5fe66
+# ╠═d7b60c09-d97f-4a78-9c1e-98dbf9da1372
+# ╠═407f122d-01ae-4e6b-9ae0-b25b15cf23f8
+# ╠═e7134856-8988-4ae9-bec2-53ab57124541
+# ╠═b47c0f30-933c-47a4-8691-46c4d3d48ed7
+# ╠═b6887cf2-dfd0-43f4-860f-31b18935caef
+# ╠═a8b3097c-d965-435e-8712-2df777def9b6
+# ╠═342e32ee-5343-4b4b-b008-9f2cdb44e9b6
+# ╠═4efd0ae0-1322-4488-b80b-d7c5aa067d9d
+# ╠═8cb42e3c-b5b9-4d0e-ae84-f7b9304920b0
+# ╠═cdd5190e-1cb4-4cc6-96af-09d149a06f82
+# ╠═c41e20bf-70b3-433d-add3-97ed29c98c84
+# ╠═2ff0a042-f411-4994-b777-fa9bb2ce8c6b
+# ╠═a0a42d56-1dc3-4701-80ee-ff80078e7734
+# ╠═ccef9339-201e-4ea3-9eda-06972be2919a
+# ╠═a8f4478d-37b8-4483-b8f1-d541f65f7b5d
+# ╠═5f4819b9-3b5b-4700-8b1f-230e38a1cf28
+# ╠═ed85fb2c-b35b-42fa-8933-b740ceb8f392
+# ╠═5d6f15de-3c56-446b-8afa-9a688804ce4e
+# ╠═092a1984-5515-4de6-b936-06344281d932
+# ╠═f6bea570-3934-4c3b-8a73-d196e105479b
+# ╠═d3937387-d7df-4228-8f3d-ff325a1b3d53
+# ╠═76428346-cbff-4745-afd0-31a479ca2494
+# ╠═ffe7d1a9-6c55-45a1-abd6-c4610d922dd0
+# ╠═8c1bc363-0825-496a-bc35-d03d34a54220
+# ╠═fad5c87a-2611-40ea-a6d7-a98975ddd7ed
+# ╠═12ec6787-9a6b-4797-9296-fd8cbeb3c1b0
+# ╠═f439cddf-427b-4185-a482-615524ba9e23
+# ╠═e2342368-eaa0-41e1-be5f-0cfce2403c34
 # ╠═cb6f30e9-bd84-494a-856e-7dc284124a22
 # ╠═66c7f41c-ba84-4522-9b9a-27b6cc3a6893
 # ╠═d08e325e-5d2a-486c-87e5-cb0833e3882b
 # ╠═53ce657b-1dd9-49c6-a152-fd3358d17b8f
 # ╠═95f02f1c-914b-4363-a100-eb34512ee911
 # ╠═df9ec094-a2ae-428d-aacb-f53a91c4eff8
+# ╠═f1dd564a-1a34-4945-bba4-f142760ea533
+# ╠═23dffd9a-4fd3-41ce-9645-943b6166d7f2
+# ╠═4f52c0d5-e11c-45e9-94d6-1d99de3479e0
 # ╠═b59f861e-8ced-4900-9fdf-d59eef82e9e3
+# ╠═5ef24d5a-e279-4ba0-83d0-4ac348df6290
+# ╠═e426497b-55c1-4792-803f-012636c7559f
+# ╠═20f36ba5-02a8-4883-b9ad-e9339b139b73
+# ╠═84b3df87-33ae-4c0f-836d-a8b225e52a4e
+# ╠═24ee0cfe-af10-4287-8265-4638ba20d042
+# ╠═bd90358f-6190-4358-a25f-1a3a85a1a944
+# ╠═30503dc1-e9e7-4876-9bbe-df8ddbb50c93
 # ╠═5955727b-40f1-4eb4-b868-2ae7788c1625
 # ╠═44fa6c8e-9e64-4262-9324-272a133e302e
 # ╠═0a4a6191-c3dd-4551-b104-dd0595dd684e
@@ -2992,6 +3384,8 @@ version = "1.4.1+0"
 # ╠═89641cc8-72b2-4a4a-9fcb-e48bdf7a778b
 # ╠═f5419815-56ef-4485-b72f-ee3bf2d3461b
 # ╠═2a341070-a64e-41dc-b41b-c8e68730dc9f
+# ╠═f33a007e-2e91-4206-bb80-65d1997247a3
+# ╠═4ad15809-2bac-4c25-8139-66fb55311f9c
 # ╠═85376195-8c5e-42a1-a307-a7f0721556b9
 # ╠═d04b0d6a-96ba-4aba-b943-74cf46f8855c
 # ╠═c99b3c6a-c29d-475d-bb79-ff23d505fe0a
