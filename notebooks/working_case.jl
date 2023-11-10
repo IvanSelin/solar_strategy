@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.26
+# v0.19.27
 
 using Markdown
 using InteractiveUtils
@@ -566,8 +566,8 @@ md"Похоже что пора делать осадки, ну или увел�
 md"# Начинаем делать осадки"
 
 # ╔═╡ 3b0cd1f5-b2f2-4178-8f0e-156f2e6ffd10
-# mapbox_style="open-street-map"
-mapbox_style="stamen-terrain"
+mapbox_style="open-street-map"
+# mapbox_style="stamen-terrain"
 # "open-street-map", "carto-positron", "carto-darkmatter", "stamen-terrain", "stamen-toner" or "stamen-watercolor" yield maps composed of raster tiles from various public tile servers which do not require signups or access tokens
 
 # ╔═╡ 9ad47da6-2b71-4354-9bd5-7113f98139d7
@@ -584,7 +584,8 @@ plotjs.Plot(
 		height=600,
 		# geo_scope="world",
 		# geo_resolution=50,
-		geo_fitbounds="locations" # geo_fitbounds="geojson"
+		geo_fitbounds="locations", # geo_fitbounds="geojson",
+		mapbox_style="stamen-terrain"
 	)
 )
 

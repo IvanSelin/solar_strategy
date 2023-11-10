@@ -1094,6 +1094,50 @@ track_1_75_dist = track_1_75[from_distance .< track_1_75.distance .< to_distance
 # ╔═╡ 12ec6787-9a6b-4797-9296-fd8cbeb3c1b0
 plot(track_1_75_dist.distance, track_1_75_dist.altitude, title="Track 1.75 data from to")
 
+# ╔═╡ e2342368-eaa0-41e1-be5f-0cfce2403c34
+begin
+	xlim_left=3000
+	xlim_right=4000
+	ylim_bottom=minimum(track[xlim_left .< track.distance .< xlim_right, :].altitude)
+	ylim_top=maximum(track[xlim_left .< track.distance .< xlim_right, :].altitude)
+	original_track_plot = plot(
+		track.distance, track.altitude,
+		title="Исходное представление маршрута",
+		# xlabel="Дистанция (м)",
+		ylabel="Высота (м)",
+		legend=false,
+		xlim=[xlim_left, xlim_right], 
+		ylim=[ylim_bottom, ylim_top]
+	)
+
+	peaks_track_plot = plot(
+		track_peaks.distance, track_peaks.altitude,
+		title="Сокращённое представление, по подъёмам",
+		# xlabel="Дистанция (м)",
+		ylabel="Высота (м)",
+		legend=false,
+		xlim=[xlim_left, xlim_right], 
+		ylim=[ylim_bottom, ylim_top]
+	)
+
+	k_1_75_track_plot = plot(
+		track_1_75.distance, track_1_75.altitude,
+		title="Сокращённое представление, параметрическое, k=1.75",
+		xlabel="Дистанция (м)",
+		ylabel="Высота (м)",
+		legend=false,
+		xlim=[xlim_left, xlim_right], 
+		ylim=[ylim_bottom, ylim_top]
+	)
+	
+	plot(original_track_plot, peaks_track_plot, k_1_75_track_plot, layout=(3,1),
+		size=(1000,700),
+		legend=false,
+		left_margin=20px,
+		right_margin=20px
+	)
+end
+
 # ╔═╡ cb6f30e9-bd84-494a-856e-7dc284124a22
 md"# Влияние длины трассы на производительность"
 
@@ -1573,21 +1617,6 @@ function benchmark_optimizations_whole(segment_sizes, track, segments, start_ene
 	return res_df
 end
 
-# ╔═╡ 7df7acba-380e-4b54-b085-a97f270ca0cd
-# ╠═╡ disabled = true
-#=╠═╡
-optim_times_whole_df = benchmark_optimizations_whole(
-	collect(segments_amount) ,
-	track_peaks_pl, segments_peaks_pl, start_energy, start_datetime
-)
-  ╠═╡ =#
-
-# ╔═╡ e47485f7-a7ee-465f-a708-332e3875e309
-# ╠═╡ disabled = true
-#=╠═╡
-CSV.write("optim_times_whole.csv", optim_times_whole_df);
-  ╠═╡ =#
-
 # ╔═╡ aa0db854-c097-4df4-b139-058869a6be8f
 optim_times_whole_df = CSV.read("optim_times_whole.csv", DataFrame)
 
@@ -1667,93 +1696,6 @@ md"Идеи на будущее:
 
 # ╔═╡ d76052a6-92a3-416e-89f7-f37e160b7d54
 
-
-# ╔═╡ e2342368-eaa0-41e1-be5f-0cfce2403c34
-begin
-	xlim_left=3000
-	xlim_right=4000
-	ylim_bottom=minimum(track[xlim_left .< track.distance .< xlim_right, :].altitude)
-	ylim_top=maximum(track[xlim_left .< track.distance .< xlim_right, :].altitude)
-	original_track_plot = plot(
-		track.distance, track.altitude,
-		title="Исходное представление маршрута",
-		# xlabel="Дистанция (м)",
-		ylabel="Высота (м)",
-		legend=false,
-		xlim=[xlim_left, xlim_right], 
-		ylim=[ylim_bottom, ylim_top]
-	)
-
-	peaks_track_plot = plot(
-		track_peaks.distance, track_peaks.altitude,
-		title="Сокращённое представление, по подъёмам",
-		# xlabel="Дистанция (м)",
-		ylabel="Высота (м)",
-		legend=false,
-		xlim=[xlim_left, xlim_right], 
-		ylim=[ylim_bottom, ylim_top]
-	)
-
-	k_1_75_track_plot = plot(
-		track_1_75.distance, track_1_75.altitude,
-		title="Сокращённое представление, параметрическое, k=1.75",
-		xlabel="Дистанция (м)",
-		ylabel="Высота (м)",
-		legend=false,
-		xlim=[xlim_left, xlim_right], 
-		ylim=[ylim_bottom, ylim_top]
-	)
-	
-	plot(original_track_plot, peaks_track_plot, k_1_75_track_plot, layout=(3,1),
-		size=(1000,700),
-		legend=false,
-		left_margin=20px,
-		right_margin=20px
-	)
-end
-
-# ╔═╡ f439cddf-427b-4185-a482-615524ba9e23
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-	original_track_plot = plot(
-		track_dist.distance, track_dist.altitude,
-		title="Исходное представление маршрута",
-		# xlabel="Дистанция (м)",
-		ylabel="Высота (м)",
-		legend=false,
-		xlim=[590, 1000], 
-		ylim=[26.5, 29]
-	)
-
-	peaks_track_plot = plot(
-		track_peaks_dist.distance, track_peaks_dist.altitude,
-		title="Сокращённое представление, по подъёмам",
-		# xlabel="Дистанция (м)",
-		ylabel="Высота (м)",
-		legend=false,
-		xlim=[590, 1000],
-		ylim=[26.5, 29]
-	)
-
-	k_1_75_track_plot = plot(
-		track_1_75_dist.distance, track_1_75_dist.altitude,
-		title="Сокращённое представление, параметрическое, k=1.75",
-		xlabel="Дистанция (м)",
-		ylabel="Высота (м)",
-		legend=false,
-		xlim=[590, 1000],
-		ylim=[26.5, 29]
-	)
-	
-	plot(original_track_plot, peaks_track_plot, k_1_75_track_plot, layout=(3,1),
-		size=(1000,700),
-		legend=false,
-		left_margin=20px,
-		right_margin=20px
-	)
-end
-  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
