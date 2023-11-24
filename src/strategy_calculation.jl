@@ -1496,10 +1496,26 @@ function iterative_optimization(
 		# push!(subtasks_splits_general, variables_split_iteration)
 
 		# @floop for subtask in iteration.subtasks
+		start_time_next_subtask = start_datetime
+		# @floop for subtask in iteration.subtasks
 		@showprogress for subtask in iteration.subtasks
+			subtask.problem.start_datetime = start_time_next_subtask
 			is_divisible = process_subtask!(subtask, scaling_coef_variables, segments)
 			# @reduce(is_track_divisible_further |= is_divisible)
 			is_track_divisible_further |= is_divisible
+			# calculate start time for next optimization
+			subtask_segments = get_segments_interval_typed(
+				segments,
+				subtask.subtask_boundaries.from,
+				subtask.subtask_boundaries.to
+			)
+			subtask_speeds = convert_kmh_to_ms(
+				set_speeds_boundaries(subtask.solution, subtask.variables_boundaries)
+			)
+			subtask_times = subtask_segments.diff_distance ./ subtask_speeds
+			subtask_time = sum(subtask_times)
+			start_time_next_subtask = subtask.problem.start_datetime .+ Dates.Millisecond.(round.(subtask_time .* 1000))
+			# start_datetime .+ Dates.Millisecond.(round.(time_seconds .* 1000))
 		end
 
 		println()
@@ -1698,11 +1714,26 @@ function iterative_optimization_overlap(track :: DataFrame,
 
 
 		is_track_divisible_further = false
+		start_time_next_subtask = start_datetime
 		# @floop for subtask in iteration.subtasks
 		@showprogress for subtask in iteration.subtasks
+			subtask.problem.start_datetime = start_time_next_subtask
 			is_divisible = process_subtask!(subtask, scaling_coef_variables, segments)
 			# @reduce(is_track_divisible_further |= is_divisible)
 			is_track_divisible_further |= is_divisible
+			# calculate start time for next optimization
+			subtask_segments = get_segments_interval_typed(
+				segments,
+				subtask.subtask_boundaries.from,
+				subtask.subtask_boundaries.to
+			)
+			subtask_speeds = convert_kmh_to_ms(
+				set_speeds_boundaries(subtask.solution, subtask.variables_boundaries)
+			)
+			subtask_times = subtask_segments.diff_distance ./ subtask_speeds
+			subtask_time = sum(subtask_times)
+			start_time_next_subtask = subtask.problem.start_datetime .+ Dates.Millisecond.(round.(subtask_time .* 1000))
+			# start_datetime .+ Dates.Millisecond.(round.(time_seconds .* 1000))
 		end
 
 		println()
@@ -2062,18 +2093,22 @@ function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segme
 		)
 	end
 
-	# if iteration_num == 1
 	if size(subtask.problem.initial_speeds, 1) == 2
 		td = TwiceDifferentiable(f_iter_low_energy, prev_iter_speeds; autodiff = :forward)
+		random_term = fill(0., vars_amount)
+		optim_func = f_iter_low_energy
 	else
-		td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)	
+		td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)
+		# random_term = rand(vars_amount)
+		random_term = fill(1., vars_amount)
+		optim_func = f_iter
 	end
 
 	lower_bound = fill(0.0, vars_amount)
 	upper_bound = fill(100.0, vars_amount)
 	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
 	result = optimize(td, tdc, prev_iter_speeds 
-	# .+ rand(vars_amount) .- 0.5
+	.+ random_term .- 0.5
 		,
 		IPNewton(),
 		Optim.Options(
@@ -2082,6 +2117,16 @@ function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segme
 			g_tol = 1e-12
 		)
 	)
+
+	# result = optimize(
+	# 	optim_func,
+	# 	prev_iter_speeds 
+	# 	.+ random_term #.- 0.5
+	# 	,
+	# 	ConjugateGradient(),
+	# 	autodiff = :forward
+	# )
+
 	minimized_speeds = Optim.minimizer(result)
 	# println(Optim.minimizer(result))
 	# println(Optim.minimum(result))

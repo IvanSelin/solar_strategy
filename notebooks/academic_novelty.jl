@@ -74,7 +74,7 @@ plotlyjs()
 # ╔═╡ 309ee8a3-f136-46ab-bb05-9fae649ce940
 begin
 	track_full, segments_full = get_track_and_segments("../data/data_australia.csv")
-	track_peaks, segments_peaks = keep_extremum_only_peaks_segments(track_full)
+	track_peaks, segments_peaks, points_peaks = keep_extremum_only_peaks_segments_with_points(track_full)
 	plot(track_peaks.distance, track_peaks.altitude, title="Track extremum only data built w/ Peaks.jl")
 end
 
@@ -100,6 +100,17 @@ begin
 	    segments_peaks
 	);
 	segments_peaks.weather_coeff = weather_coeff
+end
+
+# ╔═╡ 3fb0db03-1cbe-4711-9ff7-2ccf8b0ee08a
+begin
+	weather_full_coeff = calculate_weather_weights_for_segments(
+		w,
+		elat,
+		elon,
+		segments_full
+	)
+	segments_full.weather_coeff = weather_full_coeff
 end
 
 # ╔═╡ a48f9dc8-654b-4072-a8ea-27b0e812324e
@@ -187,7 +198,7 @@ nm_optimizer = NelderMead()
 
 # ╔═╡ 8608e4d1-8ff6-4c57-80eb-45e8b721c4b3
 begin
-	if short_track_len < 55
+	if short_track_len < 155
 		results_nm = optimize(f_wrap_regular, lower, upper, init_speeds, Fminbox(nm_optimizer), Optim.Options(iterations=10000))
 	else
 		results_nm = OptimResultsStub()
@@ -198,7 +209,7 @@ end
 # results_nm_unconstrained = optimize(f_wrap_regular, init_speeds, nm_optimizer, Optim.Options(iterations=1000000))
 
 begin
-	if short_track_len < 55
+	if short_track_len < 505
 		results_nm_unconstrained = optimize(f_wrap_regular, init_speeds, nm_optimizer, Optim.Options(iterations=1000000))
 	else
 		results_nm_unconstrained = OptimResultsStub()
@@ -235,10 +246,22 @@ begin
 	odc = OnceDifferentiableConstraints(lower, upper)
 end
 
+# ╔═╡ 1b6df0b2-572b-4255-8dd5-ee42d1a9a08d
+begin
+	if short_track_len < 505
+		results_bfgs_no_diff = optimize(f_wrap_regular, init_speeds, bfgs_optimizer, Optim.Options(iterations=1000))
+	else
+		results_bfgs_no_diff = OptimResultsStub()
+	end
+end
+
+# ╔═╡ c58758ea-4fd4-42ce-8a82-0d1a09f4f07b
+minimized_speeds_bfgs_no_diff = Optim.minimizer(results_bfgs_no_diff)
+
 # ╔═╡ 4ab6e5b4-d16c-4016-a4d8-d2b7c8db5b9b
 begin
 	if short_track_len < 20
-		results_bfgs = optimize(f_wrap_regular, lower, upper, init_speeds, Fminbox(bfgs_optimizer), Optim.Options(iterations=10000))
+		results_bfgs = optimize(f_wrap_regular, lower, upper, init_speeds, Fminbox(bfgs_optimizer), Optim.Options(iterations=1000))
 	else
 		results_bfgs = OptimResultsStub()
 	end
@@ -261,6 +284,9 @@ results_bfgs_diff_unconstrained = optimize(f_wrap_regular, init_speeds, bfgs_opt
 
 # ╔═╡ 2039e2ff-a56d-4a44-89ec-9073ae98480b
 minimized_speeds_bfgs_diff_unconstrained = Optim.minimizer(results_bfgs_diff_unconstrained)
+
+# ╔═╡ f04149e4-a1f3-4a1d-bc3c-7c4e520ba976
+simulate_run(minimized_speeds_bfgs_no_diff, track_short, segments_short, start_energy, start_datetime)
 
 # ╔═╡ 2106d6cb-9a70-4ccb-907d-3f157cfe1c46
 simulate_run(minimized_speeds_bfgs, track_short, segments_short, start_energy, start_datetime)
@@ -449,7 +475,1258 @@ end
 md"## Строка для копирования"
 
 # ╔═╡ 6fcc5460-c724-4f6e-bb04-8785cddb7f79
-generate_excel_string([results_nm, results_nm_unconstrained, results_bfgs, results_bfgs_diff, results_bfgs_diff_unconstrained, results_cg_no_diff,results_cg, results_cg_diff, results_cg_diff_unconstrained, results_ipnewton, results_ipnewton_unconstrained])
+generate_excel_string([results_nm, results_nm_unconstrained, results_bfgs_no_diff, results_bfgs, results_bfgs_diff, results_bfgs_diff_unconstrained, results_cg_no_diff,results_cg, results_cg_diff, results_cg_diff_unconstrained, results_ipnewton, results_ipnewton_unconstrained])
+
+# ╔═╡ 23906645-c779-4eb1-9201-6302fec045ea
+md"Это не способ повышения производительности, а повышения применимости?" 
+
+# ╔═╡ 9ffbda77-5314-493e-89f6-bcaaff48a737
+md"# 2 - Сокращение трассы"
+
+# ╔═╡ 35b780d1-bf92-42bc-ac72-0a95e2585f56
+md"Здесь мы будем убеждать всех, что мы хорошо сокращаем трассу"
+
+# ╔═╡ 955df201-d9d4-4da2-b604-16619c92dd85
+md"В принципе, уже всё сделано в ноутбуке про упрощение трассы
+
+Надо только прирост скорости оптимизации сделать" 
+
+# ╔═╡ 127ca813-a652-4cc7-9995-588a0ab863cb
+md"Надо взять трассу до какого-то момента в peaks и параметрического (желательно одну и ту же точку)
+
+И взять оригинальную трассу
+
+Измерить время оптимизации
+
+Затем взять ещё несколько таких точек"
+
+# ╔═╡ b53eec1b-c644-4ef9-8086-6d90eb89935b
+md"Ещё нужно сравнение на разных трассах для параметрического (желательно)"
+
+# ╔═╡ f497ffca-5630-4d30-811f-bd1e15e8d34b
+k = 1.0
+
+# ╔═╡ 1246d429-eb90-41df-bb14-df94f67a152f
+track_k, points_k = parametrized_track_simplification(track_full, k);
+
+# ╔═╡ 83934f3d-bf9c-4cd2-976c-0d50a91cbbb8
+segments_k = get_segments_for_track(track_k);
+
+# ╔═╡ d7ab2d22-c546-4b6c-b2d8-7aad0af65261
+md"Выясним, где одинаковые точки у peaks и k"
+
+# ╔═╡ e269d75f-bc01-4621-b193-555f54746ead
+intersect_points = intersect(points_peaks, points_k)
+
+# ╔═╡ 93b53e5d-69e1-47d5-a6bc-4d1756467b2d
+length(points_k)
+
+# ╔═╡ 990ac9a0-fc6f-4afb-aed2-e679ddcadfbf
+intersect_df = DataFrame((intersect=intersect_points, distance=track_full[intersect_points, :].distance))
+
+# ╔═╡ 429fcd9c-300f-437b-ae15-16ff5040f3d3
+peaks_bit_vector = in.(track_peaks.distance, Ref(intersect_df.distance))
+
+# ╔═╡ b11ef547-15b2-4425-bc83-fa6b8071e0a9
+peaks_indexes = findall(peaks_bit_vector)
+
+# ╔═╡ bf08d4cd-d34b-4a42-82df-edbbb8d02437
+intersect_df.peaks = peaks_indexes;
+
+# ╔═╡ 0c17cb82-91e8-423a-8764-87b768e71a46
+k_bit_vector = in.(track_k.distance, Ref(intersect_df.distance))
+
+# ╔═╡ 251b48a8-3a82-4859-a1b7-95306e484375
+k_indexes = findall(k_bit_vector)
+
+# ╔═╡ 4807e032-e508-4795-9ec8-e830d9abfcc5
+intersect_df.k = k_indexes;
+
+# ╔═╡ cf34f9ff-744a-498b-9835-b478a2c2d6c5
+md"Выберем некоторые из точек"
+
+# ╔═╡ 9d1b383c-5dee-45b7-bfce-f1f4bd9ef1e1
+poi = [28, 54, 109, 202, 400, 518, 749, 1007, 1490, 2065, 2534]
+# poi = [109, 150, 281, 327, 518, 742, 1207]
+# poi = [109, 150, 281]
+
+# ╔═╡ 468f734c-5f23-420a-8b87-e068e44cc977
+poi_df = intersect_df[in.(intersect_df.intersect, Ref(poi)), :]
+
+# ╔═╡ db538803-f8c5-48f3-9051-adcfa1c4160d
+md"sanity check"
+
+# ╔═╡ cc8085a3-8ce6-45b0-a353-2bc3eddc4381
+track_peaks.distance[42]
+
+# ╔═╡ 9482aafe-37b6-482d-ae11-a9a64b183bfd
+track_k.distance[22]
+
+# ╔═╡ 63989b8f-fa2f-4151-b2cf-394e79b80474
+md"sanity check passed
+
+Теперь можно и посравнивать)"
+
+# ╔═╡ 362f6a0b-b2e2-4bf0-a74d-59c1ec38578a
+md"## Сравнение по выбранным точкам"
+
+# ╔═╡ 09032708-dbde-43b1-9d18-70a881d65b7d
+begin
+	for row in eachrow(poi_df)
+		println(row.intersect)
+	end
+end
+
+# ╔═╡ 215e45a7-e1f3-45d5-af34-ec7e89fb96fb
+begin
+	track_optimization_comparison_df = DataFrame(
+		points_regular=Int[], points_peaks=Int[], points_k=Int[],
+		opt_time_regular=Float64[], opt_time_peaks=Float64[], opt_time_k=Float64[],
+		res_time_regular=Float64[], res_time_peaks=Float64[], res_time_k=Float64[],
+		min_energy_regular=Float64[], min_energy_peaks=Float64[], min_energy_k=Float64[],
+		finish_energy_regular=Float64[], finish_energy_peaks=Float64[], finish_energy_k=Float64[],
+		regular_speeds = Vector{Float64}[], peaks_speeds = Vector{Float64}[], k_speeds = Vector{Float64}[]
+	)
+	for row in eachrow(poi_df)
+		# println(row)
+		track_short_comparison = track_full[1:row.intersect,:]
+		segments_short_comparison = get_segments_for_track(track_short_comparison);
+		track_peaks_comparison = track_peaks[1:row.peaks,:]
+		segments_peaks_comparison = get_segments_for_track(track_peaks_comparison);
+		track_k_comparison = track_k[1:row.k,:]
+		segments_k_comparison = get_segments_for_track(track_k_comparison);
+		# println("$(size(segments_short_comparison,1)), $(size(segments_peaks_comparison,1)), $(size(segments_k_comparison,1))")
+
+		start_energy_comparison = row.distance/last(track_full.distance) * max_energy
+		init_speeds_regular = fill(40. , size(segments_short_comparison, 1) )
+		init_speeds_peaks = fill(40. , size(segments_peaks_comparison, 1) )
+		init_speeds_k = fill(40. , size(segments_k_comparison, 1) )
+		# now it's time to optimize
+
+		function f_wrap_regular_comparison(input_speeds :: Vector{<: Real})
+			speed_vector :: Vector{<: Real} = convert_kmh_to_ms_typed(input_speeds)
+			power_use, solar_power, time_s = solar_trip_boundaries_typed(
+				speed_vector, segments_short_comparison, start_datetime
+			)
+		
+			last_energy = last(solar_power) - last(power_use) + start_energy_comparison
+			solar_power -= power_use
+			min_penalty = abs(minimum(solar_power) + start_energy_comparison)
+		
+			cost = sum(segments_short_comparison.diff_distance ./ abs.(speed_vector)) + 150000 * min_penalty^2 + 10000 * (finish_energy - last_energy)^2;
+		
+			return cost
+		end
+
+		function f_wrap_peaks_comparison(input_speeds :: Vector{<: Real})
+			speed_vector :: Vector{<: Real} = convert_kmh_to_ms_typed(input_speeds)
+			power_use, solar_power, time_s = solar_trip_boundaries_typed(
+				speed_vector, segments_peaks_comparison, start_datetime
+			)
+		
+			last_energy = last(solar_power) - last(power_use) + start_energy_comparison
+			solar_power -= power_use
+			min_penalty = abs(minimum(solar_power) + start_energy_comparison)
+		
+			cost = sum(segments_peaks_comparison.diff_distance ./ abs.(speed_vector)) + 150000 * min_penalty^2 + 10000 * (finish_energy - last_energy)^2;
+		
+			return cost
+		end
+
+		function f_wrap_k_comparison(input_speeds :: Vector{<: Real})
+			speed_vector :: Vector{<: Real} = convert_kmh_to_ms_typed(input_speeds)
+			power_use, solar_power, time_s = solar_trip_boundaries_typed(
+				speed_vector, segments_k_comparison, start_datetime
+			)
+		
+			last_energy = last(solar_power) - last(power_use) + start_energy_comparison
+			solar_power -= power_use
+			min_penalty = abs(minimum(solar_power) + start_energy_comparison)
+		
+			cost = sum(segments_k_comparison.diff_distance ./ abs.(speed_vector)) + 150000 * min_penalty^2 + 10000 * (finish_energy - last_energy)^2;
+		
+			return cost
+		end
+
+		# или может лучше использовать NelderMead? чтобы больше была видна разница
+		results_regular = optimize(f_wrap_regular_comparison, init_speeds_regular,
+			NelderMead(), Optim.Options(iterations=10000))
+
+		results_peaks = optimize(f_wrap_peaks_comparison, init_speeds_peaks, 
+			NelderMead(), Optim.Options(iterations=10000))
+
+		results_k = optimize(f_wrap_k_comparison, init_speeds_k, 
+			NelderMead(), Optim.Options(iterations=10000))
+
+		# simulate energies and run time
+		regular_speeds = results_regular.minimizer ./ 3.6
+		peaks_speeds = results_peaks.minimizer ./ 3.6
+		k_speeds = results_k.minimizer ./ 3.6
+
+		pu_regular, sp_regular, time_regular = solar_trip_boundaries_typed(
+			regular_speeds, segments_short_comparison, start_datetime
+		)
+		pu_peaks, sp_peaks, time_peaks = solar_trip_boundaries_typed(
+			peaks_speeds, segments_peaks_comparison, start_datetime
+		)
+		pu_k, sp_k, time_k = solar_trip_boundaries_typed(
+			k_speeds, segments_k_comparison, start_datetime
+		)
+
+		time_sum_regular = last(time_regular)
+		time_sum_peaks = last(time_peaks)
+		time_sum_k = last(time_k)
+		
+		energy_regular = start_energy_comparison .+ sp_regular .- pu_regular
+		low_e_regular = minimum(energy_regular)
+
+		energy_peaks= start_energy_comparison .+ sp_peaks .- pu_peaks
+		low_e_peaks = minimum(energy_peaks)
+
+		energy_k = start_energy_comparison .+ sp_k .- pu_k
+		low_e_k = minimum(energy_k)
+
+		
+		# minimized_speeds_ms = speeds / 3.6
+	
+		# power_use, solar_power, time_s = solar_trip_boundaries(
+		# 	minimized_speeds_ms, segments, start_datetime
+		# )
+		# # track points, not segments, that's why it is size is +1 
+		# energy_in_system_new = start_energy .+ solar_power .- power_use
+		# lowest_energy = minimum(energy_in_system_new)
+		# last_energy = last(energy_in_system_new)
+
+
+		push!(
+			track_optimization_comparison_df,
+			(
+				row.intersect, row.peaks, row.k,
+				results_regular.time_run, results_peaks.time_run, results_k.time_run,
+				time_sum_regular, time_sum_peaks, time_sum_k,
+				low_e_regular, low_e_peaks, low_e_k,
+				last(energy_regular), last(energy_peaks), last(energy_k),
+				results_regular.minimizer, results_peaks.minimizer, results_k.minimizer
+			)
+		)
+		# push!(res_df, (thr, last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments, exec_time))
+		
+		# [@sprintf("%.3f",optim_result.time_run),@sprintf("%.3f",sim_time(optim_result))]
+		
+		
+	end
+	track_optimization_comparison_df
+end
+
+# ╔═╡ 88694580-4e7f-4e35-8c33-e90bf5679c7e
+simulate_run(
+	track_optimization_comparison_df.regular_speeds[8],
+	track_full[1:poi_df.intersect[8],:],
+	get_segments_for_track(track_full[1:poi_df.intersect[8],:]),
+	poi_df.distance[8]/last(track_full.distance) * max_energy,
+	start_datetime
+)
+# regular for 1st poi
+
+# ╔═╡ 480e5187-19d7-486e-ad08-3a340bd7a760
+simulate_run(
+	track_optimization_comparison_df.peaks_speeds[8],
+	track_peaks[1:poi_df.peaks[8],:],
+	get_segments_for_track(track_peaks[1:poi_df.peaks[8],:]),
+	poi_df.distance[8]/last(track_full.distance) * max_energy,
+	start_datetime
+)
+# peaks for 1st poi
+
+# ╔═╡ e3f80864-8fd2-48bd-acb8-8c91aba28e76
+simulate_run(
+	track_optimization_comparison_df.k_speeds[8],
+	track_k[1:poi_df.k[8],:],
+	get_segments_for_track(track_k[1:poi_df.k[8],:]),
+	poi_df.distance[8]/last(track_full.distance) * max_energy,
+	start_datetime
+)
+# k for 1st poi
+
+# ╔═╡ 985db9d8-b795-45c7-991f-8b68d81feee9
+track_optimization_comparison_df.opt_time_regular ./ track_optimization_comparison_df.opt_time_k
+
+# ╔═╡ b32881c8-59c1-4806-91e9-f6447f2aa22b
+plot(
+	track_optimization_comparison_df.points_regular,
+	track_optimization_comparison_df.opt_time_regular ./ track_optimization_comparison_df.opt_time_k,
+	label="Прирост производительности",
+	xlabel="Участков",
+	legend=:topleft
+)
+
+# ╔═╡ 3a6eb336-4ec3-400a-b58b-418c7429ca2d
+sum((track_optimization_comparison_df.opt_time_regular ./ track_optimization_comparison_df.opt_time_k)[1:8]) / 8
+
+# ╔═╡ c7c4ad0e-600b-47f3-ad26-9f76cecf2931
+md"# 3 - Алгоритм разбиения на подзадачи" 
+
+# ╔═╡ 1eecf941-1a74-45f8-a104-1db2d6c8e377
+md"Скорее всего в ноутбуку" 
+
+# ╔═╡ b1effadf-79ca-422a-91e3-08f72b0239ad
+
+function process_subtask_novelty!(subtask::Subtask, scaling_coef_variables:: Real, segments::DataFrame, iteration_num::Integer)
+	# 3. each subtask comes with its own chunks (variables)			
+	# split each task on parts
+	subtask.variables_boundaries = calculate_boundaries(
+		subtask.subtask_boundaries.from,
+		subtask.subtask_boundaries.to,
+		scaling_coef_variables
+	)
+
+	is_track_divisible_further = false
+	if (subtask.subtask_boundaries.size) >= scaling_coef_variables
+		# at least one subtask can be divided, so, there should be next iteration
+		is_track_divisible_further = true
+	end
+
+	# TODO: how to calculate amount of speeds?
+	vars_amount = size(subtask.variables_boundaries, 1)
+
+	# TODO: change here
+	# write a function that repeats array values to get another array of bigger size
+	# if size(subtask.problem.initial_speeds, 1) == 2
+	prev_iter_speeds = fill_array(
+		subtask.problem.initial_speeds, 
+		vars_amount
+	)
+	# else
+	# 	prev_iter_speeds = fill_array(
+	# 	35., 
+	# 	vars_amount
+	# 	)
+	# end
+
+	subtask_segments = get_segments_interval_typed(
+		segments,
+		subtask.subtask_boundaries.from,
+		subtask.subtask_boundaries.to
+	)
+
+	function f_iter(input_speeds :: Vector{<: Real})
+		return solar_partial_trip_wrapper_iter_typed(
+		# return solar_partial_trip_wrapper_iter_with_low_energy(
+			input_speeds, subtask_segments, subtask.variables_boundaries,
+			subtask.problem.start_energy, subtask.problem.finish_energy,
+			subtask.problem.start_datetime
+		)
+	end
+
+	function f_iter_low_energy(input_speeds :: Vector{<: Real})
+		# return solar_partial_trip_wrapper_iter(
+		return solar_partial_trip_wrapper_iter_with_low_energy_typed(
+			input_speeds, subtask_segments, subtask.variables_boundaries,
+			subtask.problem.start_energy, subtask.problem.finish_energy,
+			subtask.problem.start_datetime
+		)
+	end
+
+	if size(subtask.problem.initial_speeds, 1) == 2
+		td = TwiceDifferentiable(f_iter_low_energy, prev_iter_speeds; autodiff = :forward)
+		random_term = fill(0., vars_amount)
+		optim_func = f_iter_low_energy
+	else
+		td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)
+		# random_term = rand(vars_amount)
+		random_term = fill(1., vars_amount)
+		optim_func = f_iter
+	end
+
+	# lower_bound = fill(0.0, vars_amount)
+	# upper_bound = fill(100.0, vars_amount)
+	# tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+	# result = optimize(td, tdc, prev_iter_speeds 
+	# .+ random_term .- 0.5
+	# 	,
+	# 	IPNewton(),
+	# 	Optim.Options(
+	# 		x_tol = 1e-12,
+	# 		f_tol = 1e-12,
+	# 		g_tol = 1e-12
+	# 	)
+	# )
+
+	result = optimize(
+		optim_func,
+		prev_iter_speeds 
+		# .+ random_term .- 0.5
+		,
+		NelderMead()
+		# autodiff = :forward
+	)
+
+	minimized_speeds = Optim.minimizer(result)
+	# println(Optim.minimizer(result))
+	# println(Optim.minimum(result))
+	subtask.solution = minimized_speeds
+	return is_track_divisible_further
+end
+
+# ╔═╡ 1fb8c4d4-1cdb-4ee8-860c-dd82cc0e7043
+function iterative_optimization_novelty(
+		track :: DataFrame,
+		segments :: DataFrame,
+		scaling_coef_subtasks :: Integer,
+		scaling_coef_subtask_input_speeds :: Integer,
+		start_energy :: Real,
+		start_datetime=DateTime(2022,7,1,0,0,0)::DateTime
+	)
+	# general algorithm:
+	# 0. data setup
+	# 1. exit loop check
+	# 2. 	split the track into subtasks
+	# 3. 		each subtask comes with its own chunks (variables)
+	# 4. 		solve optimization problem for every subtask with its chunks (variables)
+	# 5. 	tie everything together (collect speeds to one array)
+	# 6. 	make full simulation with said speeds
+	# 7. 	prepare data for next iteration. should be subtask's chunks as subtasks
+	# 8. 	go to 2:
+	# 9. final calculations?
+
+	# 0. data setup
+	track_size = size(track,1)
+	scaling_coef_variables = scaling_coef_subtasks * scaling_coef_subtask_input_speeds
+
+	start_speeds = minimize_single_speed(
+		track,
+		segments,
+		start_energy,
+		start_datetime,
+		31.
+	)
+
+	start_n_speeds = minimize_n_speeds(
+		track,
+		segments,
+		2,
+		start_energy,
+		start_datetime,
+		first(start_speeds)
+	)
+
+	# boundaries = calculate_boundaries(1, size(track, 1), scaling_coef_subtask_input_speeds)
+
+
+
+	# solar_trip_boundaries(
+	# 		convert_kmh_to_ms(iteration_speeds),
+	# 		segments,
+	# 		start_datetime
+	# 	)
+
+
+	# for i in eachindex(start_n_speeds)
+	# 	subtask = Subtask(
+	# 		boundaries[i],
+	# 		# calculate_boundaries(1, track_size, scaling_coef),
+	# 		[],
+	# 		SubtaskProblem(
+	# 			start_energy,
+	# 			0.,
+	# 			start_speeds,
+	# 			start_datetime
+	# 		),
+	# 		[]
+	# 	)
+	# end
+
+	zero_subtask = Subtask(
+		Boundaries(1, track_size),
+		# calculate_boundaries(1, track_size, scaling_coef),
+		[],
+		SubtaskProblem(
+			start_energy,
+			0.,
+			# start_speeds,
+			start_n_speeds,
+			start_datetime
+		),
+		[]
+	)
+
+	iteration_1 = Iteration(
+		[ zero_subtask ],
+		1,
+		IterationSolution(
+			[],
+			[],
+			[],
+			[]
+		)
+	);
+
+	iterations::Vector{Iteration} = []
+	push!(iterations, iteration_1)
+
+	iteration_num = 1;
+	# 1. exit loop check
+	is_track_divisible_further = true
+	# while iteration_num <= 2
+	while is_track_divisible_further # && iteration_num <= 2
+	# while is_track_divisible_further && iteration_num <= 3
+
+		iteration = iterations[iteration_num]
+		println("Iteration $(iteration.number)")
+		
+		# 2. split the track into subtasks
+		# or grab the result of previous division for subtasks
+		# подумать где у меня точки, где участки, а где трассы по результатам деления
+		# и ещё подумать как получаются подзадачи и их переменные на разных итерациях
+		# № итерации, подзадачи, количество переменных
+		# 1			1			scale
+		# 2			scale		scale^2
+		# ...
+		# n			scale^(n-1)	scale^n - но не совсем, где как места хватит
+
+		# по идее достаточно делить трассу, когда определяемся с участками для подзадач
+		# потом в конце итерации после всех оптимизаций склеивать единый массив из точек разделения
+		# и на следующей итерации использовать уже его
+
+
+		is_track_divisible_further = false
+		# # is_there_single_subtask_where_track_is_divisible = false
+		# # Threads.@threads for subtask_index in eachindex(iteration.subtasks)
+		# # Threads.@threads for subtask in iteration.subtasks
+		# for subtask in iteration.subtasks
+		# # @floop for subtask in iteration.subtasks
+		# # for subtask_index in eachindex(iteration.subtasks)
+		# # for subtask_index in eachindex(subtasks_splits_iteration)
+		# 	# println("Subtask $subtask_index")
+		# 	# subtask = iteration.subtasks[subtask_index]
+
+		# 	# println("Analyzing subtask from $(subtask.subtask_boundaries.from) to $(subtask.subtask_boundaries.to)")
+
+		# 	# 3. each subtask comes with its own chunks (variables)			
+		# 	# split each task on parts
+		# 	subtask.variables_boundaries = calculate_boundaries(
+		# 		subtask.subtask_boundaries.from,
+		# 		subtask.subtask_boundaries.to,
+		# 		scaling_coef_variables
+		# 	)
+
+		# 	if (subtask.subtask_boundaries.size) >= scaling_coef_variables
+		# 		# at least one subtask can be divided, so, there should be next iteration
+		# 		is_track_divisible_further = true
+		# 	end
+
+		# 	#######################
+
+		# 	# TODO: how to calculate amount of speeds?
+		# 	vars_amount = size(subtask.variables_boundaries, 1)
+
+		# 	# TODO: change here
+		# 	# write a function that repeats array values to get another array of bigger size
+		# 	prev_iter_speeds = fill_array(
+		# 		subtask.problem.initial_speeds, 
+		# 		vars_amount
+		# 	)
+
+		# 	# prev_iter_speeds = fill(
+		# 	# 	first(subtask.problem.initial_speeds), 
+		# 	# 	vars_amount
+		# 	# )
+
+		# 	subtask_segments = get_segments_interval(
+		# 		segments,
+		# 		subtask.subtask_boundaries.from,
+		# 		subtask.subtask_boundaries.to
+		# 	)
+
+		# 	# 4. solve optimization problem for every subtask with its chunks (variables)
+		# 	# function f_iter(input_speeds)
+		# 	# 	if iteration_num == 1
+		# 	# 		return solar_partial_trip_wrapper_iter_with_low_energy(
+		# 	# 		# return solar_partial_trip_wrapper_iter_with_low_energy(
+		# 	# 			input_speeds, subtask_segments, subtask.variables_boundaries,
+		# 	# 			subtask.problem.start_energy, subtask.problem.finish_energy,
+		# 	# 			subtask.problem.start_datetime
+		# 	# 		)
+		# 	# 	else
+		# 	# 		return solar_partial_trip_wrapper_iter(
+		# 	# 		# return solar_partial_trip_wrapper_iter_with_low_energy(
+		# 	# 			input_speeds, subtask_segments, subtask.variables_boundaries,
+		# 	# 			subtask.problem.start_energy, subtask.problem.finish_energy,
+		# 	# 			subtask.problem.start_datetime
+		# 	# 		)
+		# 	# 	end
+		# 	# end
+
+		# 	function f_iter(input_speeds)
+		# 		return solar_partial_trip_wrapper_iter(
+		# 		# return solar_partial_trip_wrapper_iter_with_low_energy(
+		# 			input_speeds, subtask_segments, subtask.variables_boundaries,
+		# 			subtask.problem.start_energy, subtask.problem.finish_energy,
+		# 			subtask.problem.start_datetime
+		# 		)
+		# 	end
+
+		# 	function f_iter_low_energy(input_speeds)
+		# 		# return solar_partial_trip_wrapper_iter(
+		# 		return solar_partial_trip_wrapper_iter_with_low_energy(
+		# 			input_speeds, subtask_segments, subtask.variables_boundaries,
+		# 			subtask.problem.start_energy, subtask.problem.finish_energy,
+		# 			subtask.problem.start_datetime
+		# 		)
+		# 	end
+
+		# 	if iteration_num == 1
+		# 		td = TwiceDifferentiable(f_iter_low_energy, prev_iter_speeds; autodiff = :forward)
+		# 	else
+		# 		td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)	
+		# 	end
+
+		# 	# td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)
+		# 	lower_bound = fill(0.0, vars_amount)
+		# 	upper_bound = fill(100.0, vars_amount)
+		# 	# upper_bound = fill(200.0, vars_amount)
+		# 	tdc = TwiceDifferentiableConstraints(lower_bound, upper_bound)
+		# 	# line_search = LineSearches.BackTracking();
+		# 	# result = optimize(td, fill(speed, vars_amount),
+		# 		#Newton(; linesearch = line_search),
+		# 	result = optimize(td, tdc, prev_iter_speeds 
+		# 	.+ rand(vars_amount) .- 0.5
+		# 		,
+		# 		IPNewton(),
+		# 		Optim.Options(
+		# 			x_tol = 1e-12,
+		# 			f_tol = 1e-12,
+		# 			g_tol = 1e-12
+		# 		)
+		# 	)
+		# 	minimized_speeds = Optim.minimizer(result)
+		# 	# println(Optim.minimizer(result))
+		# 	# println(Optim.minimum(result))
+		# 	subtask.solution = minimized_speeds
+
+		# 	# TODO: check optimization procedure in compliance with article
+		# 	# TODO: save result somewhere - in subtask struct
+		# 	# OR, in subtaskResult struct
+
+		# end
+		# is_track_divisible_further = !is_there_single_subtask_where_track_is_divisible
+		# push!(subtasks_splits_general, variables_split_iteration)
+
+		# @floop for subtask in iteration.subtasks
+		start_time_next_subtask = start_datetime
+		# @floop for subtask in iteration.subtasks
+		@showprogress for subtask in iteration.subtasks
+			subtask.problem.start_datetime = start_time_next_subtask
+			is_divisible = process_subtask_novelty!(subtask, scaling_coef_variables, segments, iteration_num)
+			# @reduce(is_track_divisible_further |= is_divisible)
+			is_track_divisible_further |= is_divisible
+			# calculate start time for next optimization
+			subtask_segments = get_segments_interval_typed(
+				segments,
+				subtask.subtask_boundaries.from,
+				subtask.subtask_boundaries.to
+			)
+			subtask_speeds = convert_kmh_to_ms(
+				set_speeds_boundaries(subtask.solution, subtask.variables_boundaries)
+			)
+			subtask_times = subtask_segments.diff_distance ./ subtask_speeds
+			subtask_time = sum(subtask_times)
+			start_time_next_subtask = subtask.problem.start_datetime .+ Dates.Millisecond.(round.(subtask_time .* 1000))
+			# start_datetime .+ Dates.Millisecond.(round.(time_seconds .* 1000))
+		end
+
+		println()
+		# 5. tie everything together (collect speeds to one array)
+		iteration_speeds = []
+		for subtask in iteration.subtasks
+			speed_vector = set_speeds_boundaries(subtask.solution, subtask.variables_boundaries)
+			append!(iteration_speeds, speed_vector)
+		end
+
+		# 6. make full simulation with said speeds
+		power_use, solar_power, time_seconds = solar_trip_boundaries(
+			convert_kmh_to_ms(iteration_speeds),
+			segments,
+			start_datetime
+		)
+
+		println("solar sum $(sum(solar_power))")
+		println("use sum $(sum(power_use))")
+		
+
+		energy_in_system = []
+		push!(energy_in_system, start_energy)
+		total_energy = start_energy .+ solar_power .- power_use
+		append!(energy_in_system, total_energy)
+		println("min energy $(minimum(energy_in_system))")
+
+		times = start_datetime .+ Dates.Millisecond.(round.(time_seconds .* 1000))
+		pushfirst!(times, start_datetime)
+		# times = travel_time_to_datetime(time_seconds, start_datetime)
+		iteration.solution = IterationSolution(
+			iteration_speeds,
+			energy_in_system,
+			time_seconds,
+			times
+		)
+		# 7. 	prepare data for next iteration. should be subtask's chunks as subtasks
+
+		# TODO: re-split on new subtasks
+		# we can't use variables boundaries anymore
+
+		if is_track_divisible_further
+			iteration_num += 1;
+			next_iteration = Iteration(
+				[],
+				iteration_num,
+				IterationSolution(
+					[],
+					[],
+					[],
+					[]
+				)
+			)
+			for subtask in iteration.subtasks
+				new_subtasks_boundaries = calculate_boundaries(
+					subtask.subtask_boundaries.from,
+					subtask.subtask_boundaries.to,
+					scaling_coef_subtasks
+				)
+				solution_index_counter = 0
+				for new_subtask_index in eachindex(new_subtasks_boundaries)
+					new_subtask_boundaries = new_subtasks_boundaries[new_subtask_index]
+					variables_boundaries = calculate_boundaries(
+						new_subtask_boundaries.from,
+						new_subtask_boundaries.to,
+						scaling_coef_subtask_input_speeds
+					)
+					# println(subtask.solution)
+					# TODO: make proper speed selecting function
+					input_speeds_subtask = subtask.solution[ solution_index_counter + 1 : solution_index_counter + length(variables_boundaries)]
+					solution_index_counter += length(variables_boundaries)
+					# input_speeds_subtask = subtask.solution[(variables_index-1)*scaling_coef_subtask_input_speeds+1:variables_index*scaling_coef_subtask_input_speeds]
+					# println(input_speeds_subtask)
+					new_subtask = Subtask(
+						new_subtask_boundaries,
+						[],
+						SubtaskProblem(
+							energy_in_system[new_subtask_boundaries.from],
+							energy_in_system[new_subtask_boundaries.to],
+							input_speeds_subtask,
+							times[new_subtask_boundaries.from]
+						),
+						[]
+					)
+					push!(next_iteration.subtasks, new_subtask)
+				end
+			end
+
+			push!(iterations, next_iteration)
+		end
+	end # 8. 	go to 2:
+	# 9. final calculations?
+	println("Calc done")
+	return iterations
+
+end
+
+# ╔═╡ 4e3c8ce5-cbd2-4d4c-8bb9-67f4f8745068
+@time res = iterative_optimization_novelty(
+    track_full, segments_full,
+    5,
+    5,
+    5100.,
+    start_datetime
+);
+
+# ╔═╡ 50e63a4a-119a-4c17-b469-166e17acd2e3
+plot_resulted_plan(
+	track_full,
+                segments_full,
+                res[1].solution.speeds,
+                res[1].solution.energies,
+                res[1].solution.times,
+                "iteration $(res[1].number)"
+)
+
+# ╔═╡ c8c23f2b-7690-4de3-bfe5-b98f323afcdc
+simulate_run_finish_time(
+	res[1].solution.speeds,
+	track_full,
+	segments_full,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 3aab8070-9b76-4e88-ba27-0555714f045d
+plot_resulted_plan(
+	track_full,
+                segments_full,
+                res[2].solution.speeds,
+                res[2].solution.energies,
+                res[2].solution.times,
+                "iteration $(res[2].number)"
+)
+
+# ╔═╡ 54539a77-1e06-43d5-bc54-897377feb390
+plot_resulted_plan(
+	track_full,
+                segments_full,
+                res[3].solution.speeds,
+                res[3].solution.energies,
+                res[3].solution.times,
+                "iteration $(res[3].number)"
+)
+
+# ╔═╡ bdfadbc5-b240-4616-b52b-36e7d477fa81
+simulate_run_finish_time(
+	res[3].solution.speeds,
+	track_full,
+	segments_full,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 409c92f6-cd3b-41c5-a69e-a2b3e16a3960
+# plot_resulted_plan(
+# 	track_full,
+#                 segments_full,
+#                 res[6].solution.speeds,
+#                 res[6].solution.energies,
+#                 res[6].solution.times,
+#                 "iteration $(res[6].number)"
+# )
+
+simulate_run_finish_time(
+	res[6].solution.speeds,
+	track_full,
+	segments_full,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 3bd9ea26-32ae-4c73-8606-546ebcbe8e99
+md"## Высокая трасса с алгоритмом" 
+
+# ╔═╡ b004e777-ba5c-4e64-8c2f-1c026fb09f0b
+begin
+	track_high = copy(track_full)
+	track_high.altitude = track_high.altitude .* 10;
+	segments_high = get_segments_for_track(track_high);
+	segments_high.weather_coeff = weather_full_coeff;
+end
+
+# ╔═╡ 75d28697-8f3f-4c00-80a0-998b62694ab1
+res_high = iterative_optimization_novelty(
+    track_high, segments_high,
+    5,
+    5,
+    5100.,
+    start_datetime
+);
+
+# ╔═╡ a4c9be7c-fe85-4f78-9cfa-a805e3b29478
+simulate_run_finish_time(
+	res_high[1].solution.speeds,
+	track_high,
+	segments_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ ea926683-39a6-4bb3-a74f-21322a8a7812
+simulate_run_finish_time(
+	res_high[2].solution.speeds,
+	track_high,
+	segments_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 6b103fc3-d4be-4834-9c10-d20c1210728d
+simulate_run_finish_time(
+	res_high[3].solution.speeds,
+	track_high,
+	segments_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ c856f853-f4b1-4f84-ac14-dc16ee86fdcd
+simulate_run_finish_time(
+	res_high[4].solution.speeds,
+	track_high,
+	segments_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ dead6b98-85cb-4ce6-85a4-a155bb3c0dae
+res_high
+
+# ╔═╡ 1291c857-d356-438d-a83a-b5ba5a257c79
+simulate_run_finish_time(
+	res_high[6].solution.speeds,
+	track_high,
+	segments_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 08c98d56-de5a-449a-b5ab-0f330bc7034a
+md"## Высокая трасса одна скорость" 
+
+# ╔═╡ 863ed1cd-0f9b-42cd-b179-32b552fe477d
+function minimize_single_speed_novelty(
+	track, segments, start_energy, start_datetime, init_speed
+)
+	boundaries = calculate_boundaries(1, size(track, 1), 1)
+
+	function f_single_speed(input_speed)
+		# return solar_partial_trip_wrapper_iter(
+		return solar_partial_trip_wrapper_iter_with_low_energy(
+			input_speed, segments, boundaries,
+			start_energy, 0.,
+			start_datetime
+		)
+	end
+	speeds = [init_speed]
+	println("Calculating best single speed")
+	result = optimize(
+		f_single_speed,
+		speeds 
+		# .+ random_term .- 0.5
+		,
+		NelderMead()
+	)
+	
+	minimized_speeds = Optim.minimizer(result)
+	println("Got $(minimized_speeds) km/h")
+	return minimized_speeds
+end
+
+# ╔═╡ b3b88186-beee-4e2b-bf16-c5149f481760
+res_single_speed = minimize_single_speed_novelty(
+	track_high,
+	segments_high,
+	5100.,
+	start_datetime,
+	40.
+)
+
+# ╔═╡ 65b59e55-9ace-47a5-9398-997e68da4120
+simulate_run_finish_time(
+	fill(res_single_speed[1], size(segments_high, 1)),
+	track_high,
+	segments_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 4f630f4a-88f9-4cb8-8ba7-98e53ea9ac24
+simulate_run(
+	fill(res_single_speed[1], size(segments_high, 1)),
+	track_high,
+	segments_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 6f1eccb3-9333-4884-a144-01a21f439301
+md"Время в пути $(415020.821 / 3600.) часов"
+
+# ╔═╡ 6fad67c5-ff1b-4280-bfcc-32b0e9c46f73
+md"## Высокая трасса несколько скоростей"
+
+# ╔═╡ 59adbef1-7e7d-4f11-844e-106b79c54358
+function minimize_n_speeds_novelty(
+	track :: DataFrame,
+	segments :: DataFrame,
+	n_variables :: Int64,
+	start_energy :: Float64,
+	start_datetime :: DateTime,
+	init_speed :: Float64
+)
+
+	boundaries = calculate_boundaries(1, size(track, 1), n_variables)
+
+	function f_speeds(input_speeds :: Vector{<: Real}) :: Real
+		# return solar_partial_trip_wrapper_iter(
+		return solar_partial_trip_wrapper_iter_with_low_energy_typed(
+			input_speeds, segments, boundaries,
+			start_energy, 0.,
+			start_datetime
+		)
+	end
+	speeds = fill(init_speed, n_variables)
+	println("Calculating best speeds")
+	td_0 = TwiceDifferentiable(f_speeds, speeds; autodiff = :forward)
+	lower_bound_0 = fill(10.0, n_variables)
+	upper_bound_0 = fill(100.0, n_variables)
+	tdc_0 = TwiceDifferentiableConstraints(lower_bound_0, upper_bound_0)
+	# line_search = LineSearches.BackTracking();
+	# result = optimize(td, fill(speed, 1),
+		#Newton(; linesearch = line_search),
+	# result = optimize(td_0, tdc_0, speeds 
+	# # .+ rand(1) .- 0.5
+	# 	,
+	# 	IPNewton(),
+	# 	Optim.Options(
+	# 		x_tol = 1e-12,
+	# 		f_tol = 1e-12,
+	# 		g_tol = 1e-12
+	# 	)
+	# )
+
+	result = optimize(
+		f_speeds,
+		speeds 
+		# .+ random_term .- 0.5
+		,
+		NelderMead()
+	)
+	
+	
+	minimized_speeds = Optim.minimizer(result)
+	println("Got $(minimized_speeds) km/h")
+	return minimized_speeds
+end
+
+# ╔═╡ 439d1038-d1e6-4160-9c71-aea97df8370c
+n_variables = 50
+
+# ╔═╡ e0416978-9f80-472c-a710-55baec62da36
+res_n_speeds = minimize_n_speeds_novelty(
+	track_high,
+	segments_high,
+	n_variables,
+	5100.,
+	start_datetime,
+	40.
+)
+
+# ╔═╡ a8656ba2-d8f1-48c6-92a5-39f664f96f40
+boundaries_n_speeds = calculate_boundaries(1, size(track_high, 1), n_variables)
+
+# ╔═╡ 444da343-5611-4350-8741-39e1fe52041c
+speed_vector_n_speeds = set_speeds_boundaries(res_n_speeds, boundaries_n_speeds)
+
+# ╔═╡ cffdd67e-9d46-4ea9-a6ed-12d21ae9d8c3
+simulate_run_finish_time(
+	speed_vector_n_speeds,
+	track_high,
+	segments_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 69a5937b-6c33-4661-adf2-619381b4b109
+simulate_run(
+	speed_vector_n_speeds,
+	track_high,
+	segments_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ b7492047-8dbf-4e68-b7eb-1e18c614d356
+md"Время в пути $(351778.687 / 3600.) часов"
+
+# ╔═╡ a937b4ed-d5d2-4c44-87fc-8a05e1c34e02
+md"# 4 - Всё разом "
+
+# ╔═╡ 3af88372-a833-4b6c-b140-c31c2e2e6490
+md"## С маршрутом Peaks"
+
+# ╔═╡ 2a834193-ca43-459b-822d-c85c881ce872
+md"Конструируем высокую трассу с peaks"
+
+# ╔═╡ 8911b6b2-ebe6-41fa-ac5f-947f1bbd2097
+begin
+	track_peaks_high, segments_peaks_high = keep_extremum_only_peaks_segments(track_high)
+	segments_peaks_high.weather_coeff = weather_coeff;
+end
+
+# ╔═╡ a8ce7c9f-1953-4d80-9336-fda268ee2bc7
+md"Запускаем задачу оптимизации"
+
+# ╔═╡ d300b1de-d91b-4c9c-ab7d-83f3c4e5e893
+res_peaks_high = iterative_optimization(
+    track_peaks_high, segments_peaks_high,
+    5,
+    5,
+    max_energy,
+    start_datetime
+);
+
+# ╔═╡ 4000c7e9-6ae3-4a2c-a414-92216b036e3c
+md"35.7 секунд по времени " 
+
+# ╔═╡ 749a3887-0237-47cc-90b0-170266a07aaf
+simulate_run_finish_time(
+	res_peaks_high[1].solution.speeds,
+	track_peaks_high,
+	segments_peaks_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 7f5c1bbd-292a-4635-9e0b-ca8414d19315
+simulate_run_finish_time(
+	res_peaks_high[2].solution.speeds,
+	track_peaks_high,
+	segments_peaks_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ e38159a0-788f-443b-8030-0c6c85217a66
+simulate_run_finish_time(
+	res_peaks_high[3].solution.speeds,
+	track_peaks_high,
+	segments_peaks_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 0d65ff1d-be79-435e-8781-133dc5584680
+simulate_run_finish_time(
+	res_peaks_high[4].solution.speeds,
+	track_peaks_high,
+	segments_peaks_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 176813e3-aced-4c07-9bd7-f32f1cebf3dd
+simulate_run_finish_time(
+	res_peaks_high[5].solution.speeds,
+	track_peaks_high,
+	segments_peaks_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 7f24f371-6bae-4649-ba8f-9c3a1b5e52ed
+simulate_run_finish_time(
+	res_peaks_high[6].solution.speeds,
+	track_peaks_high,
+	segments_peaks_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 16eecde5-e534-45e2-b6c6-206d936f0cef
+md"Красота!" 
+
+# ╔═╡ a61db582-c7ad-49e5-8d9c-9363cf62cdc1
+simulate_run(
+	res_peaks_high[6].solution.speeds,
+	track_peaks_high,
+	segments_peaks_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 719ac3a8-400d-490c-b576-147eed156782
+last(res_peaks_high[6].solution.seconds)
+
+# ╔═╡ a5592cb8-51dc-4648-a722-d2dbfb4743f3
+md"Время в пути $(last(res_peaks_high[6].solution.seconds) / 3600.) часов"
+
+# ╔═╡ 3fe01e09-b832-4fc7-a805-9a643f3cd352
+
+
+# ╔═╡ 1c8f6b62-b72d-48db-ac72-2f16e61554a0
+md"## С маршрутом k"
+
+# ╔═╡ 6a023ad1-fe87-4db3-a27f-41d77bcf6d93
+md"Конструируем высокую трассу с k"
+
+# ╔═╡ e22b4c20-8bd5-43ae-a98b-9ec550ad54d2
+begin
+	track_k_high, points_k_high = parametrized_track_simplification(track_high, k);
+	segments_k_high = get_segments_for_track(track_k_high);
+	weather_k_coeff = calculate_weather_weights_for_segments(
+	    w,
+	    elat,
+	    elon,
+	    segments_k_high
+	);
+	segments_k_high.weather_coeff = weather_k_coeff;
+end
+
+# ╔═╡ ef829540-cd8d-4556-b1e0-46782f8e782f
+md"Запускаем залдачу оптимизации"
+
+# ╔═╡ 9357318b-fa4f-49d5-b08c-006c682d6a90
+size(track_k_high,1)
+
+# ╔═╡ 5562b93e-0ce8-48cf-aab4-9f81113d7186
+res_k_high = iterative_optimization(
+    track_k_high, segments_k_high,
+    5,
+    5,
+    max_energy,
+    start_datetime
+);
+
+# ╔═╡ f5f3a114-1edb-40a1-b571-9a38711f56cf
+simulate_run_finish_time(
+	res_k_high[1].solution.speeds,
+	track_k_high,
+	segments_k_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 2482f572-e095-4f2e-9fa0-273b0160acd6
+simulate_run_finish_time(
+	res_k_high[2].solution.speeds,
+	track_k_high,
+	segments_k_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 8849e213-e3c5-4f9f-9762-dd8519779018
+simulate_run_finish_time(
+	res_k_high[3].solution.speeds,
+	track_k_high,
+	segments_k_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ ac4db70d-ee48-453b-82ec-98527914195d
+simulate_run_finish_time(
+	res_k_high[4].solution.speeds,
+	track_k_high,
+	segments_k_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 925ad924-a051-4000-a434-a7d3fb7b2381
+simulate_run_finish_time(
+	res_k_high[5].solution.speeds,
+	track_k_high,
+	segments_k_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ ec754126-47e8-4b50-9680-0b127b7ca643
+simulate_run_finish_time(
+	res_k_high[6].solution.speeds,
+	track_k_high,
+	segments_k_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 84cfa1c8-f950-4fe5-9dd7-20c1cdcc40cd
+md"Время в пути $(last(res_k_high[6].solution.seconds) / 3600.) часов"
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -493,7 +1770,7 @@ WebIO = "~0.8.21"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.3"
+julia_version = "1.9.4"
 manifest_format = "2.0"
 project_hash = "d2d85f5744e9caca19a66a6ce96f35abec79a75a"
 
@@ -1075,12 +2352,12 @@ uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
-version = "0.6.3"
+version = "0.6.4"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "7.84.0+0"
+version = "8.4.0+0"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -1089,7 +2366,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.10.2+0"
+version = "1.11.0+1"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -2026,7 +3303,7 @@ version = "1.1.6+0"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.48.0+0"
+version = "1.52.0+1"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -2061,6 +3338,7 @@ version = "1.4.1+1"
 # ╠═95d48aa1-d500-4ed0-85da-65184ccf3364
 # ╠═309ee8a3-f136-46ab-bb05-9fae649ce940
 # ╠═a2d44ee3-a967-4c3e-8c28-782c58384870
+# ╠═3fb0db03-1cbe-4711-9ff7-2ccf8b0ee08a
 # ╠═a48f9dc8-654b-4072-a8ea-27b0e812324e
 # ╠═e5dfb032-07c2-4d2e-bdcb-370c6d9f7c82
 # ╠═5a7b2e00-3819-4d48-8165-af5f0ab69011
@@ -2090,6 +3368,8 @@ version = "1.4.1+1"
 # ╠═494a4eec-af31-47a3-b552-7faf371d81d2
 # ╠═18cf4375-dff5-4912-a34b-d2b929475443
 # ╠═08313d1e-7822-4139-9495-1641836716fe
+# ╠═1b6df0b2-572b-4255-8dd5-ee42d1a9a08d
+# ╠═c58758ea-4fd4-42ce-8a82-0d1a09f4f07b
 # ╠═4ab6e5b4-d16c-4016-a4d8-d2b7c8db5b9b
 # ╠═49bf8d7f-605d-4dbd-8077-8238573aea92
 # ╠═4ccac8b1-070c-43cd-aeaf-69955d3ce2c3
@@ -2097,6 +3377,7 @@ version = "1.4.1+1"
 # ╠═f405aaa5-e520-4d0c-bd63-ea4276a1be93
 # ╠═978810c4-8f70-47c3-b1e3-0608ca855b1a
 # ╠═2039e2ff-a56d-4a44-89ec-9073ae98480b
+# ╠═f04149e4-a1f3-4a1d-bc3c-7c4e520ba976
 # ╠═2106d6cb-9a70-4ccb-907d-3f157cfe1c46
 # ╠═82deaf73-4205-4b43-8e7e-4f6500012834
 # ╠═8bab99e6-b6de-4fa1-b5ae-0a31af1cf59a
@@ -2138,5 +3419,106 @@ version = "1.4.1+1"
 # ╠═3680d006-9322-41b9-93c6-51498d56889f
 # ╠═fde27fab-aaa2-45bf-8c71-e92bb53dc25c
 # ╠═6fcc5460-c724-4f6e-bb04-8785cddb7f79
+# ╠═23906645-c779-4eb1-9201-6302fec045ea
+# ╠═9ffbda77-5314-493e-89f6-bcaaff48a737
+# ╠═35b780d1-bf92-42bc-ac72-0a95e2585f56
+# ╠═955df201-d9d4-4da2-b604-16619c92dd85
+# ╠═127ca813-a652-4cc7-9995-588a0ab863cb
+# ╠═b53eec1b-c644-4ef9-8086-6d90eb89935b
+# ╠═f497ffca-5630-4d30-811f-bd1e15e8d34b
+# ╠═1246d429-eb90-41df-bb14-df94f67a152f
+# ╠═83934f3d-bf9c-4cd2-976c-0d50a91cbbb8
+# ╠═d7ab2d22-c546-4b6c-b2d8-7aad0af65261
+# ╠═e269d75f-bc01-4621-b193-555f54746ead
+# ╠═93b53e5d-69e1-47d5-a6bc-4d1756467b2d
+# ╠═990ac9a0-fc6f-4afb-aed2-e679ddcadfbf
+# ╠═429fcd9c-300f-437b-ae15-16ff5040f3d3
+# ╠═b11ef547-15b2-4425-bc83-fa6b8071e0a9
+# ╠═bf08d4cd-d34b-4a42-82df-edbbb8d02437
+# ╠═0c17cb82-91e8-423a-8764-87b768e71a46
+# ╠═251b48a8-3a82-4859-a1b7-95306e484375
+# ╠═4807e032-e508-4795-9ec8-e830d9abfcc5
+# ╠═cf34f9ff-744a-498b-9835-b478a2c2d6c5
+# ╠═9d1b383c-5dee-45b7-bfce-f1f4bd9ef1e1
+# ╠═468f734c-5f23-420a-8b87-e068e44cc977
+# ╠═db538803-f8c5-48f3-9051-adcfa1c4160d
+# ╠═cc8085a3-8ce6-45b0-a353-2bc3eddc4381
+# ╠═9482aafe-37b6-482d-ae11-a9a64b183bfd
+# ╠═63989b8f-fa2f-4151-b2cf-394e79b80474
+# ╠═362f6a0b-b2e2-4bf0-a74d-59c1ec38578a
+# ╠═09032708-dbde-43b1-9d18-70a881d65b7d
+# ╠═215e45a7-e1f3-45d5-af34-ec7e89fb96fb
+# ╠═88694580-4e7f-4e35-8c33-e90bf5679c7e
+# ╠═480e5187-19d7-486e-ad08-3a340bd7a760
+# ╠═e3f80864-8fd2-48bd-acb8-8c91aba28e76
+# ╠═985db9d8-b795-45c7-991f-8b68d81feee9
+# ╠═b32881c8-59c1-4806-91e9-f6447f2aa22b
+# ╠═3a6eb336-4ec3-400a-b58b-418c7429ca2d
+# ╠═c7c4ad0e-600b-47f3-ad26-9f76cecf2931
+# ╠═1eecf941-1a74-45f8-a104-1db2d6c8e377
+# ╠═1fb8c4d4-1cdb-4ee8-860c-dd82cc0e7043
+# ╠═b1effadf-79ca-422a-91e3-08f72b0239ad
+# ╠═4e3c8ce5-cbd2-4d4c-8bb9-67f4f8745068
+# ╠═50e63a4a-119a-4c17-b469-166e17acd2e3
+# ╠═c8c23f2b-7690-4de3-bfe5-b98f323afcdc
+# ╠═3aab8070-9b76-4e88-ba27-0555714f045d
+# ╠═54539a77-1e06-43d5-bc54-897377feb390
+# ╠═bdfadbc5-b240-4616-b52b-36e7d477fa81
+# ╠═409c92f6-cd3b-41c5-a69e-a2b3e16a3960
+# ╠═3bd9ea26-32ae-4c73-8606-546ebcbe8e99
+# ╠═b004e777-ba5c-4e64-8c2f-1c026fb09f0b
+# ╠═75d28697-8f3f-4c00-80a0-998b62694ab1
+# ╠═a4c9be7c-fe85-4f78-9cfa-a805e3b29478
+# ╠═ea926683-39a6-4bb3-a74f-21322a8a7812
+# ╠═6b103fc3-d4be-4834-9c10-d20c1210728d
+# ╠═c856f853-f4b1-4f84-ac14-dc16ee86fdcd
+# ╠═dead6b98-85cb-4ce6-85a4-a155bb3c0dae
+# ╠═1291c857-d356-438d-a83a-b5ba5a257c79
+# ╠═08c98d56-de5a-449a-b5ab-0f330bc7034a
+# ╠═863ed1cd-0f9b-42cd-b179-32b552fe477d
+# ╠═b3b88186-beee-4e2b-bf16-c5149f481760
+# ╠═65b59e55-9ace-47a5-9398-997e68da4120
+# ╠═4f630f4a-88f9-4cb8-8ba7-98e53ea9ac24
+# ╠═6f1eccb3-9333-4884-a144-01a21f439301
+# ╠═6fad67c5-ff1b-4280-bfcc-32b0e9c46f73
+# ╠═59adbef1-7e7d-4f11-844e-106b79c54358
+# ╠═439d1038-d1e6-4160-9c71-aea97df8370c
+# ╠═e0416978-9f80-472c-a710-55baec62da36
+# ╠═a8656ba2-d8f1-48c6-92a5-39f664f96f40
+# ╠═444da343-5611-4350-8741-39e1fe52041c
+# ╠═cffdd67e-9d46-4ea9-a6ed-12d21ae9d8c3
+# ╠═69a5937b-6c33-4661-adf2-619381b4b109
+# ╠═b7492047-8dbf-4e68-b7eb-1e18c614d356
+# ╠═a937b4ed-d5d2-4c44-87fc-8a05e1c34e02
+# ╠═3af88372-a833-4b6c-b140-c31c2e2e6490
+# ╠═2a834193-ca43-459b-822d-c85c881ce872
+# ╠═8911b6b2-ebe6-41fa-ac5f-947f1bbd2097
+# ╠═a8ce7c9f-1953-4d80-9336-fda268ee2bc7
+# ╠═d300b1de-d91b-4c9c-ab7d-83f3c4e5e893
+# ╠═4000c7e9-6ae3-4a2c-a414-92216b036e3c
+# ╠═749a3887-0237-47cc-90b0-170266a07aaf
+# ╠═7f5c1bbd-292a-4635-9e0b-ca8414d19315
+# ╠═e38159a0-788f-443b-8030-0c6c85217a66
+# ╠═0d65ff1d-be79-435e-8781-133dc5584680
+# ╠═176813e3-aced-4c07-9bd7-f32f1cebf3dd
+# ╠═7f24f371-6bae-4649-ba8f-9c3a1b5e52ed
+# ╠═16eecde5-e534-45e2-b6c6-206d936f0cef
+# ╠═a61db582-c7ad-49e5-8d9c-9363cf62cdc1
+# ╠═719ac3a8-400d-490c-b576-147eed156782
+# ╠═a5592cb8-51dc-4648-a722-d2dbfb4743f3
+# ╠═3fe01e09-b832-4fc7-a805-9a643f3cd352
+# ╠═1c8f6b62-b72d-48db-ac72-2f16e61554a0
+# ╠═6a023ad1-fe87-4db3-a27f-41d77bcf6d93
+# ╠═e22b4c20-8bd5-43ae-a98b-9ec550ad54d2
+# ╠═ef829540-cd8d-4556-b1e0-46782f8e782f
+# ╠═9357318b-fa4f-49d5-b08c-006c682d6a90
+# ╠═5562b93e-0ce8-48cf-aab4-9f81113d7186
+# ╠═f5f3a114-1edb-40a1-b571-9a38711f56cf
+# ╠═2482f572-e095-4f2e-9fa0-273b0160acd6
+# ╠═8849e213-e3c5-4f9f-9762-dd8519779018
+# ╠═ac4db70d-ee48-453b-82ec-98527914195d
+# ╠═925ad924-a051-4000-a434-a7d3fb7b2381
+# ╠═ec754126-47e8-4b50-9680-0b127b7ca643
+# ╠═84cfa1c8-f950-4fe5-9dd7-20c1cdcc40cd
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

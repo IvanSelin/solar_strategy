@@ -436,6 +436,17 @@ plot(
 	markershapes=:diamond
 )
 
+# ╔═╡ ae90c511-3fcd-405f-b6fb-7814da8893aa
+plot(
+	x_dots,
+	[y_low y_high y_mid],
+	linestyle=[:solid :solid :dot],
+	label=["Lower than straight, avg=3.5" "Higher than straight, avg=4.5" "Straight line between POI, avg=4.0"],
+	markershapes=[:diamond :square :circle],
+	xlabel="Distance",
+	ylabel="Altitude"
+)
+
 # ╔═╡ 171cc89f-05a6-49df-bd9a-deab45341778
 md"Что надо делать - считать среднее значение функции на нескольких участках.
 
@@ -948,8 +959,8 @@ Plots.scatter(
 	total_df_short.RMSE',
 	labels=permutedims(total_df_short.name),
 	markershapes=:auto,
-	xlabel="Количество участков",
-	ylabel="RMSE",
+	xlabel="Track segments",
+	ylabel="RMSE of simulation difference",
 )
 
 # ╔═╡ e8edab4f-c2cd-41dd-9aa8-2140f1641e56
@@ -958,8 +969,8 @@ Plots.scatter(
 	total_df_short.Finish_diff',
 	labels=permutedims(total_df_short.name),
 	markershapes=:auto,
-	xlabel="Track Length, pieces",
-	ylabel="Energy diff on finish",
+	xlabel="Track length, pieces",
+	ylabel="Energy difference on finish",
 )
 
 # ╔═╡ 4ba9ce08-ef82-415a-bdcc-5c70b8d4a16e
@@ -1132,6 +1143,50 @@ begin
 	
 	plot(original_track_plot, peaks_track_plot, k_1_75_track_plot, layout=(3,1),
 		size=(1000,700),
+		legend=false,
+		left_margin=20px,
+		right_margin=20px
+	)
+end
+
+# ╔═╡ 91fc63c9-cab2-4151-be14-f856ffdeb201
+begin
+	# xlim_left=3000
+	# xlim_right=4000
+	# ylim_bottom=minimum(track[xlim_left .< track.distance .< xlim_right, :].altitude)
+	# ylim_top=maximum(track[xlim_left .< track.distance .< xlim_right, :].altitude)
+	original_track_plot2 = plot(
+		track.distance, track.altitude,
+		title="Initial track representation",
+		# xlabel="Дистанция (м)",
+		# ylabel="Altitude (meters)",
+		legend=false,
+		xlim=[xlim_left, xlim_right], 
+		ylim=[ylim_bottom, ylim_top]
+	)
+
+	peaks_track_plot2 = plot(
+		track_peaks.distance, track_peaks.altitude,
+		title="Extemum points only",
+		# xlabel="Дистанция (м)",
+		ylabel="Altitude (meters)",
+		legend=false,
+		xlim=[xlim_left, xlim_right], 
+		ylim=[ylim_bottom, ylim_top]
+	)
+
+	k_1_75_track_plot2 = plot(
+		track_1_75.distance, track_1_75.altitude,
+		title="Parametric merging, k=1.75",
+		xlabel="Distance (meters)",
+		# ylabel="Altitude (meters)",
+		legend=false,
+		xlim=[xlim_left, xlim_right], 
+		ylim=[ylim_bottom, ylim_top]
+	)
+	
+	plot(original_track_plot2, peaks_track_plot2, k_1_75_track_plot2, layout=(3,1),
+		size=(600,400),
 		legend=false,
 		left_margin=20px,
 		right_margin=20px
@@ -1733,7 +1788,7 @@ ProgressMeter = "~1.7.2"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.3"
+julia_version = "1.9.4"
 manifest_format = "2.0"
 project_hash = "0d26fd02ca2063f5e9f3aa2cd9654fd748aba60f"
 
@@ -2239,12 +2294,12 @@ version = "0.16.1"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
-version = "0.6.3"
+version = "0.6.4"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "7.84.0+0"
+version = "8.4.0+0"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -2253,7 +2308,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.10.2+0"
+version = "1.11.0+1"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -3060,7 +3115,7 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.48.0+0"
+version = "1.52.0+1"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -3169,6 +3224,7 @@ version = "1.4.1+0"
 # ╠═950d2611-9730-4552-af0e-72e9cfc801d3
 # ╠═5f5d1144-b83b-4c67-a20e-669387b93493
 # ╠═a472bc02-13d7-4ce1-b74a-2a783f0a7965
+# ╠═ae90c511-3fcd-405f-b6fb-7814da8893aa
 # ╠═171cc89f-05a6-49df-bd9a-deab45341778
 # ╠═1a4155e3-a791-4f5c-bc46-687dd17c3742
 # ╠═aa9edc8e-6357-4c3e-a8c2-f38241de7f38
@@ -3272,8 +3328,8 @@ version = "1.4.1+0"
 # ╠═8c1bc363-0825-496a-bc35-d03d34a54220
 # ╠═fad5c87a-2611-40ea-a6d7-a98975ddd7ed
 # ╠═12ec6787-9a6b-4797-9296-fd8cbeb3c1b0
-# ╠═f439cddf-427b-4185-a482-615524ba9e23
 # ╠═e2342368-eaa0-41e1-be5f-0cfce2403c34
+# ╠═91fc63c9-cab2-4151-be14-f856ffdeb201
 # ╠═cb6f30e9-bd84-494a-856e-7dc284124a22
 # ╠═66c7f41c-ba84-4522-9b9a-27b6cc3a6893
 # ╠═d08e325e-5d2a-486c-87e5-cb0833e3882b
@@ -3334,8 +3390,6 @@ version = "1.4.1+0"
 # ╠═7b6dd0b4-6e9c-44bf-baf7-6dcc0709086d
 # ╠═1938c38a-5dfa-43a2-8810-cc987a34cce4
 # ╠═cdefdb31-f6fe-4f86-9f12-e01f068f1108
-# ╠═7df7acba-380e-4b54-b085-a97f270ca0cd
-# ╠═e47485f7-a7ee-465f-a708-332e3875e309
 # ╠═aa0db854-c097-4df4-b139-058869a6be8f
 # ╠═fca157a2-743b-452f-b035-44fe7363764b
 # ╠═53a4439c-3714-4c95-a0db-9f4ca9d1105b

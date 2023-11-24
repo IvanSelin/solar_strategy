@@ -130,19 +130,19 @@ w, elat, elon = generate_clouds(
 	0.75
 );
 
-w2, elat2, elon2 = generate_clouds(
-    -10,
-    130,
-    -35,
-    140,
-    -25,
-    133,
-    0.5,
-    0.5,
-    dimensions,
-    0.75
-)
-write_weather_json(w2,elat2,elon2,"weather_coeff_full_2")
+# w2, elat2, elon2 = generate_clouds(
+#     -10,
+#     130,
+#     -35,
+#     140,
+#     -25,
+#     133,
+#     0.5,
+#     0.5,
+#     dimensions,
+#     0.75
+# )
+# write_weather_json(w2,elat2,elon2,"weather_coeff_full_2")
 
 weather_coeff = calculate_weather_weights_for_segments(
     w,
@@ -163,6 +163,14 @@ segments_peaks.weather_coeff = weather_coeff
     DateTime(2023,1,1,10,0,0)
 );
 plots_for_results(res_peaks, track_peaks, segments_peaks)
+
+simulate_run_finish_time(
+	res_peaks[1].solution.speeds,
+	track_peaks,
+	segments_peaks,
+	5100.,
+	DateTime(2023,1,1,10,0,0)
+)
 
 simulate_run_finish_time(
     fill(37.90363171504429, size(segments_peaks.diff_distance, 1)),
