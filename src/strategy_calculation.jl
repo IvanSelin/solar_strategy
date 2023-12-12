@@ -2121,10 +2121,13 @@ function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segme
 	# result = optimize(
 	# 	optim_func,
 	# 	prev_iter_speeds 
-	# 	.+ random_term #.- 0.5
+	# 	.+ random_term .- 0.5
 	# 	,
-	# 	ConjugateGradient(),
-	# 	autodiff = :forward
+	# 	# ConjugateGradient(),
+	# 	# LBFGS(),
+	# 	# autodiff = :forward
+	# 	# NelderMead()
+	# 	SimulatedAnnealing()
 	# )
 
 	minimized_speeds = Optim.minimizer(result)

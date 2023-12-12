@@ -92,6 +92,16 @@ plot(
     legend=false
 )
 
+k=1.75
+_, points_k = parametrized_track_simplification(track, k)
+track_k, segments_k = get_track_and_segments_for_selected_points_modified(track, points_k)
+
+track_high_k, segments_high_k = get_track_and_segments_for_selected_points_modified(track_high, points_k)
+
+# this way reduction is very low
+k2 = 7.25
+_, points_k2 = parametrized_track_simplification(track_high, k2)
+track_high_k2, segments_high_k2 = get_track_and_segments_for_selected_points_modified(track_high, points_k2)
 
 # from_index = 1
 # to_index = 3000
@@ -203,6 +213,93 @@ simulate_run_finish_time(
     fill(28., size(segments_peaks_high.diff_distance, 1)),
     track_peaks_high,
     segments_peaks_high,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+)
+
+# k track high
+weather_coeff_k = calculate_weather_weights_for_segments(
+    w,
+    elat,
+    elon,
+    segments_k
+);
+segments_high_k.weather_coeff = weather_coeff_k
+@time res_full_high_k = iterative_optimization(
+    track_high_k, segments_high_k,
+    5,
+    5,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+);
+plots_for_results(res_full_high_k, track_high_k, segments_high_k)
+
+function k_speeds_to_regular(speeds, points)
+	# k_speeds = res_full_high_k[end].solution.speeds
+
+	new_speed_vector_for_regular = []
+	for i=2:size(points,1)
+		append!(
+			new_speed_vector_for_regular,
+			fill(
+				speeds[i-1],
+				points[i] - points[i-1]
+			)
+		)
+	end
+	# println("new size $(size(new_speed_vector_for_regular,1))")
+	# println("old size $(poi_df.intersect[index]-1)")
+	# @assert size(new_speed_vector_for_regular,1)==poi_df.intersect-1
+	return new_speed_vector_for_regular
+end
+
+speeds_for_regular_track = k_speeds_to_regular(
+    res_full_high_k[end].solution.speeds,
+    points_k
+)
+
+weather_coeff_full = calculate_weather_weights_for_segments(
+    w,
+    elat,
+    elon,
+    segments
+);
+segments_high.weather_coeff = weather_coeff_full
+simulate_run_finish_time(
+    speeds_for_regular_track,
+    track_high,
+    segments_high,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+)
+
+
+# high k2 track
+weather_coeff_k2 = calculate_weather_weights_for_segments(
+    w,
+    elat,
+    elon,
+    segments_high_k2
+);
+segments_high_k2.weather_coeff = weather_coeff_k2
+@time res_full_high_k2 = iterative_optimization(
+    track_high_k2, segments_high_k2,
+    5,
+    5,
+    5100.,
+    DateTime(2023,1,1,10,0,0)
+);
+plots_for_results(res_full_high_k2, track_high_k2, segments_high_k2)
+
+speeds_for_regular_track2 = k_speeds_to_regular(
+    res_full_high_k2[end].solution.speeds,
+    points_k2
+)
+
+simulate_run_finish_time(
+    speeds_for_regular_track2,
+    track_high,
+    segments_high,
     5100.,
     DateTime(2023,1,1,10,0,0)
 )

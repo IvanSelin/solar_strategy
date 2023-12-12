@@ -483,6 +483,17 @@ md"Это не способ повышения производительнос�
 # ╔═╡ 9ffbda77-5314-493e-89f6-bcaaff48a737
 md"# 2 - Сокращение трассы"
 
+# ╔═╡ 62499f26-9863-47f4-9aab-37d2f6f1b255
+plot(
+	track_peaks.distance / 1000.,
+	track_peaks.altitude,
+	title="Машрут",
+	xlabel="Дистанция (км)",
+	ylabel="Высота над уровнем моря (м)",
+	legend=false
+	# margin=10Plots.px,
+)
+
 # ╔═╡ 35b780d1-bf92-42bc-ac72-0a95e2585f56
 md"Здесь мы будем убеждать всех, что мы хорошо сокращаем трассу"
 
@@ -504,7 +515,7 @@ md"Надо взять трассу до какого-то момента в pea
 md"Ещё нужно сравнение на разных трассах для параметрического (желательно)"
 
 # ╔═╡ f497ffca-5630-4d30-811f-bd1e15e8d34b
-k = 1.0
+k = 1.75
 
 # ╔═╡ 1246d429-eb90-41df-bb14-df94f67a152f
 track_k, points_k = parametrized_track_simplification(track_full, k);
@@ -546,8 +557,8 @@ intersect_df.k = k_indexes;
 md"Выберем некоторые из точек"
 
 # ╔═╡ 9d1b383c-5dee-45b7-bfce-f1f4bd9ef1e1
-poi = [28, 54, 109, 202, 400, 518, 749, 1007, 1490, 2065, 2534]
-# poi = [109, 150, 281, 327, 518, 742, 1207]
+# poi = [28, 54, 109, 202, 400, 518, 749, 1007, 1490, 2065, 2534] # k=1.0
+poi = [5,28,54,109, 150, 281, 327, 518, 742, 1207, 1560, 2046, 2619] # k=1.75
 # poi = [109, 150, 281]
 
 # ╔═╡ 468f734c-5f23-420a-8b87-e068e44cc977
@@ -720,20 +731,20 @@ end
 
 # ╔═╡ 88694580-4e7f-4e35-8c33-e90bf5679c7e
 simulate_run(
-	track_optimization_comparison_df.regular_speeds[8],
-	track_full[1:poi_df.intersect[8],:],
-	get_segments_for_track(track_full[1:poi_df.intersect[8],:]),
-	poi_df.distance[8]/last(track_full.distance) * max_energy,
+	track_optimization_comparison_df.regular_speeds[6],
+	track_full[1:poi_df.intersect[6],:],
+	get_segments_for_track(track_full[1:poi_df.intersect[6],:]),
+	poi_df.distance[6]/last(track_full.distance) * max_energy,
 	start_datetime
 )
 # regular for 1st poi
 
 # ╔═╡ 480e5187-19d7-486e-ad08-3a340bd7a760
 simulate_run(
-	track_optimization_comparison_df.peaks_speeds[8],
-	track_peaks[1:poi_df.peaks[8],:],
-	get_segments_for_track(track_peaks[1:poi_df.peaks[8],:]),
-	poi_df.distance[8]/last(track_full.distance) * max_energy,
+	track_optimization_comparison_df.peaks_speeds[6],
+	track_peaks[1:poi_df.peaks[6],:],
+	get_segments_for_track(track_peaks[1:poi_df.peaks[6],:]),
+	poi_df.distance[6]/last(track_full.distance) * max_energy,
 	start_datetime
 )
 # peaks for 1st poi
@@ -760,8 +771,290 @@ plot(
 	legend=:topleft
 )
 
+# ╔═╡ d1146d90-664a-4235-95b0-8570e70713fc
+plot(
+	track_optimization_comparison_df.points_regular,
+	track_optimization_comparison_df.opt_time_regular ./ track_optimization_comparison_df.opt_time_k,
+	ylabel="Performance gain",
+	xlabel="Number of segments",
+	label="k=1.75",
+	title="k=1.75 performance",
+	# legend=:topleft,
+	legend=false,
+	size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px
+	# , layout=(2,1)
+)
+
+# ╔═╡ f8780df8-5868-49da-a5a8-a556afdb3f18
+plot(
+	track_optimization_comparison_df.points_regular,
+	track_optimization_comparison_df.opt_time_regular ./ track_optimization_comparison_df.opt_time_peaks,
+	ylabel="Performance gain",
+	xlabel="Number of segments",
+	label="Peaks",
+	title="Peaks performance",
+	# legend=:topleft,
+	legend=false,
+	size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px
+	# , layout=(2,1)
+)
+
+# ╔═╡ 75a0a6e3-4462-4f1d-baa6-3364d211a4b5
+plot(
+	track_optimization_comparison_df.points_regular,
+	[
+		track_optimization_comparison_df.opt_time_regular ./ track_optimization_comparison_df.opt_time_peaks track_optimization_comparison_df.opt_time_regular ./ track_optimization_comparison_df.opt_time_k
+	],
+	ylabel="Performance gain",
+	xlabel="Number of segments",
+	labels=["Extremum points" "Parametric, k=1.75"],
+	# title="Peaks performance",
+	markers=[:diamond :circle],
+	legend=:topleft,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px
+	# , layout=(2,1)
+)
+
+# ╔═╡ a0775a71-0cca-43a6-835a-d66850605a45
+good_peaks_index = abs.(track_optimization_comparison_df.min_energy_peaks) .< 5.0
+
+# ╔═╡ fd6a8bb0-7691-4a03-a928-999ddf6e3076
+good_k_index = abs.(track_optimization_comparison_df.min_energy_k) .< 5.0
+
+# ╔═╡ f9d7c72f-c666-4a4a-b31a-c92b37507da9
+plot(
+	track_optimization_comparison_df.points_regular[good_peaks_index],
+	track_optimization_comparison_df.opt_time_regular[good_peaks_index] ./ track_optimization_comparison_df.opt_time_peaks[good_peaks_index] ,
+	ylabel="Performance gain",
+	xlabel="Number of segments",
+	labels=["Extremum points" ""],
+	# title="Peaks performance",
+	marker=:diamond,
+	legend=:topleft,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px
+	# , layout=(2,1)
+)
+
+# ╔═╡ 62043829-4ca6-4dd7-bf4f-85c7343ee177
+plot!(
+	track_optimization_comparison_df.points_regular[good_k_index],
+	track_optimization_comparison_df.opt_time_regular[good_k_index] ./ track_optimization_comparison_df.opt_time_k[good_k_index] ,
+	ylabel="Performance gain",
+	xlabel="Number of segments",
+	labels=["k=$(k)" "2"],
+	# title="Peaks performance",
+	marker=:circle,
+	legend=:topleft,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px
+	# , layout=(2,1)
+)
+
+# ╔═╡ 46c90566-c373-40c1-b4ca-1ae1c9872a87
+good_orig_index = abs.(track_optimization_comparison_df.min_energy_regular) .< 5.0
+
+# ╔═╡ dcdf64c2-01df-4d73-a365-1b6381c9c3e1
+until_num = findlast(good_orig_index)
+
 # ╔═╡ 3a6eb336-4ec3-400a-b58b-418c7429ca2d
-sum((track_optimization_comparison_df.opt_time_regular ./ track_optimization_comparison_df.opt_time_k)[1:8]) / 8
+sum((track_optimization_comparison_df.opt_time_regular ./ track_optimization_comparison_df.opt_time_k)[1:until_num]) / until_num
+
+# ╔═╡ 2f0d3995-cbfd-420f-8936-380fc5d5da88
+sum((track_optimization_comparison_df.opt_time_regular ./ track_optimization_comparison_df.opt_time_peaks)[1:until_num]) / until_num
+
+# ╔═╡ a694736a-a239-4b3c-8670-9982aaf0204e
+md"### Сравнение всех трёх "
+
+# ╔═╡ 714c393b-bb42-4622-848f-1dca1868169d
+function draw_comparison_plot(index)
+
+	reg_plot = simulate_run(
+		track_optimization_comparison_df.regular_speeds[index],
+		track_full[1:poi_df.intersect[index],:],
+		get_segments_for_track(track_full[1:poi_df.intersect[index],:]),
+		poi_df.distance[index]/last(track_full.distance) * max_energy,
+		start_datetime
+	)
+
+
+	peaks_plot = simulate_run(
+		track_optimization_comparison_df.peaks_speeds[index],
+		track_peaks[1:poi_df.peaks[index],:],
+		get_segments_for_track(track_peaks[1:poi_df.peaks[index],:]),
+		poi_df.distance[index]/last(track_full.distance) * max_energy,
+		start_datetime
+	)
+
+	k_plot = simulate_run(
+		track_optimization_comparison_df.k_speeds[index],
+		track_k[1:poi_df.k[index],:],
+		get_segments_for_track(track_k[1:poi_df.k[index],:]),
+		poi_df.distance[index]/last(track_full.distance) * max_energy,
+		start_datetime
+	)
+
+	plot(
+		reg_plot, peaks_plot, k_plot,
+		layout=(3,1),
+		size=(750,1500),
+		legend=false
+	)
+	
+end
+
+# ╔═╡ a13bb6c3-0bed-4c2f-868f-5acded90aada
+draw_comparison_plot(5)
+
+# ╔═╡ 75983ca9-e54a-419d-895c-892916135484
+md"Сокращённые управляющие воздействия надо раскрывать на всю трассу, а не гонять по сокращённой"
+
+# ╔═╡ 75ec8028-db00-4e56-936c-dddf5c286735
+points_peaks[1:poi_df.peaks[5]]
+
+# ╔═╡ d105fc37-e079-4c5d-aa6b-288e4828c993
+function peaks_speeds_to_regular(index)
+	peaks_speeds = track_optimization_comparison_df.peaks_speeds[index]
+	# peaks_track = track_peaks[1:poi_df.peaks[index],:]
+	# peaks_segments = get_segments_for_track(track_full[1:poi_df.intersect[index],:])
+	# start_energy = poi_df.distance[index]/last(track_full.distance) * max_energy
+
+	# orig_track = track_full[1:poi_df.intersect[index],:]
+
+	points_to_analyze = points_peaks[1:poi_df.peaks[index]]
+	new_speed_vector_for_regular = []
+	for i=2:size(points_to_analyze,1)
+		append!(
+			new_speed_vector_for_regular,
+			fill(
+				peaks_speeds[i-1],
+				points_to_analyze[i] - points_to_analyze[i-1]
+			)
+		)
+	end
+	# println("new size $(size(new_speed_vector_for_regular,1))")
+	# println("old size $(poi_df.intersect[index]-1)")
+	# @assert size(new_speed_vector_for_regular,1)==poi_df.intersect-1
+	return new_speed_vector_for_regular
+end
+
+# ╔═╡ 2e35d429-cbb1-4e63-a03b-eaa9662229ab
+peaks_speeds_to_regular(2)
+
+# ╔═╡ 2d8a9498-aa45-46d8-947e-94da8a07c27f
+function k_speeds_to_regular(index)
+	k_speeds = track_optimization_comparison_df.k_speeds[index]
+	# k_track = track_peaks[1:poi_df.k[index],:]
+	# k_segments = get_segments_for_track(track_k[1:poi_df.intersect[index],:])
+	# start_energy = poi_df.distance[index]/last(track_full.distance) * max_energy
+
+	# orig_track = track_full[1:poi_df.intersect[index],:]
+
+	points_to_analyze = points_k[1:poi_df.k[index]]
+	new_speed_vector_for_regular = []
+	for i=2:size(points_to_analyze,1)
+		append!(
+			new_speed_vector_for_regular,
+			fill(
+				k_speeds[i-1],
+				points_to_analyze[i] - points_to_analyze[i-1]
+			)
+		)
+	end
+	# println("new size $(size(new_speed_vector_for_regular,1))")
+	# println("old size $(poi_df.intersect[index]-1)")
+	# @assert size(new_speed_vector_for_regular,1)==poi_df.intersect-1
+	return new_speed_vector_for_regular
+end
+
+# ╔═╡ 31ac9c67-77f5-422c-b57a-6cf0c1021f9b
+function draw_comparison_plot_peaks_speeds_on_reg(index)
+
+	reg_plot = simulate_run(
+		track_optimization_comparison_df.regular_speeds[index],
+		track_full[1:poi_df.intersect[index],:],
+		get_segments_for_track(track_full[1:poi_df.intersect[index],:]),
+		poi_df.distance[index]/last(track_full.distance) * max_energy,
+		start_datetime
+	)
+
+
+	peaks_plot = simulate_run(
+		peaks_speeds_to_regular(index),
+		track_full[1:poi_df.intersect[index],:],
+		get_segments_for_track(track_full[1:poi_df.intersect[index],:]),
+		poi_df.distance[index]/last(track_full.distance) * max_energy,
+		start_datetime
+	)
+
+	k_plot = simulate_run(
+		k_speeds_to_regular(index),
+		track_full[1:poi_df.intersect[index],:],
+		get_segments_for_track(track_full[1:poi_df.intersect[index],:]),
+		poi_df.distance[index]/last(track_full.distance) * max_energy,
+		start_datetime
+	)
+
+	plot(
+		reg_plot, peaks_plot, k_plot,
+		layout=(3,1),
+		size=(750,1200),
+		legend=false
+	)
+	
+end
+
+# ╔═╡ caa3f733-8766-4674-8d1e-f3b67fdb84a8
+draw_comparison_plot_peaks_speeds_on_reg(4)
+
+# ╔═╡ b3437d4d-eb4b-418b-a139-1bc5bf4e45a7
+md"Похоже что упрощение по k работает отлично (при 1.75)
+
+Peaks работает хуже чем полное представление трассы
+
+После 6-го индекса оригинальное решение начинает расходиться. (но результат ещё лучше peaks)
+
+После индекса 8 и peaks начинает работать лучше
+
+На индексе 10 peaks начинает расходиться
+
+k работает всегда"
+
+# ╔═╡ 5cf54f86-1377-4342-a7b8-700af58bbe0a
+md"Итого, k работает всегда и вообще пусечка
+
+Peaks в малом интевале значений между 8 и 10 индексом"
+
+# ╔═╡ 4f73ca8a-97d7-47af-bda8-003496ce38a4
+md"### Рисуем новую картинку"
+
+# ╔═╡ 800979ad-68c4-48ea-8bac-7bb0e6cb10e5
+plot!(
+	track_optimization_comparison_df.points_regular[good_k_index],
+	track_optimization_comparison_df.opt_time_regular[good_k_index] ./ track_optimization_comparison_df.opt_time_k[good_k_index] ,
+	ylabel="Performance gain",
+	xlabel="Number of segments",
+	labels=["k=$(k)" "2"],
+	# title="Peaks performance",
+	marker=:circle,
+	legend=:topleft,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px
+	# , layout=(2,1)
+)
 
 # ╔═╡ c7c4ad0e-600b-47f3-ad26-9f76cecf2931
 md"# 3 - Алгоритм разбиения на подзадачи" 
@@ -3421,6 +3714,7 @@ version = "1.4.1+1"
 # ╠═6fcc5460-c724-4f6e-bb04-8785cddb7f79
 # ╠═23906645-c779-4eb1-9201-6302fec045ea
 # ╠═9ffbda77-5314-493e-89f6-bcaaff48a737
+# ╠═62499f26-9863-47f4-9aab-37d2f6f1b255
 # ╠═35b780d1-bf92-42bc-ac72-0a95e2585f56
 # ╠═955df201-d9d4-4da2-b604-16619c92dd85
 # ╠═127ca813-a652-4cc7-9995-588a0ab863cb
@@ -3453,7 +3747,31 @@ version = "1.4.1+1"
 # ╠═e3f80864-8fd2-48bd-acb8-8c91aba28e76
 # ╠═985db9d8-b795-45c7-991f-8b68d81feee9
 # ╠═b32881c8-59c1-4806-91e9-f6447f2aa22b
+# ╠═d1146d90-664a-4235-95b0-8570e70713fc
+# ╠═f8780df8-5868-49da-a5a8-a556afdb3f18
+# ╠═75a0a6e3-4462-4f1d-baa6-3364d211a4b5
+# ╠═a0775a71-0cca-43a6-835a-d66850605a45
+# ╠═fd6a8bb0-7691-4a03-a928-999ddf6e3076
+# ╠═f9d7c72f-c666-4a4a-b31a-c92b37507da9
+# ╠═62043829-4ca6-4dd7-bf4f-85c7343ee177
+# ╠═46c90566-c373-40c1-b4ca-1ae1c9872a87
+# ╠═dcdf64c2-01df-4d73-a365-1b6381c9c3e1
 # ╠═3a6eb336-4ec3-400a-b58b-418c7429ca2d
+# ╠═2f0d3995-cbfd-420f-8936-380fc5d5da88
+# ╠═a694736a-a239-4b3c-8670-9982aaf0204e
+# ╠═714c393b-bb42-4622-848f-1dca1868169d
+# ╠═a13bb6c3-0bed-4c2f-868f-5acded90aada
+# ╠═75983ca9-e54a-419d-895c-892916135484
+# ╠═75ec8028-db00-4e56-936c-dddf5c286735
+# ╠═d105fc37-e079-4c5d-aa6b-288e4828c993
+# ╠═2e35d429-cbb1-4e63-a03b-eaa9662229ab
+# ╠═2d8a9498-aa45-46d8-947e-94da8a07c27f
+# ╠═31ac9c67-77f5-422c-b57a-6cf0c1021f9b
+# ╠═caa3f733-8766-4674-8d1e-f3b67fdb84a8
+# ╠═b3437d4d-eb4b-418b-a139-1bc5bf4e45a7
+# ╠═5cf54f86-1377-4342-a7b8-700af58bbe0a
+# ╠═4f73ca8a-97d7-47af-bda8-003496ce38a4
+# ╠═800979ad-68c4-48ea-8bac-7bb0e6cb10e5
 # ╠═c7c4ad0e-600b-47f3-ad26-9f76cecf2931
 # ╠═1eecf941-1a74-45f8-a104-1db2d6c8e377
 # ╠═1fb8c4d4-1cdb-4ee8-860c-dd82cc0e7043

@@ -159,7 +159,55 @@ function parametrized_track_simplification(track, threshold)
         end
     end
     new_points = setdiff(points, points_to_delete);
+    if new_points[end] != size(track, 1)
+        push!(new_points, size(track, 1))
+    end
     return track[new_points,:], new_points
+end
+
+function get_average_on_segment(data_x, data_y, from, to)
+	integrated_value::Float64 = 0
+	# for i=1:length(data_y)-1
+	for i=from:to-1
+		integrated_value += (data_y[i] + data_y[i+1]) / 2 * (data_x[i+1] - data_x[i])
+	end
+	result = integrated_value / (data_x[to] - data_x[from])
+	return result
+end
+
+function get_track_and_segments_for_selected_points_modified(track, points)
+	# constructing proper lat, lon and alt values with numerical integration
+	new_altitude = [];
+	new_longitude = [];
+	new_latitude = [];
+	for i=1:length(points)-1
+		push!(new_altitude, get_average_on_segment(track.distance, track.altitude, points[i], points[i+1]))
+		push!(new_longitude,  get_average_on_segment(track.distance, track.longitude, points[i], points[i+1]))
+		push!(new_latitude,  get_average_on_segment(track.distance, track.latitude, points[i], points[i+1]))
+	end
+
+	new_track = copy(track)
+	new_track.index = 1:size(new_track, 1)
+	new_track = new_track[points,:]
+	
+	new_segments = DataFrame(
+        from = new_track.index[1:size(new_track, 1) - 1],
+        to = new_track.index[2:size(new_track, 1)],
+        diff_distance = diff(new_track.distance),
+        diff_altitude = diff(new_track.altitude)
+    )
+
+	new_segments.slope = atand.(new_segments.diff_altitude ./ new_segments.diff_distance)
+
+	# new_segments.latitude = get_mean_data(new_track.latitude)
+    # new_segments.longitude = get_mean_data(new_track.longitude)
+	new_segments.latitude = Float64.(new_latitude)
+	new_segments.longitude = Float64.(new_longitude)
+	# new_segments.altitude = get_mean_data(new_track.altitude)
+	new_segments.altitude = Float64.(new_altitude)
+	new_segments.weather_coeff .= 1.0
+	
+	return new_track, new_segments
 end
 
 function get_mean_data(series)

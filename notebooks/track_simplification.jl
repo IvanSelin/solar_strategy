@@ -67,7 +67,18 @@ track,segments = get_track_and_segments("..//data//data_australia.csv");
 track
 
 # ╔═╡ dbe59867-4be2-4a6a-9236-35dc96d2d387
-plot(track.distance, track.altitude, title="Raw track data")
+plot(track.distance/1e3, track.altitude, title="Original track data", legend=false, size=(300,250), xlabel="Distance (km)", ylabel="Altitude (m)")
+
+# ╔═╡ 3327e2e2-4398-4aed-83c1-eaeb7565bd48
+plot(
+	track.distance[1:100]/1e3,
+	track.altitude[1:100],
+	title="Original track data",
+	legend=false, size=(300,250),
+	xlabel="Distance (km)",
+	ylabel="Altitude (m)",
+	markershape=:diamond
+)
 
 # ╔═╡ e53d252c-31b5-430c-a241-b41159243bc7
 track_peaks, segments_peaks, points_peaks = keep_extremum_only_peaks_segments_with_points(track);
@@ -288,6 +299,19 @@ function plot_differences(income,use,time,energy, track, points)
 	plot(income_plot, use_plot, energy_plot, time_plot, layout=(4,1), size=(1000,700), legend=false)
 end
 
+# ╔═╡ dadc2e8c-3aae-4944-b5e6-cc99b9c4e1f5
+function plot_differences_en(income,use,time,energy, track, points)
+	track_points = track[points, :];
+	income_plot = plot(track_points.distance, income, title="Energy income difference");
+	use_plot = plot(track_points.distance, use, title="Energy drain difference");
+	time_plot = plot(track_points.distance, time, title="Time difference (seconds)", xlabel="Distance (meters)");
+	energy_plot = plot(track_points.distance, energy, title="Energy difference (Wt*h)");
+
+	plot(
+		# income_plot, use_plot,
+		energy_plot, time_plot, layout=(2,1), size=(600,400), legend=false)
+end
+
 # ╔═╡ 0aeeb368-896e-4bc8-ad1c-d92b0c324392
 plot_differences(test_income, test_use, test_time, test_energy, track, points[0.05])
 
@@ -346,6 +370,18 @@ function compare_track_energies_plot_thr(track, segments, speed, thr)
 	return plot_differences(test_income, test_use, test_time, test_energy, track, points[thr])
 end
 
+# ╔═╡ a8f3f8a9-673c-497b-a311-89798970f358
+function compare_track_energies_plot_thr_en(track, segments, speed, thr)
+
+	test_income, test_use, test_time, test_energy = compare_track_energies_income_use(
+		track, segments,
+		tracks[thr], segments_dict[thr], points[thr],
+		opt_speed, start_energy, start_datetime
+	)
+
+	return plot_differences_en(test_income, test_use, test_time, test_energy, track, points[thr])
+end
+
 # ╔═╡ ce77f956-bd0a-48c1-a2b2-1f26a49877d8
 compare_track_energies_plot_thr(track, segments, opt_speed, 0.)
 
@@ -363,6 +399,9 @@ compare_track_energies_plot_thr(track, segments, opt_speed, 0.75)
 
 # ╔═╡ b845f4f8-22c0-49cb-9580-d51c19e115bd
 compare_track_energies_plot_thr(track, segments, opt_speed, 1.)
+
+# ╔═╡ d95e9d51-867e-484a-8006-e1fb2d1e0fbf
+compare_track_energies_plot_thr_en(track, segments, opt_speed, 1.75)
 
 # ╔═╡ baa774fc-d955-4b69-8a32-7bf7b6a92997
 md"# Сравнение с peaks"
@@ -432,8 +471,12 @@ plot(
 	x_dots,
 	[y_low y_high y_mid],
 	linestyle=[:solid :solid :dot],
-	label=["Ниже среднего" "Выше среднего" "Среднее"],
-	markershapes=:diamond
+	label=["Ниже прямой, среднее=3.5" "Выше прямой, среднее=4.5" "Прямая между ТИ, среднее=4.0"],
+	xlabel="Дистанция",
+	ylabel="Высота",
+	# markershapes=:diamond
+	markershapes=[:diamond :square :circle],
+	size=(500, 300)
 )
 
 # ╔═╡ ae90c511-3fcd-405f-b6fb-7814da8893aa
@@ -444,7 +487,9 @@ plot(
 	label=["Lower than straight, avg=3.5" "Higher than straight, avg=4.5" "Straight line between POI, avg=4.0"],
 	markershapes=[:diamond :square :circle],
 	xlabel="Distance",
-	ylabel="Altitude"
+	ylabel="Altitude",
+	size=(500, 250),
+	legend=:bottomleft
 )
 
 # ╔═╡ 171cc89f-05a6-49df-bd9a-deab45341778
@@ -585,6 +630,75 @@ md"Разница в минус по высоте, поэтому и меньш�
 
 # ╔═╡ 9d390be8-b231-4fc8-827a-f561293e82b9
 md"Ещё надо посмотреть насколько резкие перепады в power use и почему"
+
+# ╔═╡ 1e7a691c-d3cd-4d4c-a202-311e222a6320
+md"## А теперь для k сравним"
+
+# ╔═╡ 5da7a24e-b075-4d6f-ab20-e7bfd4a2aed9
+track_new_1_75, segments_new_1_75 = get_track_and_segments_for_selected_points_modified(track, points[1.75])
+
+# ╔═╡ b62e5863-7bf9-4e96-9891-267dc4baa737
+reg_1_75_income, reg_1_75_use, reg_1_75_time, reg_1_75_energy = compare_track_energies_income_use(
+	track, segments,
+	tracks[1.75], segments_dict[1.75], points[1.75],
+	opt_speed, start_energy, start_datetime
+)
+
+# ╔═╡ 9ab0a9a7-c071-49ba-bc0d-077b44c5c041
+new_1_75_income, new_1_75_use, new_1_75_time, new_1_75_energy = compare_track_energies_income_use(
+	track, segments,
+	track_new_1_75, segments_new_1_75, points[1.75],
+	opt_speed, start_energy, start_datetime
+)
+
+# ╔═╡ 26c9ff7f-2ff7-4fe8-9abe-d72f4d869c5c
+md"Сперва без численного интегрирования"
+
+# ╔═╡ d6645aef-70a6-4af3-8cb4-4254d80a7281
+plot_differences(
+	reg_1_75_income, reg_1_75_use, reg_1_75_time, reg_1_75_energy, track, points[1.75]
+)
+
+# ╔═╡ 95fd37d2-f7b0-479b-9779-093efcc11066
+md"Потом с численным интегрированием"
+
+# ╔═╡ e42e57dd-5513-4ca8-9ddf-5816f94f5707
+plot_differences(
+	new_1_75_income, new_1_75_use, new_1_75_time, new_1_75_energy, track, points[1.75]
+)
+
+# ╔═╡ aa4596d6-a281-4ed3-8115-f5f3e30d1f35
+md"Разницы нет?" 
+
+# ╔═╡ 9af6b676-d183-4f52-b92a-8017a0df4c85
+last(new_1_75_energy)
+
+# ╔═╡ aa4c6f7a-d6ca-430e-8297-5e07e9e9e2b3
+last(reg_1_75_energy)
+
+# ╔═╡ 81eac0f6-9c2f-4123-886f-c0317d70444b
+md"Похоже что немного есть таки в пользу правильного усреднения"
+
+# ╔═╡ 2790174f-7a2e-46c9-967e-065c4f9a12fd
+last(new_1_75_use)
+
+# ╔═╡ d36a4805-e59b-45ba-9433-54fd26733670
+last(reg_1_75_use)
+
+# ╔═╡ 8695b7a4-8127-4766-a7f5-fcc7d7f5b331
+md"Одинаково по использованию энергии (логично, среднее не используется)"
+
+# ╔═╡ a9bad1e6-7a9c-49c0-a0aa-33aaa6776691
+last(new_1_75_income)
+
+# ╔═╡ 0059a826-9daa-4d9c-9213-b1acefb8b92f
+last(reg_1_75_income)
+
+# ╔═╡ cbc854d5-d287-495c-9921-408ce23d1f30
+md"А вот без усреднения хуже приход энергии" 
+
+# ╔═╡ af6550be-7453-41ef-bcbe-dd41312eec76
+md"Итого, integrated k=1.75 all the way!" 
 
 # ╔═╡ 5b770bfc-64d1-4b8e-b30d-e40cf4eb5397
 md"# Анализ power use" 
@@ -889,7 +1003,7 @@ end
 Plots.scatter(
 	total_df.name,
 	[
-		total_df.Finish_diff total_df.Length
+		abs.(total_df.Finish_diff) total_df.Length
 	],
 	labels = [
 		"Ошибка на финише (Вт*ч)" "Количество участков"
@@ -944,6 +1058,41 @@ begin
 	plot(length_k_plot, r_squared_k_plot, finish_diff_k_plot, layout=(3,1), size=(900,700), legend=false, left_margin = 20px)
 end
 
+# ╔═╡ 5fccfd98-c270-4cb5-b8e4-cce7e0e5f04b
+begin
+	length_k_plot2 = Plots.scatter(
+		total_df.name,
+		total_df.Length,
+		# xlabel="K",
+		# color=:red,
+		ylabel="# of segments  ",
+		# legend = :outertopright
+		legend=false
+	)
+	r_squared_k_plot2 = Plots.scatter(
+		total_df.name,
+		total_df.R2,
+		# xlabel="K",
+		color=:red,
+		ylabel="R^2",
+		# legend = :outertopright
+		legend=false
+	)
+	finish_diff_k_plot2 = Plots.scatter(
+		total_df.name,
+		abs.(total_df.Finish_diff)./start_energy*100,
+		xlabel="k",
+		color=:yellow,
+		ylabel="Finish energy error %",
+		# yscale=:log10,
+		# legend = :outertopright
+		legend=false
+		# title=""
+	)
+	
+	plot(length_k_plot2, r_squared_k_plot2, finish_diff_k_plot2, layout=(3,1), size=(500,520), legend=false, left_margin = 20px)
+end
+
 # ╔═╡ 63c9378a-df62-41d1-b3a0-db5a1be3b3c5
 sort!(total_df, [:Length, :name], rev=[true, false]);
 
@@ -960,7 +1109,8 @@ Plots.scatter(
 	labels=permutedims(total_df_short.name),
 	markershapes=:auto,
 	xlabel="Track segments",
-	ylabel="RMSE of simulation difference",
+	ylabel="Energy simulation RMSE",
+	size=(400,250)
 )
 
 # ╔═╡ e8edab4f-c2cd-41dd-9aa8-2140f1641e56
@@ -969,8 +1119,9 @@ Plots.scatter(
 	total_df_short.Finish_diff',
 	labels=permutedims(total_df_short.name),
 	markershapes=:auto,
-	xlabel="Track length, pieces",
+	xlabel="Track segments",
 	ylabel="Energy difference on finish",
+	size=(400,250)
 )
 
 # ╔═╡ 4ba9ce08-ef82-415a-bdcc-5c70b8d4a16e
@@ -1301,6 +1452,21 @@ Plots.scatter(
 # ╔═╡ f1dd564a-1a34-4945-bba4-f142760ea533
 mean_linear_fit = curve_fit(Polynomial, thr_df_large_times.Length, thr_df_large_times.MedTime, 1)
 
+# ╔═╡ 283b19e1-2b1b-4d7f-9e9a-3aaeb0eca290
+mean_fit_sim = curve_fit(Polynomial, thr_df_large_times.Length, thr_df_large_times.MeanTime, 1)
+
+# ╔═╡ 87d04f23-87cc-4c8d-a364-57e221ace9ce
+plot(
+	thr_df_large_times.Length,
+	[ thr_df_large_times.MeanTime/1e9  mean_fit_sim.(thr_df_large_times.Length)/1e9],
+	# labels=["Mean" "Median" "Mean (fit):"*text(mean_fit).str "Median (fit):"*text(median_fit).str],
+	labels=["Среднее время по замеру" "Аппроксимация:"*text(mean_fit_sim).str],
+	xlabel="Количество участков",
+	ylabel="Время (с)",
+	seriestypes=[:scatter :path ],
+	title="Время моделирования"
+)
+
 # ╔═╡ 23dffd9a-4fd3-41ce-9645-943b6166d7f2
 Plots.scatter(
 	thr_df_large_times.Length,
@@ -1312,8 +1478,16 @@ Plots.scatter(
 	ylabel="Время (с)"
 )
 
-# ╔═╡ 4f52c0d5-e11c-45e9-94d6-1d99de3479e0
-vcat(thr_df_large_times.Length, 2222)
+# ╔═╡ 71463a7f-35e0-4196-aa3c-0a0df5734696
+Plots.scatter(
+	thr_df_large_times.Length,
+	[
+		thr_df_large_times.MeanTime/1e9
+	],
+	label="Modeling time",
+	xlabel="Amount of segments",
+	ylabel="Time (seconds)"
+)
 
 # ╔═╡ b59f861e-8ced-4900-9fdf-d59eef82e9e3
 md"Линейная зависимость скорости симуляции"
@@ -1518,17 +1692,32 @@ optim_times_df = CSV.read("optim_times.csv", DataFrame)
 # ╔═╡ ec3eb92f-9232-4309-8564-d8c9b620293b
 mean_fit = curve_fit(Polynomial, optim_times_df.Length, optim_times_df.Mean, 3)
 
+# ╔═╡ 28c338dd-6a85-49ad-ac5b-e4df11210abd
+mean_fit2 = curve_fit(Polynomial, optim_times_df.Length, optim_times_df.Mean, 2)
+
 # ╔═╡ 4592706f-7f90-41c4-bf11-4254fa6450a2
 median_fit = curve_fit(Polynomial, optim_times_df.Length, optim_times_df.Median, 3)
 
 # ╔═╡ c4c9f140-086a-483e-9bb8-5af8e452181e
 plot(
 	optim_times_df.Length,
-	[ optim_times_df.Mean  mean_fit.(optim_times_df.Length)],
+	[ optim_times_df.Mean/1000.  mean_fit.(optim_times_df.Length)/1000.],
 	# labels=["Mean" "Median" "Mean (fit):"*text(mean_fit).str "Median (fit):"*text(median_fit).str],
 	labels=["Среднее время по замеру" "Аппроксимация:"*text(mean_fit).str],
 	xlabel="Количество участков",
-	ylabel="Время (мс)",
+	ylabel="Время (с)",
+	seriestypes=[:scatter :path ],
+	title="Время оптимизации"
+)
+
+# ╔═╡ 2fcdf706-5ff6-4e86-a6e9-839e9144655a
+plot(
+	optim_times_df.Length,
+	[ optim_times_df.Mean/1000.  mean_fit2.(optim_times_df.Length)/1000.],
+	# labels=["Mean" "Median" "Mean (fit):"*text(mean_fit).str "Median (fit):"*text(median_fit).str],
+	labels=["Среднее время по замеру" "Аппроксимация:"*text(mean_fit2).str],
+	xlabel="Количество участков",
+	ylabel="Время (с)",
 	seriestypes=[:scatter :path ],
 	title="Время оптимизации"
 )
@@ -3150,6 +3339,7 @@ version = "1.4.1+0"
 # ╠═d6fb7d82-6bd9-4da9-b183-67fb16ab9f66
 # ╠═aef61af9-31df-4757-95bd-7fdfc0edbc1a
 # ╠═dbe59867-4be2-4a6a-9236-35dc96d2d387
+# ╠═3327e2e2-4398-4aed-83c1-eaeb7565bd48
 # ╠═e53d252c-31b5-430c-a241-b41159243bc7
 # ╠═164055ba-18bb-482d-816e-e278fc76a0d0
 # ╠═1b6f993d-e4cc-4973-b5cf-269f01c7f409
@@ -3195,6 +3385,7 @@ version = "1.4.1+0"
 # ╠═aa894177-a0a5-4488-a784-3752edaeddcb
 # ╠═97690c57-f630-4762-bdb8-6630cc14c3a7
 # ╠═f61f4da9-0689-4752-ae25-27415a95c10d
+# ╠═dadc2e8c-3aae-4944-b5e6-cc99b9c4e1f5
 # ╠═0aeeb368-896e-4bc8-ad1c-d92b0c324392
 # ╠═cdf8794f-67ed-41df-bd9e-b1c57c82133b
 # ╠═eb2ddfbc-a8ab-4b88-ac46-37af7c563d42
@@ -3204,12 +3395,14 @@ version = "1.4.1+0"
 # ╠═3cd8689b-5f6c-481b-9e5b-ec0356597598
 # ╠═35102b6b-1a3f-4c99-b03a-86fb5ad00e14
 # ╠═6950f324-b23c-4b49-b391-586bda1b872e
+# ╠═a8f3f8a9-673c-497b-a311-89798970f358
 # ╠═ce77f956-bd0a-48c1-a2b2-1f26a49877d8
 # ╠═425a892c-b550-486e-b376-8566ae086f6a
 # ╠═d9a12d12-8c19-4cd3-88ba-847e1c273850
 # ╠═f84953c2-bed0-4375-a9d1-0bb646c832e9
 # ╠═c26613ea-827d-46b8-9bd2-15ddf6cd885b
 # ╠═b845f4f8-22c0-49cb-9580-d51c19e115bd
+# ╠═d95e9d51-867e-484a-8006-e1fb2d1e0fbf
 # ╠═baa774fc-d955-4b69-8a32-7bf7b6a92997
 # ╠═da13556d-62b0-49ce-867f-f64b8f227599
 # ╠═ecc4c5e7-7b9f-47b2-9f35-85f6c241f4ea
@@ -3251,6 +3444,25 @@ version = "1.4.1+0"
 # ╠═91cae49c-bd36-473f-a23b-d15ecd1ac073
 # ╠═dea20b86-88d4-4337-8f58-25606c7adff1
 # ╠═9d390be8-b231-4fc8-827a-f561293e82b9
+# ╠═1e7a691c-d3cd-4d4c-a202-311e222a6320
+# ╠═5da7a24e-b075-4d6f-ab20-e7bfd4a2aed9
+# ╠═b62e5863-7bf9-4e96-9891-267dc4baa737
+# ╠═9ab0a9a7-c071-49ba-bc0d-077b44c5c041
+# ╠═26c9ff7f-2ff7-4fe8-9abe-d72f4d869c5c
+# ╠═d6645aef-70a6-4af3-8cb4-4254d80a7281
+# ╠═95fd37d2-f7b0-479b-9779-093efcc11066
+# ╠═e42e57dd-5513-4ca8-9ddf-5816f94f5707
+# ╠═aa4596d6-a281-4ed3-8115-f5f3e30d1f35
+# ╠═9af6b676-d183-4f52-b92a-8017a0df4c85
+# ╠═aa4c6f7a-d6ca-430e-8297-5e07e9e9e2b3
+# ╠═81eac0f6-9c2f-4123-886f-c0317d70444b
+# ╠═2790174f-7a2e-46c9-967e-065c4f9a12fd
+# ╠═d36a4805-e59b-45ba-9433-54fd26733670
+# ╠═8695b7a4-8127-4766-a7f5-fcc7d7f5b331
+# ╠═a9bad1e6-7a9c-49c0-a0aa-33aaa6776691
+# ╠═0059a826-9daa-4d9c-9213-b1acefb8b92f
+# ╠═cbc854d5-d287-495c-9921-408ce23d1f30
+# ╠═af6550be-7453-41ef-bcbe-dd41312eec76
 # ╠═5b770bfc-64d1-4b8e-b30d-e40cf4eb5397
 # ╠═f9dc21cb-d389-454d-99da-383208e268f9
 # ╠═76438295-379c-4d08-a57c-ac3b341f3a90
@@ -3288,6 +3500,7 @@ version = "1.4.1+0"
 # ╠═4b17b7fd-3a5d-4560-bcaf-bffb1d096ab5
 # ╠═aac0c842-14b6-48e3-bde1-30e32713046f
 # ╠═27ffc2b1-9239-4fa4-b575-bab651196be6
+# ╠═5fccfd98-c270-4cb5-b8e4-cce7e0e5f04b
 # ╠═63c9378a-df62-41d1-b3a0-db5a1be3b3c5
 # ╠═0902e42e-8435-4a45-ab7f-9d7969dce188
 # ╠═9e6bd014-b57b-41a4-a170-9e466325d51e
@@ -3337,8 +3550,10 @@ version = "1.4.1+0"
 # ╠═95f02f1c-914b-4363-a100-eb34512ee911
 # ╠═df9ec094-a2ae-428d-aacb-f53a91c4eff8
 # ╠═f1dd564a-1a34-4945-bba4-f142760ea533
+# ╠═283b19e1-2b1b-4d7f-9e9a-3aaeb0eca290
+# ╠═87d04f23-87cc-4c8d-a364-57e221ace9ce
 # ╠═23dffd9a-4fd3-41ce-9645-943b6166d7f2
-# ╠═4f52c0d5-e11c-45e9-94d6-1d99de3479e0
+# ╠═71463a7f-35e0-4196-aa3c-0a0df5734696
 # ╠═b59f861e-8ced-4900-9fdf-d59eef82e9e3
 # ╠═5ef24d5a-e279-4ba0-83d0-4ac348df6290
 # ╠═e426497b-55c1-4792-803f-012636c7559f
@@ -3373,8 +3588,10 @@ version = "1.4.1+0"
 # ╠═1cc1735a-7b11-4ecf-9b11-d0aac8a79c7a
 # ╠═8a195f8f-c9ff-4f24-aca1-5b85d7421383
 # ╠═ec3eb92f-9232-4309-8564-d8c9b620293b
+# ╠═28c338dd-6a85-49ad-ac5b-e4df11210abd
 # ╠═4592706f-7f90-41c4-bf11-4254fa6450a2
 # ╠═c4c9f140-086a-483e-9bb8-5af8e452181e
+# ╠═2fcdf706-5ff6-4e86-a6e9-839e9144655a
 # ╠═67de2dbd-3633-4728-a6e4-53e2ddfb2625
 # ╠═e9821459-f1b6-4884-8d0c-3017ac2d776d
 # ╠═5c493ed5-e368-4550-88da-bf6c7338b879

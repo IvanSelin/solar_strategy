@@ -51,6 +51,7 @@ export iterative_optimization
 export plots_for_results
 export simulate_run_finish_time
 export get_mean_data
+export parametrized_track_simplification, get_track_and_segments_for_selected_points_modified
 # #### concept
 # #=
 # overall concept of modelling:
