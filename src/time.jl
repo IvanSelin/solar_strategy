@@ -113,6 +113,18 @@ function calculate_travel_time_seconds_intervals_typed(
     return diff_distance ./ speed_vector
 end
 
+function calculate_travel_time_seconds_intervals_typed_night(
+    speed_vector :: Vector{<: Real},
+    diff_distance :: Vector{<: Real},
+    start_datetime :: DateTime)
+    #### time manipulation
+    # time needed to spend on each part of the track
+    # TODO: night charge and time diff
+    time_s = diff_distance ./ speed_vector
+    return travel_time_to_datetime(time_s, start_datetime)
+    # return diff_distance ./ speed_vector
+end
+
 function calculate_travel_time_datetime(speed_vector, segments, start_datetime)
     time_s = calculate_travel_time_seconds(speed_vector, segments)
 	time_utc = travel_time_to_datetime(time_s, start_datetime)

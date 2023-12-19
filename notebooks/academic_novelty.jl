@@ -978,6 +978,17 @@ function k_speeds_to_regular(index)
 	return new_speed_vector_for_regular
 end
 
+# ╔═╡ 8e309468-42f0-4963-8795-e92f5dcfd409
+plot(
+	simulate_run(
+		k_speeds_to_regular(10),
+		track_full[1:poi_df.intersect[10],:],
+		get_segments_for_track(track_full[1:poi_df.intersect[10],:]),
+		poi_df.distance[10]/last(track_full.distance) * max_energy,
+		start_datetime
+	)[3]
+)
+
 # ╔═╡ 31ac9c67-77f5-422c-b57a-6cf0c1021f9b
 function draw_comparison_plot_peaks_speeds_on_reg(index)
 
@@ -1009,14 +1020,14 @@ function draw_comparison_plot_peaks_speeds_on_reg(index)
 	plot(
 		reg_plot, peaks_plot, k_plot,
 		layout=(3,1),
-		size=(750,1200),
+		size=(750,1500),
 		legend=false
 	)
 	
 end
 
 # ╔═╡ caa3f733-8766-4674-8d1e-f3b67fdb84a8
-draw_comparison_plot_peaks_speeds_on_reg(4)
+draw_comparison_plot_peaks_speeds_on_reg(9)
 
 # ╔═╡ b3437d4d-eb4b-418b-a139-1bc5bf4e45a7
 md"Похоже что упрощение по k работает отлично (при 1.75)
@@ -1040,7 +1051,7 @@ Peaks в малом интевале значений между 8 и 10 инд�
 md"### Рисуем новую картинку"
 
 # ╔═╡ 800979ad-68c4-48ea-8bac-7bb0e6cb10e5
-plot!(
+plot(
 	track_optimization_comparison_df.points_regular[good_k_index],
 	track_optimization_comparison_df.opt_time_regular[good_k_index] ./ track_optimization_comparison_df.opt_time_k[good_k_index] ,
 	ylabel="Performance gain",
@@ -1056,11 +1067,223 @@ plot!(
 	# , layout=(2,1)
 )
 
+# ╔═╡ bc416a2c-c7c6-4174-b2e0-a460e2caf20d
+plot(
+	track_optimization_comparison_df.points_regular,
+	[track_optimization_comparison_df.opt_time_regular  track_optimization_comparison_df.opt_time_peaks track_optimization_comparison_df.opt_time_k ],
+	ylabel="Optimization time(seconds)",
+	xlabel="Number of segments",
+	labels=["Initial track data" "Extremum POI selection" "Parametric POI selection, k=1.75"],
+	# title="Peaks performance",
+	marker=:circle,
+	legend=:top,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px,
+	size=(400,300)
+	# , layout=(2,1)
+)
+
+# ╔═╡ b3a45434-bb30-41fe-b03a-a0b79f85148f
+plot(
+	track_optimization_comparison_df.points_regular,
+	[track_optimization_comparison_df.opt_time_regular  track_optimization_comparison_df.opt_time_peaks track_optimization_comparison_df.opt_time_k ],
+	ylabel="Время оптимизации (с)",
+	xlabel="Количество участков исходного маршрута",
+	labels=["Исходное представление" "По экстремумам" "Параметрический метод, k=1.75"],
+	# title="Peaks performance",
+	# marker=:circle,
+	markershapes=[:diamond :square :circle],
+	legend=:top,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px,
+	size=(500,400)
+	# , layout=(2,1)
+)
+
+# ╔═╡ 16c6e2de-4fa4-4d4d-ae30-f616f3a24815
+plot(
+	track_optimization_comparison_df.points_regular,
+	[track_optimization_comparison_df.res_time_regular  track_optimization_comparison_df.res_time_peaks track_optimization_comparison_df.res_time_k ],
+	ylabel="Target: travel time(seconds)",
+	xlabel="Number of segments",
+	labels=["Initial track data" "Extremum POI selection" "Parametric POI selection, k=1.75"],
+	# title="Peaks performance",
+	marker=:circle,
+	legend=false,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px,
+	size=(400,300)
+	# , layout=(2,1)
+)
+
+# ╔═╡ a7112a48-f654-4b94-b9e5-047fa676c4ec
+plot(
+	track_optimization_comparison_df.points_regular,
+	[track_optimization_comparison_df.res_time_regular  track_optimization_comparison_df.res_time_peaks track_optimization_comparison_df.res_time_k ],
+	ylabel="Время прохождения маршрута(с)",
+	xlabel="Количество участков исходного маршрута",
+	labels=["Исходное представление" "По экстремумам" "Параметрический метод, k=1.75"],
+	# title="Peaks performance",
+	# marker=:circle,
+	markershapes=[:diamond :square :circle],
+	legend=:top,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px,
+	size=(500,400)
+	# , layout=(2,1)
+)
+
+# ╔═╡ b61aa7e4-2559-4dd4-8625-3ec8379d5192
+plot(
+	track_optimization_comparison_df.points_regular,
+	[ track_optimization_comparison_df.res_time_regular./track_optimization_comparison_df.res_time_regular track_optimization_comparison_df.res_time_regular./track_optimization_comparison_df.res_time_peaks track_optimization_comparison_df.res_time_regular./track_optimization_comparison_df.res_time_k ],
+	ylabel="Относительное улучшение целевого значения",
+	xlabel="Количество участков исходного маршрута",
+	labels=["Исходное представление" "По экстремумам" "Параметрический метод, k=1.75"],
+	# title="Peaks performance",
+	# marker=:circle,
+	markershapes=[:diamond :square :circle],
+	# markercolors=[2 3],
+	# lc=[2 3],
+	legend=:top,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px,
+	size=(500,400)
+	# , layout=(2,1)
+)
+
+# ╔═╡ d6fdb353-32f3-40a5-a46d-1edb3bcf432f
+plot(
+	track_optimization_comparison_df.points_regular,
+	[track_optimization_comparison_df.finish_energy_regular  track_optimization_comparison_df.finish_energy_peaks track_optimization_comparison_df.finish_energy_k ],
+	ylabel="Finish energy(Wt*h)",
+	xlabel="Number of segments",
+	labels=["Initial track data" "Extremum POI selection" "Parametric POI selection, k=1.75"],
+	# title="Peaks performance",
+	marker=:circle,
+	legend=:top,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px,
+	size=(400,300)
+	# , layout=(2,1)
+)
+
+# ╔═╡ 961f4c09-76a3-4acf-927b-963f46b3da43
+plot(
+	track_optimization_comparison_df.points_regular,
+	[track_optimization_comparison_df.finish_energy_regular  track_optimization_comparison_df.finish_energy_peaks track_optimization_comparison_df.finish_energy_k ],
+	ylabel="Энергия на финише (Вт*ч)",
+	xlabel="Количество участков исходного маршрута",
+	labels=["Исходное представление" "По экстремумам" "Параметрический метод, k=1.75"],
+	# title="Peaks performance",
+	# marker=:circle,
+	markershapes=[:diamond :square :circle],
+	legend=:top,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px,
+	size=(500,400)
+	# , layout=(2,1)
+)
+
+# ╔═╡ 327a9299-8cbc-43ad-a479-dc3df9a4cb40
+plot(
+	track_optimization_comparison_df.points_regular,
+	[track_optimization_comparison_df.points_regular track_optimization_comparison_df.points_peaks track_optimization_comparison_df.points_k ],
+	ylabel="Количество участков",
+	xlabel="Количество участков исходного маршрута",
+	labels=["Исходное представление" "По экстремумам" "Параметрический метод, k=1.75"],
+	# title="Peaks performance",
+	# marker=:circle,
+	markershapes=[:diamond :square :circle],
+	legend=:top,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px,
+	size=(500,400)
+	# , layout=(2,1)
+)
+
+# ╔═╡ e46b3a53-5bb9-4e41-a10f-1e2f3028d5bb
+plot(
+	track_optimization_comparison_df.points_regular,
+	[track_optimization_comparison_df.points_regular./track_optimization_comparison_df.points_peaks track_optimization_comparison_df.points_regular./track_optimization_comparison_df.points_k ],
+	ylabel="Уменьшение количества участков",
+	xlabel="Количество участков исходного маршрута",
+	labels=["По экстремумам" "Параметрический метод, k=1.75"],
+	# title="Peaks performance",
+	# marker=:circle,
+	markershapes=[:square :circle],
+	legend=:top,
+	# legend=false,
+	# size=(400,300),
+	# marginbottom=5Plots.mm
+	bottom_margin = 10Plots.px,
+	size=(500,400)
+	# , layout=(2,1)
+)
+
 # ╔═╡ c7c4ad0e-600b-47f3-ad26-9f76cecf2931
 md"# 3 - Алгоритм разбиения на подзадачи" 
 
 # ╔═╡ 1eecf941-1a74-45f8-a104-1db2d6c8e377
 md"Скорее всего в ноутбуку" 
+
+# ╔═╡ ef8d41a3-6943-4b52-9363-1552454ec4e5
+function simulate_run_finish_time_rus(speeds, track, segments, start_energy, start_datetime)
+	minimized_speeds_ms = speeds / 3.6
+	
+	power_use, solar_power, time_s = solar_trip_boundaries(
+		minimized_speeds_ms, segments, start_datetime
+	)
+	# track points, not segments, that's why it is size is +1 
+	energy_in_system_new = start_energy .+ solar_power .- power_use
+	lowest_energy = minimum(energy_in_system_new)
+	last_energy = last(energy_in_system_new)
+	pushfirst!(energy_in_system_new, start_energy)
+	finish_time = start_datetime + Dates.Millisecond(round(last(time_s * 1000)))
+
+	track_plot = plot(track.distance, track.altitude, title="Маршрут",
+		color=:green,
+		ylabel="Высота над уровнем моря (м)", label="Маршрут")
+
+	speed_plot = plot(
+		get_mean_data(track.distance),
+		speeds,
+		# seriestype=:bar,
+		bar_width=segments.diff_distance,
+		title="Скорость, время финиша $(finish_time)",
+		ylabel="Скорость (км/ч)",
+		label="Энергия"
+	)
+
+	low_energy_red = fill(0., size(track.distance, 1))
+	
+	energy_plot = plot(
+		track.distance,
+		[energy_in_system_new low_energy_red],
+		linewidth=[1 3],
+		title="Энергия в системе, нижний уровень $(round(lowest_energy, digits=2)), последний $(round(last_energy, digits=2))",
+		xlabel="Дистанция (м)", ylabel="Энергия (Вт*ч)",
+		label="Энергия"
+	)
+	
+	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(750,700), legend=false)
+end
 
 # ╔═╡ b1effadf-79ca-422a-91e3-08f72b0239ad
 
@@ -1609,6 +1832,9 @@ begin
 	segments_high.weather_coeff = weather_full_coeff;
 end
 
+# ╔═╡ ce03474e-661b-4343-8c4d-7fc7a9652955
+size(track_high, 1)
+
 # ╔═╡ 75d28697-8f3f-4c00-80a0-998b62694ab1
 res_high = iterative_optimization_novelty(
     track_high, segments_high,
@@ -1619,7 +1845,7 @@ res_high = iterative_optimization_novelty(
 );
 
 # ╔═╡ a4c9be7c-fe85-4f78-9cfa-a805e3b29478
-simulate_run_finish_time(
+simulate_run_finish_time_rus(
 	res_high[1].solution.speeds,
 	track_high,
 	segments_high,
@@ -1628,7 +1854,7 @@ simulate_run_finish_time(
 )
 
 # ╔═╡ ea926683-39a6-4bb3-a74f-21322a8a7812
-simulate_run_finish_time(
+simulate_run_finish_time_rus(
 	res_high[2].solution.speeds,
 	track_high,
 	segments_high,
@@ -1637,7 +1863,7 @@ simulate_run_finish_time(
 )
 
 # ╔═╡ 6b103fc3-d4be-4834-9c10-d20c1210728d
-simulate_run_finish_time(
+simulate_run_finish_time_rus(
 	res_high[3].solution.speeds,
 	track_high,
 	segments_high,
@@ -1660,6 +1886,24 @@ res_high
 # ╔═╡ 1291c857-d356-438d-a83a-b5ba5a257c79
 simulate_run_finish_time(
 	res_high[6].solution.speeds,
+	track_high,
+	segments_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ e55a1586-f138-4f91-ac38-3823684098e9
+test_bnd = calculate_boundaries(1, size(track_high, 1), 5)
+
+# ╔═╡ e849e392-7527-4c0b-a002-1f8253f8dba0
+test_spd = fill(28.2, 5) .+ rand(5)
+
+# ╔═╡ 3db5faa4-2a5b-43c2-8b82-5e915f111804
+test_spd_2 = set_speeds_boundaries_typed(test_spd, test_bnd, size(segments_high, 1))
+
+# ╔═╡ c27023a9-9cca-41c6-8a90-944d9c867ff9
+simulate_run_finish_time_rus(
+	test_spd_2,
 	track_high,
 	segments_high,
 	max_energy,
@@ -1708,7 +1952,7 @@ res_single_speed = minimize_single_speed_novelty(
 )
 
 # ╔═╡ 65b59e55-9ace-47a5-9398-997e68da4120
-simulate_run_finish_time(
+simulate_run_finish_time_rus(
 	fill(res_single_speed[1], size(segments_high, 1)),
 	track_high,
 	segments_high,
@@ -1805,7 +2049,7 @@ boundaries_n_speeds = calculate_boundaries(1, size(track_high, 1), n_variables)
 speed_vector_n_speeds = set_speeds_boundaries(res_n_speeds, boundaries_n_speeds)
 
 # ╔═╡ cffdd67e-9d46-4ea9-a6ed-12d21ae9d8c3
-simulate_run_finish_time(
+simulate_run_finish_time_rus(
 	speed_vector_n_speeds,
 	track_high,
 	segments_high,
@@ -1938,7 +2182,7 @@ md"Конструируем высокую трассу с k"
 
 # ╔═╡ e22b4c20-8bd5-43ae-a98b-9ec550ad54d2
 begin
-	track_k_high, points_k_high = parametrized_track_simplification(track_high, k);
+	track_k_high, points_k_high = parametrized_track_simplification(track_high, 7.5);
 	segments_k_high = get_segments_for_track(track_k_high);
 	weather_k_coeff = calculate_weather_weights_for_segments(
 	    w,
@@ -2000,9 +2244,27 @@ simulate_run_finish_time(
 	start_datetime
 )
 
+# ╔═╡ 1a5eeb2b-b706-4882-9878-ea1a15a32d07
+res_k_high[5].solution.speeds
+
+# ╔═╡ 6853eabb-223a-47fb-bf79-2a865ac68df5
+res_speeds = copy(res_k_high[5].solution.speeds)
+
+# ╔═╡ 70094fee-48ca-472a-a01a-d5a09f855f9f
+res_speeds[10000:end] .= 51.5
+
 # ╔═╡ 925ad924-a051-4000-a434-a7d3fb7b2381
-simulate_run_finish_time(
-	res_k_high[5].solution.speeds,
+simulate_run_finish_time_rus(
+	res_k_high[5].solution.speeds .- 0.31,
+	track_k_high,
+	segments_k_high,
+	max_energy,
+	start_datetime
+)
+
+# ╔═╡ 36bc1699-d512-4250-be1e-0bd2d4c4f499
+simulate_run_finish_time_rus(
+	res_speeds .- 0.3,
 	track_k_high,
 	segments_k_high,
 	max_energy,
@@ -3766,14 +4028,25 @@ version = "1.4.1+1"
 # ╠═d105fc37-e079-4c5d-aa6b-288e4828c993
 # ╠═2e35d429-cbb1-4e63-a03b-eaa9662229ab
 # ╠═2d8a9498-aa45-46d8-947e-94da8a07c27f
+# ╠═8e309468-42f0-4963-8795-e92f5dcfd409
 # ╠═31ac9c67-77f5-422c-b57a-6cf0c1021f9b
 # ╠═caa3f733-8766-4674-8d1e-f3b67fdb84a8
 # ╠═b3437d4d-eb4b-418b-a139-1bc5bf4e45a7
 # ╠═5cf54f86-1377-4342-a7b8-700af58bbe0a
 # ╠═4f73ca8a-97d7-47af-bda8-003496ce38a4
 # ╠═800979ad-68c4-48ea-8bac-7bb0e6cb10e5
+# ╠═bc416a2c-c7c6-4174-b2e0-a460e2caf20d
+# ╠═b3a45434-bb30-41fe-b03a-a0b79f85148f
+# ╠═16c6e2de-4fa4-4d4d-ae30-f616f3a24815
+# ╠═a7112a48-f654-4b94-b9e5-047fa676c4ec
+# ╠═b61aa7e4-2559-4dd4-8625-3ec8379d5192
+# ╠═d6fdb353-32f3-40a5-a46d-1edb3bcf432f
+# ╠═961f4c09-76a3-4acf-927b-963f46b3da43
+# ╠═327a9299-8cbc-43ad-a479-dc3df9a4cb40
+# ╠═e46b3a53-5bb9-4e41-a10f-1e2f3028d5bb
 # ╠═c7c4ad0e-600b-47f3-ad26-9f76cecf2931
 # ╠═1eecf941-1a74-45f8-a104-1db2d6c8e377
+# ╠═ef8d41a3-6943-4b52-9363-1552454ec4e5
 # ╠═1fb8c4d4-1cdb-4ee8-860c-dd82cc0e7043
 # ╠═b1effadf-79ca-422a-91e3-08f72b0239ad
 # ╠═4e3c8ce5-cbd2-4d4c-8bb9-67f4f8745068
@@ -3785,6 +4058,7 @@ version = "1.4.1+1"
 # ╠═409c92f6-cd3b-41c5-a69e-a2b3e16a3960
 # ╠═3bd9ea26-32ae-4c73-8606-546ebcbe8e99
 # ╠═b004e777-ba5c-4e64-8c2f-1c026fb09f0b
+# ╠═ce03474e-661b-4343-8c4d-7fc7a9652955
 # ╠═75d28697-8f3f-4c00-80a0-998b62694ab1
 # ╠═a4c9be7c-fe85-4f78-9cfa-a805e3b29478
 # ╠═ea926683-39a6-4bb3-a74f-21322a8a7812
@@ -3792,6 +4066,10 @@ version = "1.4.1+1"
 # ╠═c856f853-f4b1-4f84-ac14-dc16ee86fdcd
 # ╠═dead6b98-85cb-4ce6-85a4-a155bb3c0dae
 # ╠═1291c857-d356-438d-a83a-b5ba5a257c79
+# ╠═e55a1586-f138-4f91-ac38-3823684098e9
+# ╠═e849e392-7527-4c0b-a002-1f8253f8dba0
+# ╠═3db5faa4-2a5b-43c2-8b82-5e915f111804
+# ╠═c27023a9-9cca-41c6-8a90-944d9c867ff9
 # ╠═08c98d56-de5a-449a-b5ab-0f330bc7034a
 # ╠═863ed1cd-0f9b-42cd-b179-32b552fe477d
 # ╠═b3b88186-beee-4e2b-bf16-c5149f481760
@@ -3835,7 +4113,11 @@ version = "1.4.1+1"
 # ╠═2482f572-e095-4f2e-9fa0-273b0160acd6
 # ╠═8849e213-e3c5-4f9f-9762-dd8519779018
 # ╠═ac4db70d-ee48-453b-82ec-98527914195d
+# ╠═1a5eeb2b-b706-4882-9878-ea1a15a32d07
+# ╠═6853eabb-223a-47fb-bf79-2a865ac68df5
+# ╠═70094fee-48ca-472a-a01a-d5a09f855f9f
 # ╠═925ad924-a051-4000-a434-a7d3fb7b2381
+# ╠═36bc1699-d512-4250-be1e-0bd2d4c4f499
 # ╠═ec754126-47e8-4b50-9680-0b127b7ca643
 # ╠═84cfa1c8-f950-4fe5-9dd7-20c1cdcc40cd
 # ╟─00000000-0000-0000-0000-000000000001

@@ -631,6 +631,12 @@ md"Разница в минус по высоте, поэтому и меньш�
 # ╔═╡ 9d390be8-b231-4fc8-827a-f561293e82b9
 md"Ещё надо посмотреть насколько резкие перепады в power use и почему"
 
+# ╔═╡ 1550e304-31d0-4d4c-b5a2-8e4d72561f05
+size(track_new_peaks, 1)
+
+# ╔═╡ 55f67256-7b17-40a3-a739-d502ac5864fb
+size(track, 1) / size(track_new_peaks, 1)
+
 # ╔═╡ 1e7a691c-d3cd-4d4c-a202-311e222a6320
 md"## А теперь для k сравним"
 
@@ -666,6 +672,9 @@ md"Потом с численным интегрированием"
 plot_differences(
 	new_1_75_income, new_1_75_use, new_1_75_time, new_1_75_energy, track, points[1.75]
 )
+
+# ╔═╡ 205cc77c-2f01-4552-a660-08bd750d9b43
+size(track,1)/size(points[1.75],1)
 
 # ╔═╡ aa4596d6-a281-4ed3-8115-f5f3e30d1f35
 md"Разницы нет?" 
@@ -881,7 +890,7 @@ function make_comparison_peaks(track, segments, speed, start_energy, start_datet
 	last_diff = last(source) - last(new_energy)
 	number_of_segments = length(points_peaks)
 
-	push!(res_df, ("Peaks", last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments, exec_time))
+	push!(res_df, ("Экстремумы", last_diff, mae_val, mse_val, rmse_val, r2_val, number_of_segments, exec_time))
 end
 
 # ╔═╡ e46f1433-f940-4b3c-a6c5-49a70c07f671
@@ -1097,7 +1106,7 @@ end
 sort!(total_df, [:Length, :name], rev=[true, false]);
 
 # ╔═╡ 0902e42e-8435-4a45-ab7f-9d7969dce188
-total_df_short = copy(total_df[total_df.Length .> 2000,:])
+total_df_short = copy(total_df[total_df.Length .> 500,:])
 
 # ╔═╡ 9e6bd014-b57b-41a4-a170-9e466325d51e
 md"А теперь попробуем сделать так, чтобы каждая точка была отдельной серией"
@@ -1108,9 +1117,9 @@ Plots.scatter(
 	total_df_short.RMSE',
 	labels=permutedims(total_df_short.name),
 	markershapes=:auto,
-	xlabel="Track segments",
-	ylabel="Energy simulation RMSE",
-	size=(400,250)
+	xlabel="Количество участков",
+	ylabel="Энергия в системе, RMSE",
+	size=(400,350)
 )
 
 # ╔═╡ e8edab4f-c2cd-41dd-9aa8-2140f1641e56
@@ -1119,9 +1128,11 @@ Plots.scatter(
 	total_df_short.Finish_diff',
 	labels=permutedims(total_df_short.name),
 	markershapes=:auto,
-	xlabel="Track segments",
-	ylabel="Energy difference on finish",
-	size=(400,250)
+	xlabel="Количество участков",
+	ylabel="Разница в энрегии на финише",
+	size=(400,350),
+	legend=:topright,
+	ylims=(-0.2, 2.25)
 )
 
 # ╔═╡ 4ba9ce08-ef82-415a-bdcc-5c70b8d4a16e
@@ -3444,6 +3455,8 @@ version = "1.4.1+0"
 # ╠═91cae49c-bd36-473f-a23b-d15ecd1ac073
 # ╠═dea20b86-88d4-4337-8f58-25606c7adff1
 # ╠═9d390be8-b231-4fc8-827a-f561293e82b9
+# ╠═1550e304-31d0-4d4c-b5a2-8e4d72561f05
+# ╠═55f67256-7b17-40a3-a739-d502ac5864fb
 # ╠═1e7a691c-d3cd-4d4c-a202-311e222a6320
 # ╠═5da7a24e-b075-4d6f-ab20-e7bfd4a2aed9
 # ╠═b62e5863-7bf9-4e96-9891-267dc4baa737
@@ -3452,6 +3465,7 @@ version = "1.4.1+0"
 # ╠═d6645aef-70a6-4af3-8cb4-4254d80a7281
 # ╠═95fd37d2-f7b0-479b-9779-093efcc11066
 # ╠═e42e57dd-5513-4ca8-9ddf-5816f94f5707
+# ╠═205cc77c-2f01-4552-a660-08bd750d9b43
 # ╠═aa4596d6-a281-4ed3-8115-f5f3e30d1f35
 # ╠═9af6b676-d183-4f52-b92a-8017a0df4c85
 # ╠═aa4c6f7a-d6ca-430e-8297-5e07e9e9e2b3
