@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.19.36
 
 using Markdown
 using InteractiveUtils
@@ -28,6 +28,7 @@ begin
 	using NLSolversBase
 	using Printf
 	using BenchmarkTools
+	using LoopVectorization
 end
 
 # ╔═╡ 0419a898-c344-4659-9db4-e8c3fb598b26
@@ -88,9 +89,10 @@ md"Что вообще можно сделать:
 0. Самый обычный код по вычислению одного значения. На входе одно значение, на выходе тоже - база. в тестах не участвует (mechanical_power_calculation_alloc_typed)
 1. Код с массивами на входе, массив на выходе, операции поэлементные через if for и т.д.
 2. Код с массивами на входе, массив на выходе, операции с массивами (mechanical_power_calculation_typed)
-3. Код с массивами на входе, массив на выходе, операции с массивами + simd
-4. Самый обычный код по вычислению одного значения, вызываемый через broadcasting ( mechanical_power_calculation_alloc_typed через точку)
-5. Самый обычный код по вычислению одного значения, вызываемый через broadcasting + simd  ( mechanical_power_calculation_alloc_typed через точку + simd)" 
+3. Код с массивами на входе, массив на выходе, операции поэлементные + simd
+4. Код с массивами на входе, массив на выходе, операции поэлементные + turbo
+5. Самый обычный код по вычислению одного значения, вызываемый через broadcasting ( mechanical_power_calculation_alloc_typed через точку)
+6. Самый обычный код по вычислению одного значения, вызываемый через broadcasting + inline  ( mechanical_power_calculation_alloc_typed через точку + inline)"
 
 # ╔═╡ bee05552-07d8-4965-9a54-6a6231c2f141
 # вызывать через @benchmark res_broadcast_typed = mechanical_power_calculation_alloc_typed.(input_speed, segments.slope, segments.diff_distance) samples=50 evals=10
@@ -105,7 +107,7 @@ md"## 0. Одно значение"
 bench_single = @benchmark res_single = mechanical_power_calculation_alloc_typed(input_speed[1], segments.slope[1], segments.diff_distance[1]) samples=50 evals=10
 
 # ╔═╡ 123b32cb-3c16-498d-a7ad-4282db98233a
-md"## 1. Массивы на входе, поэлементно" 
+md"## 1. Массивы, поэлементно for" 
 
 # ╔═╡ 09322f8c-963c-4344-988f-95f755a9cd5d
 function mechanical_power_calculation_elem(
@@ -143,8 +145,95 @@ end
 # ╔═╡ cb163612-7795-46a8-91c6-09d9e5ef5fa9
 bench_elem = @benchmark res_elem_for = mechanical_power_calculation_elem(input_speed, segments.slope, segments.diff_distance) samples=50 evals=10
 
+# ╔═╡ 11d3182d-0831-4090-a0d8-fb2805263d53
+md"## 2. Массивы, массивное программирование "
+
+# ╔═╡ 95a70dc0-8aac-4da2-8937-b58d5abf59e8
+@time mechanical_power_calculation_typed(input_speed, segments.slope, segments.diff_distance)
+
+# ╔═╡ ecdf8762-40b6-45b6-9b11-d3de0436bc79
+bench_array = @benchmark res_array = mechanical_power_calculation_typed(input_speed, segments.slope, segments.diff_distance) samples=50 evals=10
+
+# ╔═╡ feaf8708-e3d6-4ebc-8749-ce53fdf87967
+md"## 3. Массивы, поэлементно + simd"
+
+# ╔═╡ 96e92893-1bc2-45a5-bcd9-7d5af1eabd11
+function mechanical_power_calculation_elem_simd(
+    speed_ms :: Vector{<: Real},
+    slope :: Vector{<: Real},
+    diff_distance :: Vector{<: Real}
+    )
+    drag = 0.18
+    frontal_area = 1 # m^2
+    ro = 1.18 # air density
+
+    mass = 390 # kg
+    g = 9.8019 # at start: [41.2646201567207,-95.9244249307473,301.540649414063];
+    # 9.80147 at finish: [43.9660024736000,-121.345052439700,1229.07763671875]
+    friction_1 = 0.0023;
+    friction_2 = 0.000041; # total friction = friction_1 + friction_2*speed
+
+    engine_efficiency = 0.87
+	mechanical_power = []
+	@inbounds @simd for i in eachindex(speed_ms)
+		mechanical_force = (
+			drag * frontal_area * speed_ms[i] ^ 2 * ro / 2 +
+	        mass * g * (friction_1 + friction_2 * 4 * speed_ms[i]) * cosd(slope[i]) .+
+	        mass * g * sind(slope[i])
+	    )
+
+		push!(mechanical_power, mechanical_force * diff_distance[i] / engine_efficiency)
+	end
+    return mechanical_power
+end
+
+# ╔═╡ 9badd1e5-3587-447e-85b3-ac184f6d2085
+@time mechanical_power_calculation_elem_simd(input_speed, segments.slope, segments.diff_distance)
+
+# ╔═╡ d2d15a7e-0b6b-4d9c-aeba-6061b250962f
+bench_elem_simd = @benchmark res_elem_for = mechanical_power_calculation_elem_simd(input_speed, segments.slope, segments.diff_distance) samples=50 evals=10
+
+# ╔═╡ 8cfe8a23-aa2c-475e-b264-99b5012f2468
+md"## 4. Массивы, поэлементно + turbo"
+
+# ╔═╡ fab2e9e8-372d-4ad4-94f8-bb34200e326e
+function mechanical_power_calculation_elem_turbo(
+    speed_ms :: Vector{<: Real},
+    slope :: Vector{<: Real},
+    diff_distance :: Vector{<: Real}
+    )
+    drag = 0.18
+    frontal_area = 1 # m^2
+    ro = 1.18 # air density
+
+    mass = 390 # kg
+    g = 9.8019 # at start: [41.2646201567207,-95.9244249307473,301.540649414063];
+    # 9.80147 at finish: [43.9660024736000,-121.345052439700,1229.07763671875]
+    friction_1 = 0.0023;
+    friction_2 = 0.000041; # total friction = friction_1 + friction_2*speed
+
+    engine_efficiency = 0.87
+	mechanical_power = zeros(size(speed_ms,1))
+	@turbo for i in eachindex(speed_ms)
+		mechanical_force = (
+			drag * frontal_area * speed_ms[i] ^ 2 * ro / 2 +
+	        mass * g * (friction_1 + friction_2 * 4 * speed_ms[i]) * cosd(slope[i]) .+
+	        mass * g * sind(slope[i])
+	    )
+
+		mechanical_power[i] = mechanical_force * diff_distance[i] / engine_efficiency
+	end
+    return mechanical_power
+end
+
+# ╔═╡ 10a1fdb7-1fb7-4704-bf09-08ec2bce48a7
+@time mechanical_power_calculation_elem_turbo(input_speed, segments.slope, segments.diff_distance)
+
+# ╔═╡ 9ffdc940-ca20-4626-8578-49748e23b388
+bench_elem_turbo = @benchmark res_elem_turbo = mechanical_power_calculation_elem_turbo(input_speed, segments.slope, segments.diff_distance) samples=50 evals=10
+
 # ╔═╡ 5eade3f1-b060-4a1a-b807-a9552914beab
-md"## 4. Broadcasting, без simd" 
+md"## 5. Одно значение, Broadcasting" 
 
 # ╔═╡ ee575192-627e-4c26-aa8f-1c3f5f98fb54
 @time mechanical_power_calculation_alloc_typed.(input_speed, segments.slope, segments.diff_distance)
@@ -152,8 +241,51 @@ md"## 4. Broadcasting, без simd"
 # ╔═╡ 6904f607-2603-4b7b-b2f0-79690e7c79b0
 bench_broadcast = @benchmark res_broadcast_typed = mechanical_power_calculation_alloc_typed.(input_speed, segments.slope, segments.diff_distance) samples=50 evals=10
 
-# ╔═╡ 524bc8d1-162f-4986-94c5-9b14694d9dd1
+# ╔═╡ cbe0ed45-7ef2-4ecf-92e3-4c04674b923f
+md"## 6. Одно значение, Broadcasting + inline" 
 
+# ╔═╡ 3ed8a749-74e6-47fe-9190-f874b085f925
+@inline function mechanical_power_calculation_alloc_typed_inline(
+    speed_ms :: Real, slope :: Real, diff_distance :: Real) :: Real
+    drag = 0.18
+    frontal_area = 1. # m^2
+    ro = 1.18 # air density
+
+    mass = 390. # kg
+    g = 9.8019 # at start: [41.2646201567207,-95.9244249307473,301.540649414063];
+    # 9.80147 at finish: [43.9660024736000,-121.345052439700,1229.07763671875]
+    friction_1 = 0.0023;
+    friction_2 = 0.000041; # total friction = friction_1 + friction_2*speed
+
+    engine_efficiency = 0.87
+
+    # mechanical force = drag force + friction force + gravitational force
+    # newtons
+    mechanical_force = (
+        drag * frontal_area * speed_ms ^ 2 * ro / 2. +
+        mass * g * (friction_1 + friction_2 * 4 * speed_ms) * cosd(slope) +
+        mass * g * sind(slope)
+        )
+
+    # mechanical power = mechanical force * distance delta / engine efficiency
+    # watts * s
+    mechanical_power = (
+        mechanical_force * diff_distance / engine_efficiency
+        )
+
+    # TODO: get rid of return, or at least make it type-stable
+    # see https://docs.julialang.org/en/v1/manual/faq/#Types,-type-declarations,-and-constructors-1
+    return mechanical_power
+end
+
+# ╔═╡ ec33090c-e96c-4cdf-b756-31d0158cd479
+@time mechanical_power_calculation_alloc_typed_inline.(input_speed, segments.slope, segments.diff_distance)
+
+# ╔═╡ 8c113b17-a9d3-4d22-995e-8d9ee177116a
+bench_broadcast_inline = @benchmark res_broadcast_inline= mechanical_power_calculation_alloc_typed_inline.(input_speed, segments.slope, segments.diff_distance) samples=50 evals=10
+
+# ╔═╡ 99268d06-b6e1-40e6-a93f-6c9b418baa38
+md"## Сводные результаты (TODO)"
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -164,6 +296,7 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 LineSearches = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
+LoopVectorization = "bdcacae8-1622-11e9-2a5c-532679323890"
 NLSolversBase = "d41bc354-129a-5804-8e4c-c37616107c6c"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Peaks = "18e31ff7-3703-566c-8e60-38913d67486b"
@@ -183,6 +316,7 @@ CSV = "~0.10.11"
 DataFrames = "~1.6.1"
 Distributions = "~0.25.100"
 LineSearches = "~7.2.0"
+LoopVectorization = "~0.12.166"
 NLSolversBase = "~7.8.3"
 Optim = "~1.7.7"
 Peaks = "~0.4.4"
@@ -199,9 +333,9 @@ WebIO = "~0.8.21"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.4"
+julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "39751fcce322abc42633856d01736f1aab0f99b3"
+project_hash = "03ece4019b6084628cdca464dcf4ecd78d142f24"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -270,6 +404,12 @@ git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
 version = "0.1.7"
 
+[[deps.BitTwiddlingConvenienceFunctions]]
+deps = ["Static"]
+git-tree-sha1 = "0c5f81f47bbbcf4aea7b2959135713459170798b"
+uuid = "62783981-4cbd-42fc-bca8-16325de8dc4b"
+version = "0.1.5"
+
 [[deps.Blink]]
 deps = ["Base64", "Distributed", "HTTP", "JSExpr", "JSON", "Lazy", "Logging", "MacroTools", "Mustache", "Mux", "Pkg", "Reexport", "Sockets", "WebIO"]
 git-tree-sha1 = "b1c61fd7e757c7e5ca6521ef41df8d929f41e3af"
@@ -281,6 +421,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
 version = "1.0.8+0"
+
+[[deps.CPUSummary]]
+deps = ["CpuId", "IfElse", "PrecompileTools", "Static"]
+git-tree-sha1 = "601f7e7b3d36f18790e2caf83a882d88e9b71ff1"
+uuid = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
+version = "0.2.4"
 
 [[deps.CSV]]
 deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "PrecompileTools", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings", "WorkerUtilities"]
@@ -299,6 +445,12 @@ deps = ["LinearAlgebra"]
 git-tree-sha1 = "f641eb0a4f00c343bbc32346e1217b86f3ce9dad"
 uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
 version = "0.5.1"
+
+[[deps.CloseOpenIntervals]]
+deps = ["Static", "StaticArrayInterface"]
+git-tree-sha1 = "70232f82ffaab9dc52585e0dd043b5e0c6b714f1"
+uuid = "fb6a15b2-703c-40df-9091-08a04967cfa9"
+version = "0.1.12"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -353,7 +505,7 @@ weakdeps = ["Dates", "LinearAlgebra"]
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.5+0"
+version = "1.0.5+1"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
@@ -379,6 +531,12 @@ version = "1.5.4"
 git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.2"
+
+[[deps.CpuId]]
+deps = ["Markdown"]
+git-tree-sha1 = "fcbb72b032692610bfbdb15018ac16a36cf2e406"
+uuid = "adafc99b-e345-5852-983c-f28acb93d879"
+version = "0.3.1"
 
 [[deps.Crayons]]
 git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
@@ -646,6 +804,12 @@ git-tree-sha1 = "6187bb2d5fcbb2007c39e7ac53308b0d371124bd"
 uuid = "9fb69e20-1954-56bb-a84f-559cc56a8ff7"
 version = "0.2.2"
 
+[[deps.HostCPUFeatures]]
+deps = ["BitTwiddlingConvenienceFunctions", "IfElse", "Libdl", "Static"]
+git-tree-sha1 = "eb8fed28f4994600e29beef49744639d985a04b2"
+uuid = "3e5b6fbb-0976-4d2c-9146-d79de83f2fb0"
+version = "0.1.16"
+
 [[deps.HypergeometricFunctions]]
 deps = ["DualNumbers", "LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]
 git-tree-sha1 = "f218fe3736ddf977e0e772bc9a586b2383da2685"
@@ -669,6 +833,11 @@ deps = ["Logging", "Random"]
 git-tree-sha1 = "d75853a0bdbfb1ac815478bacd89cd27b550ace6"
 uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
 version = "0.2.3"
+
+[[deps.IfElse]]
+git-tree-sha1 = "debdd00ffef04665ccbb3e150747a77560e8fad1"
+uuid = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
+version = "0.1.1"
 
 [[deps.InlineStrings]]
 deps = ["Parsers"]
@@ -774,6 +943,12 @@ version = "0.16.1"
     DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
     SymEngine = "123dc426-2d89-5057-bbad-38513e3affd8"
 
+[[deps.LayoutPointers]]
+deps = ["ArrayInterface", "LinearAlgebra", "ManualMemory", "SIMDTypes", "Static", "StaticArrayInterface"]
+git-tree-sha1 = "62edfee3211981241b57ff1cedf4d74d79519277"
+uuid = "10f19ff3-798f-405d-979b-55457f8fc047"
+version = "0.1.15"
+
 [[deps.Lazy]]
 deps = ["MacroTools"]
 git-tree-sha1 = "1370f8202dac30758f3c345f9909b97f53d87d3f"
@@ -795,8 +970,13 @@ uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
 version = "8.4.0+0"
 
 [[deps.LibGit2]]
-deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
+deps = ["Base64", "LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
+
+[[deps.LibGit2_jll]]
+deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll"]
+uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
+version = "1.6.4+0"
 
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
@@ -889,6 +1069,21 @@ git-tree-sha1 = "0d097476b6c381ab7906460ef1ef1638fbce1d91"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.0.2"
 
+[[deps.LoopVectorization]]
+deps = ["ArrayInterface", "CPUSummary", "CloseOpenIntervals", "DocStringExtensions", "HostCPUFeatures", "IfElse", "LayoutPointers", "LinearAlgebra", "OffsetArrays", "PolyesterWeave", "PrecompileTools", "SIMDTypes", "SLEEFPirates", "Static", "StaticArrayInterface", "ThreadingUtilities", "UnPack", "VectorizationBase"]
+git-tree-sha1 = "0f5648fbae0d015e3abe5867bca2b362f67a5894"
+uuid = "bdcacae8-1622-11e9-2a5c-532679323890"
+version = "0.12.166"
+
+    [deps.LoopVectorization.extensions]
+    ForwardDiffExt = ["ChainRulesCore", "ForwardDiff"]
+    SpecialFunctionsExt = "SpecialFunctions"
+
+    [deps.LoopVectorization.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+    SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+
 [[deps.MIMEs]]
 git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
 uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
@@ -899,6 +1094,11 @@ deps = ["Markdown", "Random"]
 git-tree-sha1 = "9ee1618cbf5240e6d4e0371d6f24065083f60c48"
 uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 version = "0.5.11"
+
+[[deps.ManualMemory]]
+git-tree-sha1 = "bcaef4fc7a0cfe2cba636d84cda54b5e4e4ca3cd"
+uuid = "d125e4d3-2237-4719-b19c-fa641b8a4667"
+version = "0.1.8"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -913,7 +1113,7 @@ version = "1.1.7"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.28.2+0"
+version = "2.28.2+1"
 
 [[deps.Measures]]
 git-tree-sha1 = "c13304c81eec1ed3af7fc20e75fb6b26092a1102"
@@ -937,7 +1137,7 @@ version = "0.7.7"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2022.10.11"
+version = "2023.1.10"
 
 [[deps.Mustache]]
 deps = ["Printf", "Tables"]
@@ -972,6 +1172,15 @@ git-tree-sha1 = "6862738f9796b3edc1c09d0890afce4eca9e7e93"
 uuid = "510215fc-4207-5dde-b226-833fc4488ee2"
 version = "0.5.4"
 
+[[deps.OffsetArrays]]
+git-tree-sha1 = "6a731f2b5c03157418a20c12195eb4b74c8f8621"
+uuid = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
+version = "1.13.0"
+weakdeps = ["Adapt"]
+
+    [deps.OffsetArrays.extensions]
+    OffsetArraysAdaptExt = "Adapt"
+
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "887579a3eb005446d514ab7aeac5d1d027658b8f"
@@ -981,12 +1190,12 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.21+4"
+version = "0.3.23+2"
 
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+0"
+version = "0.8.1+2"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
@@ -1026,7 +1235,7 @@ version = "1.6.2"
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
-version = "10.42.0+0"
+version = "10.42.0+1"
 
 [[deps.PDMats]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
@@ -1072,7 +1281,7 @@ version = "0.42.2+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.9.2"
+version = "1.10.0"
 
 [[deps.PlotThemes]]
 deps = ["PlotUtils", "Statistics"]
@@ -1123,6 +1332,12 @@ deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNu
 git-tree-sha1 = "e47cd150dbe0443c3a3651bc5b9cbd5576ab75b7"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 version = "0.7.52"
+
+[[deps.PolyesterWeave]]
+deps = ["BitTwiddlingConvenienceFunctions", "CPUSummary", "IfElse", "Static", "ThreadingUtilities"]
+git-tree-sha1 = "240d7170f5ffdb285f9427b92333c3463bf65bf6"
+uuid = "1d0040c9-8b98-4ee7-8388-3f51789ca0ad"
+version = "0.2.1"
 
 [[deps.PooledArrays]]
 deps = ["DataAPI", "Future"]
@@ -1185,7 +1400,7 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.Random]]
-deps = ["SHA", "Serialization"]
+deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[deps.RecipesBase]]
@@ -1233,6 +1448,17 @@ version = "0.4.0+0"
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
 
+[[deps.SIMDTypes]]
+git-tree-sha1 = "330289636fb8107c5f32088d2741e9fd7a061a5c"
+uuid = "94e857df-77ce-4151-89e5-788b33177be4"
+version = "0.1.0"
+
+[[deps.SLEEFPirates]]
+deps = ["IfElse", "Static", "VectorizationBase"]
+git-tree-sha1 = "3aac6d68c5e57449f5b9b865c9ba50ac2970c4cf"
+uuid = "476501e8-09a2-5ece-8869-fb82de89a1fa"
+version = "0.6.42"
+
 [[deps.Scratch]]
 deps = ["Dates"]
 git-tree-sha1 = "30449ee12237627992a99d5e30ae63e4d78cd24a"
@@ -1277,6 +1503,7 @@ version = "1.1.1"
 [[deps.SparseArrays]]
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+version = "1.10.0"
 
 [[deps.SpecialFunctions]]
 deps = ["IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
@@ -1290,6 +1517,26 @@ version = "2.3.1"
     [deps.SpecialFunctions.weakdeps]
     ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 
+[[deps.Static]]
+deps = ["IfElse"]
+git-tree-sha1 = "f295e0a1da4ca425659c57441bcb59abb035a4bc"
+uuid = "aedffcd0-7271-4cad-89d0-dc628f76c6d3"
+version = "0.8.8"
+
+[[deps.StaticArrayInterface]]
+deps = ["ArrayInterface", "Compat", "IfElse", "LinearAlgebra", "PrecompileTools", "Requires", "SparseArrays", "Static", "SuiteSparse"]
+git-tree-sha1 = "5d66818a39bb04bf328e92bc933ec5b4ee88e436"
+uuid = "0d7ed370-da01-4f52-bd93-41d350b8b718"
+version = "1.5.0"
+
+    [deps.StaticArrayInterface.extensions]
+    StaticArrayInterfaceOffsetArraysExt = "OffsetArrays"
+    StaticArrayInterfaceStaticArraysExt = "StaticArrays"
+
+    [deps.StaticArrayInterface.weakdeps]
+    OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
+    StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
 [[deps.StaticArraysCore]]
 git-tree-sha1 = "36b3d696ce6366023a0ea192b4cd442268995a0d"
 uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
@@ -1298,7 +1545,7 @@ version = "1.4.2"
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-version = "1.9.0"
+version = "1.10.0"
 
 [[deps.StatsAPI]]
 deps = ["LinearAlgebra"]
@@ -1337,9 +1584,9 @@ deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
 uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 
 [[deps.SuiteSparse_jll]]
-deps = ["Artifacts", "Libdl", "Pkg", "libblastrampoline_jll"]
+deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "5.10.1+6"
+version = "7.2.1+1"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -1378,6 +1625,12 @@ version = "0.1.1"
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[[deps.ThreadingUtilities]]
+deps = ["ManualMemory"]
+git-tree-sha1 = "eda08f7e9818eb53661b3deb74e3159460dfbc27"
+uuid = "8290d209-cae3-49c0-8002-c8c24d57dab5"
+version = "0.5.2"
 
 [[deps.TimeZones]]
 deps = ["Artifacts", "Dates", "Downloads", "InlineStrings", "LazyArtifacts", "Mocking", "Printf", "Scratch", "TZJData", "Unicode", "p7zip_jll"]
@@ -1447,6 +1700,12 @@ version = "1.6.3"
 git-tree-sha1 = "ca0969166a028236229f63514992fc073799bb78"
 uuid = "41fe7b60-77ed-43a1-b4f0-825fd5a5650d"
 version = "0.2.0"
+
+[[deps.VectorizationBase]]
+deps = ["ArrayInterface", "CPUSummary", "HostCPUFeatures", "IfElse", "LayoutPointers", "Libdl", "LinearAlgebra", "SIMDTypes", "Static", "StaticArrayInterface"]
+git-tree-sha1 = "7209df901e6ed7489fe9b7aa3e46fb788e15db85"
+uuid = "3d5dd08c-fd9d-11e8-17fa-ed2836048c2f"
+version = "0.21.65"
 
 [[deps.Vulkan_Loader_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Wayland_jll", "Xorg_libX11_jll", "Xorg_libXrandr_jll", "xkbcommon_jll"]
@@ -1660,7 +1919,7 @@ version = "1.5.0+0"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.2.13+0"
+version = "1.2.13+1"
 
 [[deps.Zstd_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1701,7 +1960,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.8.0+0"
+version = "5.8.0+1"
 
 [[deps.libevdev_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1747,7 +2006,7 @@ version = "1.52.0+1"
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.4.0+0"
+version = "17.4.0+2"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1790,9 +2049,24 @@ version = "1.4.1+1"
 # ╠═09322f8c-963c-4344-988f-95f755a9cd5d
 # ╠═e32e1968-d4cc-4db6-b040-5ab43695967f
 # ╠═cb163612-7795-46a8-91c6-09d9e5ef5fa9
+# ╠═11d3182d-0831-4090-a0d8-fb2805263d53
+# ╠═95a70dc0-8aac-4da2-8937-b58d5abf59e8
+# ╠═ecdf8762-40b6-45b6-9b11-d3de0436bc79
+# ╠═feaf8708-e3d6-4ebc-8749-ce53fdf87967
+# ╠═96e92893-1bc2-45a5-bcd9-7d5af1eabd11
+# ╠═9badd1e5-3587-447e-85b3-ac184f6d2085
+# ╠═d2d15a7e-0b6b-4d9c-aeba-6061b250962f
+# ╠═8cfe8a23-aa2c-475e-b264-99b5012f2468
+# ╠═fab2e9e8-372d-4ad4-94f8-bb34200e326e
+# ╠═10a1fdb7-1fb7-4704-bf09-08ec2bce48a7
+# ╠═9ffdc940-ca20-4626-8578-49748e23b388
 # ╠═5eade3f1-b060-4a1a-b807-a9552914beab
 # ╠═ee575192-627e-4c26-aa8f-1c3f5f98fb54
 # ╠═6904f607-2603-4b7b-b2f0-79690e7c79b0
-# ╠═524bc8d1-162f-4986-94c5-9b14694d9dd1
+# ╠═cbe0ed45-7ef2-4ecf-92e3-4c04674b923f
+# ╠═3ed8a749-74e6-47fe-9190-f874b085f925
+# ╠═ec33090c-e96c-4cdf-b756-31d0158cd479
+# ╠═8c113b17-a9d3-4d22-995e-8d9ee177116a
+# ╠═99268d06-b6e1-40e6-a93f-6c9b418baa38
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
