@@ -287,6 +287,87 @@ bench_broadcast_inline = @benchmark res_broadcast_inline= mechanical_power_calcu
 # ╔═╡ 99268d06-b6e1-40e6-a93f-6c9b418baa38
 md"## Сводные результаты (TODO)"
 
+# ╔═╡ 1f6ff174-2551-42f9-957a-89ac685586f8
+bench_broadcast_inline.allocs
+
+# ╔═╡ c6b41ec8-016b-42f1-8f1c-7ddbb611bf8c
+bench_broadcast_inline.memory
+
+# ╔═╡ 1064ba0c-5948-44d6-aee0-612298dc1d15
+bench_broadcast_inline.times
+
+# ╔═╡ ce5dc92d-50b6-4e38-9b21-a365b9874f51
+res_df = DataFrame(Name=String[], TimeAvg=Float64[], TimeMed=Float64[], Memory=Int64[], Allocs=Int64[])
+
+# ╔═╡ cce5287d-130c-40e0-a52d-787a3e6f161d
+bench_list = [ bench_elem, bench_array, bench_elem_simd, bench_broadcast ];
+
+# ╔═╡ a354f4ef-897e-41a8-a217-b23c5d5ccd67
+names = ["Поэлементно", "Массивные операции", "Поэлементно + simd", "Broadcasting"]
+
+# ╔═╡ 0857f3a3-1ed1-4fa0-a094-d02afa4e7481
+for i in eachindex(bench_list)
+	push!(
+		res_df,
+		(
+			names[i],
+			mean(bench_list[i].times),
+			median(bench_list[i].times),
+			bench_list[i].memory,
+			bench_list[i].allocs
+		)
+	)
+end
+
+# ╔═╡ b7ef484c-86a8-496b-8c11-34955342a8ab
+scatter(res_df.Name, res_df.TimeAvg)
+
+# ╔═╡ 18b3a000-8f4b-4e13-bd2c-78c49baab291
+bar(
+	res_df.Name, res_df.TimeAvg,
+	size=(1000,500),
+	legend=false,
+	ylabel="Время, с",
+	title="Среднее время выполнения"
+)
+
+# ╔═╡ 90bb8cbe-688e-4580-ae29-01d1787d66a4
+bar(
+	res_df.Name, res_df.TimeMed,
+	size=(1000,500),
+	legend=false,
+	ylabel="Время, с",
+	title="Медианное время выполнения"
+)
+
+# ╔═╡ bf5c2c60-4715-4886-918d-9de9917fec6d
+scatter(
+	res_df.Name, [ res_df.TimeAvg res_df.TimeMed ],
+	size=(1000,500),
+	# legend=false,
+	label=["Среднее" "Медианное"],
+	ylabel="Время, с",
+	title="Время выполнения"
+)
+
+# ╔═╡ 70b5f0c1-cefc-4f2e-8125-e70c73451018
+bar(
+	res_df.Name, res_df.Memory,
+	size=(1000,500),
+	legend=false,
+	ylabel="Память (Байт)",
+	title="Задействованное количество памяти"
+)
+
+# ╔═╡ 4e4becee-e543-43a5-9791-9f8b9de1ca25
+bar(
+	res_df.Name, res_df.Allocs,
+	size=(1000,500),
+	legend=false,
+	# ylabel="Память (Байт)",
+	title="Количество аллокаций памяти"
+)
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -2068,5 +2149,18 @@ version = "1.4.1+1"
 # ╠═ec33090c-e96c-4cdf-b756-31d0158cd479
 # ╠═8c113b17-a9d3-4d22-995e-8d9ee177116a
 # ╠═99268d06-b6e1-40e6-a93f-6c9b418baa38
+# ╠═1f6ff174-2551-42f9-957a-89ac685586f8
+# ╠═c6b41ec8-016b-42f1-8f1c-7ddbb611bf8c
+# ╠═1064ba0c-5948-44d6-aee0-612298dc1d15
+# ╠═ce5dc92d-50b6-4e38-9b21-a365b9874f51
+# ╠═cce5287d-130c-40e0-a52d-787a3e6f161d
+# ╠═a354f4ef-897e-41a8-a217-b23c5d5ccd67
+# ╠═0857f3a3-1ed1-4fa0-a094-d02afa4e7481
+# ╠═b7ef484c-86a8-496b-8c11-34955342a8ab
+# ╠═18b3a000-8f4b-4e13-bd2c-78c49baab291
+# ╠═90bb8cbe-688e-4580-ae29-01d1787d66a4
+# ╠═bf5c2c60-4715-4886-918d-9de9917fec6d
+# ╠═70b5f0c1-cefc-4f2e-8125-e70c73451018
+# ╠═4e4becee-e543-43a5-9791-9f8b9de1ca25
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
