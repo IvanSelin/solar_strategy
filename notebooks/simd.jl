@@ -368,6 +368,31 @@ bar(
 	title="Количество аллокаций памяти"
 )
 
+# ╔═╡ 2a8bb19d-586d-4b8d-85a8-3631e753efa9
+md"# Полный расчёт энергии" 
+
+# ╔═╡ 1fdb0c05-282b-4934-a30d-d1284794906c
+md"## 1. Массивы, поэлементно for"
+
+# ╔═╡ 80021a5d-9264-423a-b18b-b081352b67e8
+function electrical_power_calculation_elem(diff_distance :: Vector{<: Real}, speed_ms :: Vector{<: Real})
+    power_onboard = 40; # Wt, 0.04kWt
+	result = zeros(size(speed_ms, 1))
+	for i in eachindex(diff_distance)
+		result[i] = power_onboard * diff_distance[i] / speed_ms[i]
+	end
+    return result;
+end
+
+# ╔═╡ c929165b-183f-4018-b3a5-c32f894a2445
+@time electrical_power_calculation_typed(segments.diff_distance, input_speed)
+
+# ╔═╡ 373573f6-0e80-4cfe-ad0a-a2eecef10e10
+@time electrical_power_calculation_elem(segments.diff_distance, input_speed)
+
+# ╔═╡ 77c28caf-3ab1-4db1-a6cc-42e3d37a47fb
+
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -2162,5 +2187,11 @@ version = "1.4.1+1"
 # ╠═bf5c2c60-4715-4886-918d-9de9917fec6d
 # ╠═70b5f0c1-cefc-4f2e-8125-e70c73451018
 # ╠═4e4becee-e543-43a5-9791-9f8b9de1ca25
+# ╠═2a8bb19d-586d-4b8d-85a8-3631e753efa9
+# ╠═1fdb0c05-282b-4934-a30d-d1284794906c
+# ╠═80021a5d-9264-423a-b18b-b081352b67e8
+# ╠═c929165b-183f-4018-b3a5-c32f894a2445
+# ╠═373573f6-0e80-4cfe-ad0a-a2eecef10e10
+# ╠═77c28caf-3ab1-4db1-a6cc-42e3d37a47fb
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
