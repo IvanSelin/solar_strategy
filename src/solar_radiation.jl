@@ -727,14 +727,15 @@ function solar_power_income_alloc_typed_vector(
     latitude :: Vector{<: Real},
     altitude :: Vector{<: Real},
     utc_time :: Vector{DateTime},
-    time_s :: Vector{<: Real}
+    time_s :: Vector{<: Real},
+    solar_car :: SolarCar
     )
-    electrics_efficiency = 0.86
-    solar_panels_efficiency = 0.228
-    panels_area = 4 # m^2
+    # electrics_efficiency = 0.86
+    # solar_panels_efficiency = 0.228
+    # panels_area = 4 # m^2
 	return solar_radiation_alloc_typed_vector(
         latitude, altitude, utc_time
-        ) .* electrics_efficiency .* solar_panels_efficiency .* panels_area .* time_s ./ 3600.0
+        ) .* solar_car.electrics_efficiency .* solar_car.solar_panels_efficiency .* solar_car.panels_area .* time_s ./ 3600.0
 end
 
 function solar_power_income(time_df, track_df)

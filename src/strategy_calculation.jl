@@ -631,7 +631,9 @@ end
 function solar_trip_boundaries_typed(
 		input_speed :: Vector{<: Real},
 		segments :: DataFrame,
-		start_datetime :: DateTime
+		start_datetime :: DateTime,
+		solar_car :: SolarCar,
+		env :: Environment
 	)
     # input speed in m/s
 	# @debug "func solar_trip_calculation_bounds input_speed size is $(size(input_speed, 1)), track size is $(size(track.distance, 1)))"
@@ -646,13 +648,16 @@ function solar_trip_boundaries_typed(
     #### calculcations
     # mechanical calculations are now in separate file
     # mechanical_power = mechanical_power_calculation_alloc.(input_speed, segments.slope, segments.diff_distance)
-	mechanical_power = mechanical_power_calculation_alloc_typed.(input_speed, segments.slope, segments.diff_distance)
+	mechanical_power = mechanical_power_calculation_alloc_typed.(
+			input_speed, segments.slope, segments.diff_distance,
+			solar_car, env
+		)
 
 	# mechanical_power = mechanical_power_calculation_typed(input_speed, segments.slope, segments.diff_distance)
 
     # electical losses
     # electrical_power = electrical_power_calculation(segments.diff_distance, input_speed)
-	electrical_power = electrical_power_calculation_typed(segments.diff_distance, input_speed)
+	electrical_power = electrical_power_calculation_typed(segments.diff_distance, input_speed, solar_car)
     # converting mechanical work to elecctrical power and then power use
     # power_use = calculate_power_use(mechanical_power, electrical_power)
     power_use_accumulated_wt_h = mechanical_power + electrical_power
@@ -688,7 +693,8 @@ function solar_trip_boundaries_typed(
 		segments.latitude,
 		segments.altitude, 
 		mean_segment_utc,
-		intervals_seconds
+		intervals_seconds,
+		solar_car
 	)
 	# println("solar power len $(size(solar_power, 1))")
     # solar_power_accumulated = calculate_power_income_accumulated(solar_power)
@@ -840,12 +846,15 @@ function solar_partial_trip_wrapper_iter_typed(
 		variables_boundaries :: Vector{Boundaries},
 		start_energy :: Real,
 		finish_energy :: Real,
-		start_datetime :: DateTime
+		start_datetime :: DateTime,
+		solar_car :: SolarCar,
+		env :: Environment
 	) :: Real
 	speeds_ms :: Vector{<: Real} = convert_kmh_to_ms_typed(speeds)
 	speed_vector :: Vector{<: Real} = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
 	power_use, solar_power, time_s = solar_trip_boundaries_typed(
-		speed_vector, segments, start_datetime
+		speed_vector, segments, start_datetime,
+		solar_car, env
 	)
 	# track points, not segments, that's why it is size is +1 
 	# energy_in_system = start_energy .+ solar_power .- power_use
@@ -893,14 +902,16 @@ function solar_partial_trip_wrapper_iter_with_low_energy_typed(
 		variables_boundaries :: Vector{Boundaries},
 		start_energy :: Real,
 		finish_energy :: Real,
-		start_datetime :: DateTime
+		start_datetime :: DateTime,
+		solar_car :: SolarCar,
+		env :: Environment
 	) :: Real
 	speeds_ms :: Vector{<: Real} = convert_kmh_to_ms_typed(speeds)
 	speed_vector :: Vector{<: Real} = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
 	# speeds_ms = convert_kmh_to_ms(speeds)
 	# speed_vector = set_speeds_boundaries_typed(speeds_ms, variables_boundaries, size(segments, 1))
 	power_use, solar_power, time_s = solar_trip_boundaries_typed(
-		speed_vector, segments, start_datetime
+		speed_vector, segments, start_datetime, solar_car, env
 	)
 	# track points, not segments, that's why it is size is +1 
 	# energy_in_system = Vector{}(undef, size(segments, 1))
@@ -1258,7 +1269,9 @@ function iterative_optimization(
 		scaling_coef_subtasks :: Integer,
 		scaling_coef_subtask_input_speeds :: Integer,
 		start_energy :: Real,
-		start_datetime=DateTime(2022,7,1,0,0,0)::DateTime
+		start_datetime=DateTime(2022,7,1,0,0,0)::DateTime,
+		solar_car::SolarCar,
+		env::Environment
 	)
 	# general algorithm:
 	# 0. data setup
@@ -1281,7 +1294,9 @@ function iterative_optimization(
 		segments,
 		start_energy,
 		start_datetime,
-		31.
+		31.,
+		solar_car,
+		env
 	)
 
 	start_n_speeds = minimize_n_speeds(
@@ -1290,7 +1305,9 @@ function iterative_optimization(
 		2,
 		start_energy,
 		start_datetime,
-		first(start_speeds)
+		first(start_speeds),
+		solar_car,
+		env
 	)
 
 	# boundaries = calculate_boundaries(1, size(track, 1), scaling_coef_subtask_input_speeds)
@@ -1500,7 +1517,7 @@ function iterative_optimization(
 		# @floop for subtask in iteration.subtasks
 		@showprogress for subtask in iteration.subtasks
 			subtask.problem.start_datetime = start_time_next_subtask
-			is_divisible = process_subtask!(subtask, scaling_coef_variables, segments)
+			is_divisible = process_subtask!(subtask, scaling_coef_variables, segments, solar_car, env)
 			# @reduce(is_track_divisible_further |= is_divisible)
 			is_track_divisible_further |= is_divisible
 			# calculate start time for next optimization
@@ -1527,7 +1544,7 @@ function iterative_optimization(
 		end
 
 		# 6. make full simulation with said speeds
-		power_use, solar_power, time_seconds = solar_trip_boundaries(
+		power_use, solar_power, time_seconds = solar_trip_boundaries_typed(
 			convert_kmh_to_ms(iteration_speeds),
 			segments,
 			start_datetime
@@ -1745,7 +1762,7 @@ function iterative_optimization_overlap(track :: DataFrame,
 		end
 
 		# 6. make full simulation with said speeds
-		power_use, solar_power, time_seconds = solar_trip_boundaries(
+		power_use, solar_power, time_seconds = solar_trip_boundaries_typed(
 			convert_kmh_to_ms(iteration_speeds),
 			segments,
 			start_datetime
@@ -2037,7 +2054,9 @@ function two_step_optimization(
 
 end
 
-function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segments::DataFrame)
+function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segments::DataFrame,
+		solar_car::SolarCar, env::Environment
+	)
 	# 3. each subtask comes with its own chunks (variables)			
 	# split each task on parts
 	subtask.variables_boundaries = calculate_boundaries(
@@ -2080,7 +2099,8 @@ function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segme
 		# return solar_partial_trip_wrapper_iter_with_low_energy(
 			input_speeds, subtask_segments, subtask.variables_boundaries,
 			subtask.problem.start_energy, subtask.problem.finish_energy,
-			subtask.problem.start_datetime
+			subtask.problem.start_datetime,
+			solar_car, env
 		)
 	end
 
@@ -2089,7 +2109,8 @@ function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segme
 		return solar_partial_trip_wrapper_iter_with_low_energy_typed(
 			input_speeds, subtask_segments, subtask.variables_boundaries,
 			subtask.problem.start_energy, subtask.problem.finish_energy,
-			subtask.problem.start_datetime
+			subtask.problem.start_datetime,
+			solar_car, env
 		)
 	end
 
@@ -2137,16 +2158,26 @@ function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segme
 	return is_track_divisible_further
 end
 
-function minimize_single_speed(track, segments, start_energy, start_datetime, init_speed)
+function minimize_single_speed(
+		track::DataFrame,
+		segments::DataFrame,
+		start_energy::Float64,
+		start_datetime::DateTIme,
+		init_speed::Float64,
+		solar_car::SolarCar,
+		env::Environment
+	)
 
 	boundaries = calculate_boundaries(1, size(track, 1), 1)
 
-	function f_single_speed(input_speed)
+	function f_single_speed(input_speed::Float64)
 		# return solar_partial_trip_wrapper_iter(
-		return solar_partial_trip_wrapper_iter_with_low_energy(
+		return solar_partial_trip_wrapper_iter_with_low_energy_typed(
 			input_speed, segments, boundaries,
 			start_energy, 0.,
-			start_datetime
+			start_datetime,
+			solar_car,
+			env
 		)
 	end
 	speeds = [init_speed]
@@ -2180,7 +2211,10 @@ function minimize_n_speeds(
 	n_variables :: Int64,
 	start_energy :: Float64,
 	start_datetime :: DateTime,
-	init_speed :: Float64)
+	init_speed :: Float64,
+	solar_car::SolarCar,
+	env::Environment
+	)
 
 	boundaries = calculate_boundaries(1, size(track, 1), n_variables)
 
@@ -2189,7 +2223,8 @@ function minimize_n_speeds(
 		return solar_partial_trip_wrapper_iter_with_low_energy_typed(
 			input_speeds, segments, boundaries,
 			start_energy, 0.,
-			start_datetime
+			start_datetime,
+			solar_car, env
 		)
 	end
 	speeds = fill(init_speed, n_variables)

@@ -92,6 +92,28 @@ plot(
     legend=false
 )
 
+
+# preparing the solar car data
+# using the SOL data as an example
+solar_car = SolarCar(
+    390.0,
+    0.18,
+    1.0,
+    0.0023,
+    0.000041,
+    0.87,
+    40.0,
+    0.86,
+    0.228,
+    4.0
+)
+
+# and general environment data
+env = Environment(
+    9.8019,
+    1.18
+)
+
 k=1.75
 _, points_k = parametrized_track_simplification(track, k)
 track_k, segments_k = get_track_and_segments_for_selected_points_modified(track, points_k)
