@@ -1,19 +1,19 @@
 struct SolarCar
-    mass::Real # kg
-    drag::Real # dimensionless
-    frontal_area::Real # m²
-    tire_friction::Real # dimensionless
-    tire_friction_speed::Real # dimensionless
-    engine_efficiency::Real # dimensionless
-    electrics_power::Real # Wt
-    electrics_efficiency::Real # dimensionless
-    solar_panels_efficiency::Real # dimensionless
-    panels_area::Real # m²
+    mass::Float64 # kg
+    drag::Float64 # dimensionless
+    frontal_area::Float64 # m²
+    tire_friction::Float64 # dimensionless
+    tire_friction_speed::Float64 # dimensionless
+    engine_efficiency::Float64 # dimensionless
+    electrics_power::Float64 # Wt
+    electrics_efficiency::Float64 # dimensionless
+    solar_panels_efficiency::Float64 # dimensionless
+    panels_area::Float64 # m²
 end
 
 struct Environment
-    g::Real
-    ro::Real
+    g::Float64
+    ro::Float64
 end
 
 # enabling broadcasting for custom types
