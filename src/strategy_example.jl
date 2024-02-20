@@ -192,6 +192,8 @@ segments_peaks.weather_coeff = weather_coeff
     5,
     5,
     5100.,
+    solar_car,
+    env,
     DateTime(2023,1,1,10,0,0)
 );
 plots_for_results(res_peaks, track_peaks, segments_peaks)

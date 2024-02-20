@@ -1,20 +1,25 @@
 struct SolarCar
-    mass::Float64 # kg
-    drag::Float64 # dimensionless
-    frontal_area::Float64 # m²
-    tire_friction::Float64 # dimensionless
-    tire_friction_speed::Float64 # dimensionless
-    engine_efficiency::Float64 # dimensionless
-    electrics_power::Float64 # Wt
-    electrics_efficiency::Float64 # dimensionless
-    solar_panels_efficiency::Float64 # dimensionless
-    panels_area::Float64 # m²
+    mass::Real # kg
+    drag::Real # dimensionless
+    frontal_area::Real # m²
+    tire_friction::Real # dimensionless
+    tire_friction_speed::Real # dimensionless
+    engine_efficiency::Real # dimensionless
+    electrics_power::Real # Wt
+    electrics_efficiency::Real # dimensionless
+    solar_panels_efficiency::Real # dimensionless
+    panels_area::Real # m²
 end
 
 struct Environment
-    g::Float64
-    ro::Float64
+    g::Real
+    ro::Real
 end
+
+# enabling broadcasting for custom types
+
+Broadcast.broadcastable(sc::SolarCar) = Ref(sc)
+Broadcast.broadcastable(e::Environment) = Ref(e)
 
 function mechanical_power_calculation(speed_ms, slope, diff_distance)
     drag = 0.18
@@ -101,14 +106,14 @@ function mechanical_power_calculation_alloc_typed(
     # newtons
     mechanical_force = (
         solar_car.drag * solar_car.frontal_area * speed_ms ^ 2 * env.ro / 2. +
-        solar_car.mass * env.g * (solar_car.friction_1 + solar_car.friction_2 * 4 * speed_ms) * cosd(slope) +
+        solar_car.mass * env.g * (solar_car.tire_friction + solar_car.tire_friction_speed * 4 * speed_ms) * cosd(slope) +
         solar_car.mass * env.g * sind(slope)
         )
 
     # mechanical power = mechanical force * distance delta / engine efficiency
     # watts * s
     mechanical_power = (
-        mechanical_force * diff_distance / engine_efficiency
+        mechanical_force * diff_distance / solar_car.engine_efficiency
         )
 
     # TODO: get rid of return, or at least make it type-stable

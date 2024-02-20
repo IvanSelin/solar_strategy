@@ -1269,9 +1269,9 @@ function iterative_optimization(
 		scaling_coef_subtasks :: Integer,
 		scaling_coef_subtask_input_speeds :: Integer,
 		start_energy :: Real,
-		start_datetime=DateTime(2022,7,1,0,0,0)::DateTime,
 		solar_car::SolarCar,
-		env::Environment
+		env::Environment,
+		start_datetime=DateTime(2022,7,1,0,0,0)::DateTime
 	)
 	# general algorithm:
 	# 0. data setup
@@ -1547,7 +1547,9 @@ function iterative_optimization(
 		power_use, solar_power, time_seconds = solar_trip_boundaries_typed(
 			convert_kmh_to_ms(iteration_speeds),
 			segments,
-			start_datetime
+			start_datetime,
+			solar_car,
+			env
 		)
 
 		println("solar sum $(sum(solar_power))")
@@ -2161,20 +2163,23 @@ end
 function minimize_single_speed(
 		track::DataFrame,
 		segments::DataFrame,
-		start_energy::Float64,
-		start_datetime::DateTIme,
-		init_speed::Float64,
+		start_energy::Real,
+		start_datetime::DateTime,
+		init_speed::Real,
 		solar_car::SolarCar,
 		env::Environment
 	)
 
 	boundaries = calculate_boundaries(1, size(track, 1), 1)
 
-	function f_single_speed(input_speed::Float64)
+	function f_single_speed(input_speed :: Vector{<: Real})
 		# return solar_partial_trip_wrapper_iter(
 		return solar_partial_trip_wrapper_iter_with_low_energy_typed(
-			input_speed, segments, boundaries,
-			start_energy, 0.,
+			input_speed,
+			segments,
+			boundaries,
+			start_energy,
+			0.,
 			start_datetime,
 			solar_car,
 			env
