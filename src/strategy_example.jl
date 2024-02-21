@@ -123,6 +123,8 @@ segments_high_k.weather_coeff = weather_coeff_k
     5,
     5,
     5100.,
+    solar_car,
+    env,
     DateTime(2023,1,1,10,0,0)
 );
 plots_for_results(res_full_high_k, track_high_k, segments_high_k)
@@ -159,11 +161,13 @@ weather_coeff_full = calculate_weather_weights_for_segments(
 );
 segments_high.weather_coeff = weather_coeff_full
 simulate_run_finish_time(
-    speeds_for_regular_track,
+    Float64.(speeds_for_regular_track),
     track_high,
     segments_high,
     5100.,
-    DateTime(2023,1,1,10,0,0)
+    DateTime(2023,1,1,10,0,0),
+    solar_car,
+    env
 )
 
 
@@ -180,13 +184,17 @@ segments_high_k2.weather_coeff = weather_coeff_k2
     5,
     5,
     5100.,
+    solar_car,
+    env,
     DateTime(2023,1,1,10,0,0)
 );
 plots_for_results(res_full_high_k2, track_high_k2, segments_high_k2)
 
-speeds_for_regular_track2 = k_speeds_to_regular(
-    res_full_high_k2[end].solution.speeds,
-    points_k2
+speeds_for_regular_track2 = Float64.(
+    k_speeds_to_regular(
+        res_full_high_k2[end].solution.speeds,
+        points_k2
+    )
 )
 
 simulate_run_finish_time(
@@ -194,52 +202,7 @@ simulate_run_finish_time(
     track_high,
     segments_high,
     5100.,
-    DateTime(2023,1,1,10,0,0)
+    DateTime(2023,1,1,10,0,0),
+    solar_car,
+    env
 )
-
-# full track
-weather_coeff_full = calculate_weather_weights_for_segments(
-    w,
-    elat,
-    elon,
-    segments
-);
-segments.weather_coeff = weather_coeff_full
-@time res_full = iterative_optimization(
-    track, segments,
-    5,
-    5,
-    5100.,
-    DateTime(2023,1,1,10,0,0)
-);
-plots_for_results(res_full, track, segments)
-
-simulate_run_finish_time(
-    fill(37.90363171504429, size(segments.diff_distance, 1)),
-    track,
-    segments,
-    5100.,
-    DateTime(2023,1,1,10,0,0)
-)
-
-# full high track
-segments_high.weather_coeff = weather_coeff_full
-@time res_full_high = iterative_optimization(
-    track_high, segments_high,
-    5,
-    5,
-    5100.,
-    DateTime(2023,1,1,10,0,0)
-);
-plots_for_results(res_full_high, track_high, segments_high)
-
-
-
-@time res_aus = iterative_optimization(
-    track_aus, segments_aus,
-    5,
-    5,
-    5100.,
-    DateTime(2023,1,1,0,0,0)
-);
-plots_for_results(res_aus, track_aus, segments_aus)
