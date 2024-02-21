@@ -402,21 +402,10 @@ function hierarchical_optimization_alloc(speed, track, chunks_amount, start_ener
 	minimized_speeds_ms = convert_kmh_to_ms(minimized_speeds)
 	minimized_speed_vector = set_speeds(minimized_speeds_ms, track, split_indexes)
 	power_use, solar_power, energy_in_system, time, time_s = solar_trip_calculation_bounds_alloc(minimized_speed_vector, track, start_datetime, start_energy)
-	# println("iteration $(iteration), speed is $(speed) planned finish energy is $(finish_energy)")
-	# println("track from $(start_index) to $(end_index)")
-	# println("start datetime $(start_datetime)")
-	# println("stare energy $(start_energy)")
-	# println("split indexes are $(split_indexes)")
-	# # println("distances are $(track[split_indexes, :])")
-	# # println("minimized speeds are: $(minimized_speeds)")
-	# println("simulated finish energy is $(last(energy_in_system))")
-	# # println("finish energy difference penalty is: $(100 * abs(last(energy_in_system) - finish_energy))")
 	split_energies = energy_in_system[split_indexes]
 	pushfirst!(split_energies, start_energy)
 	split_times = time[split_indexes, :utc_time]
 	pushfirst!(split_times, start_datetime)
-	# println("split energies are $(split_energies)")
-	# println("")
 	
 	# 5 - go though each track piece and enter function again
 	# @debug "split_energies size is $(size(split_energies, 1)), chunks_amount is $(chunks_amount)"
