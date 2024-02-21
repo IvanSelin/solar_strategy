@@ -1,7 +1,6 @@
 module SolarStrategy
 
-using DataFrames
-# also consider using JuliaDB and Query
+using DataFrames # also consider using JuliaDB and Query
 using CSV
 using Plots # default
 using PlotlyBase
@@ -14,18 +13,9 @@ using Distributed
 using ProgressMeter
 using JSON
 
+# dev dependencies, not used as of right now
 # using Revise
-# includet("energy_draw.jl")
-# includet("time.jl")
-# includet("solar_radiation.jl")
-# includet("track.jl")
-# includet("utils.jl")
-# includet("weather.jl")
-# includet("strategy_calculation.jl")
 # using Alert
-# using ProtoStructs
-# using OhMyREPL
-# using BenchmarkTools
 # selecting a Plots backend
 plotly(ticks=:native)
 # consider using Gadfly http://gadflyjl.org/stable/
