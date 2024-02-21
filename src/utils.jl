@@ -84,11 +84,12 @@ function simulate_run(speeds, track, segments, start_energy, start_datetime)
 	plot(track_plot, speed_plot, energy_plot, layout=(3,1), size=(750,700), legend=false)
 end
 
-function simulate_run_finish_time(speeds, track, segments, start_energy, start_datetime)
+function simulate_run_finish_time(
+	speeds :: Vector{<: Real}, track :: DataFrame, segments :: DataFrame, start_energy :: Real, start_datetime :: DateTime, solar_car :: SolarCar, env :: Environment)
 	minimized_speeds_ms = speeds / 3.6
 	
-	power_use, solar_power, time_s = solar_trip_boundaries(
-		minimized_speeds_ms, segments, start_datetime
+	power_use, solar_power, time_s = solar_trip_boundaries_typed(
+		minimized_speeds_ms, segments, start_datetime, solar_car, env
 	)
 	# track points, not segments, that's why it is size is +1 
 	energy_in_system_new = start_energy .+ solar_power .- power_use
