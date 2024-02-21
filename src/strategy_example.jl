@@ -1,34 +1,3 @@
-# using DataFrames
-# # also consider using JuliaDB and Query
-# using CSV
-# using Plots # default
-# using PlotlyBase
-# # using PlotlySave
-# using TimeZones
-# using Dates
-# using Optim
-# using LineSearches
-# using ProtoStructs
-# using OhMyREPL
-# using Distributions
-# using Random
-# using StatsBase
-# # using FLoops
-# using Distributed
-# using ProgressMeter
-# using BenchmarkTools
-# using JSON
-
-# using Revise
-# includet("energy_draw.jl")
-# includet("time.jl")
-# includet("solar_radiation.jl")
-# includet("track.jl")
-# includet("utils.jl")
-# includet("weather.jl")
-# includet("strategy_calculation.jl")
-# using Alert
-# selecting a Plots backend
 include("SolarStrategy.jl")
 using .SolarStrategy
 
@@ -36,16 +5,6 @@ using Plots
 using Dates
 # using CSV
 plotly(ticks=:native)
-
-
-# include("energy_draw.jl")
-# include("time.jl")
-# include("solar_radiation.jl")
-# include("track.jl")
-# include("utils.jl")
-# include("weather.jl")
-# include("strategy_calculation.jl")
-
 
 #### concept
 #=
@@ -125,29 +84,6 @@ k2 = 7.25
 _, points_k2 = parametrized_track_simplification(track_high, k2)
 track_high_k2, segments_high_k2 = get_track_and_segments_for_selected_points_modified(track_high, points_k2)
 
-# from_index = 1
-# to_index = 3000
-
-# from_index = 3000
-# to_index = 7000
-
-# from_index = 7000
-# to_index = size(track_peaks.distance, 1)
-
-# plot(
-#     track_peaks.distance[from_index:to_index] / 1000., track_peaks.altitude[from_index:to_index],
-#     title="Сокращённый гоночный маршрут, подзадача 3",
-#     xlabel="Дистанция (км)",
-#     ylabel="Высота (м)",
-#     legend=false
-# )
-
-# track_aus, segments_aus = get_track_and_segments("data/data_australia_random.csv");
-# track_aus.altitude = track_aus.altitude * 10;
-# segments_aus = get_segments_for_track(track_aus);
-# plot(track_aus.distance, track_aus.altitude, title="Track aus short")
-
-
 dimensions=15;
 w, elat, elon = generate_clouds(
 	-10,
@@ -162,20 +98,6 @@ w, elat, elon = generate_clouds(
 	0.75
 );
 
-# w2, elat2, elon2 = generate_clouds(
-#     -10,
-#     130,
-#     -35,
-#     140,
-#     -25,
-#     133,
-#     0.5,
-#     0.5,
-#     dimensions,
-#     0.75
-# )
-# write_weather_json(w2,elat2,elon2,"weather_coeff_full_2")
-
 weather_coeff = calculate_weather_weights_for_segments(
     w,
     elat,
@@ -184,8 +106,6 @@ weather_coeff = calculate_weather_weights_for_segments(
 );
 segments_peaks.weather_coeff = weather_coeff
 
-# @time res = iterative_optimization(track, segments, 5, 5100., DateTime(2022,7,1,0,0,0));
-# 41 sec for two iterations
 # regular track
 @time res_peaks = iterative_optimization(
     track_peaks, segments_peaks,
@@ -197,22 +117,6 @@ segments_peaks.weather_coeff = weather_coeff
     DateTime(2023,1,1,10,0,0)
 );
 plots_for_results(res_peaks, track_peaks, segments_peaks)
-
-simulate_run_finish_time(
-	res_peaks[1].solution.speeds,
-	track_peaks,
-	segments_peaks,
-	5100.,
-	DateTime(2023,1,1,10,0,0)
-)
-
-simulate_run_finish_time(
-    fill(37.90363171504429, size(segments_peaks.diff_distance, 1)),
-    track_peaks,
-    segments_peaks,
-    5100.,
-    DateTime(2023,1,1,10,0,0)
-)
 
 # high track
 segments_peaks_high.weather_coeff = weather_coeff
