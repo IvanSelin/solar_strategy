@@ -79,20 +79,6 @@ w, elat, elon = generate_clouds(
 	0.75
 );
 
-# w2, elat2, elon2 = generate_clouds(
-#     -10,
-#     130,
-#     -35,
-#     140,
-#     -25,
-#     133,
-#     0.5,
-#     0.5,
-#     dimensions,
-#     0.75
-# )
-# write_weather_json(w2,elat2,elon2,"weather_coeff_full_2")
-
 weather_coeff = calculate_weather_weights_for_segments(
     w,
     elat,
