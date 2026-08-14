@@ -715,11 +715,11 @@ function process_subtask!(subtask::Subtask, scaling_coef_variables:: Real, segme
 	end
 
 	if size(subtask.problem.initial_speeds, 1) == 2
-		td = TwiceDifferentiable(f_iter_low_energy, prev_iter_speeds; autodiff = :forward)
+		td = TwiceDifferentiable(f_iter_low_energy, prev_iter_speeds)#; autodiff = :forward)
 		random_term = fill(0., vars_amount)
 		optim_func = f_iter_low_energy
 	else
-		td = TwiceDifferentiable(f_iter, prev_iter_speeds; autodiff = :forward)
+		td = TwiceDifferentiable(f_iter, prev_iter_speeds)#; autodiff = :forward)
 		# random_term = rand(vars_amount)
 		random_term = fill(1., vars_amount)
 		optim_func = f_iter
@@ -785,7 +785,7 @@ function minimize_single_speed(
 	end
 	speeds = [init_speed]
 	println("Calculating best single speed")
-	td_0 = TwiceDifferentiable(f_single_speed, speeds; autodiff = :forward)
+	td_0 = TwiceDifferentiable(f_single_speed, speeds)#; autodiff = :forward)
 	lower_bound_0 = fill(5.0, 1)
 	upper_bound_0 = fill(100.0, 1)
 	# upper_bound_0 = fill(150.0, 1)
@@ -832,7 +832,7 @@ function minimize_n_speeds(
 	end
 	speeds = fill(init_speed, n_variables)
 	println("Calculating best speeds")
-	td_0 = TwiceDifferentiable(f_speeds, speeds; autodiff = :forward)
+	td_0 = TwiceDifferentiable(f_speeds, speeds)#; autodiff = :forward)
 	lower_bound_0 = fill(10.0, n_variables)
 	upper_bound_0 = fill(100.0, n_variables)
 	tdc_0 = TwiceDifferentiableConstraints(lower_bound_0, upper_bound_0)
@@ -896,7 +896,7 @@ function minimize_speeds_split_points_typed(
 	end
 	speeds = fill(init_speed, n_variables)
 	println("Calculating best speeds")
-	td_0 = TwiceDifferentiable(f_speeds, speeds; autodiff = :forward)
+	td_0 = TwiceDifferentiable(f_speeds, speeds)#; autodiff = :forward)
 	lower_bound_0 = fill(10.0, n_variables)
 	upper_bound_0 = fill(100.0, n_variables)
 	tdc_0 = TwiceDifferentiableConstraints(lower_bound_0, upper_bound_0)
