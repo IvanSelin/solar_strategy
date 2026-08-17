@@ -110,7 +110,9 @@ begin
 end
 
 # ╔═╡ adc95909-8d67-4f08-9d0a-ebd09b651207
-md"# No weather, regular strategy"
+md"# No weather, regular strategy
+
+Getting the reular results in order to have a proper comparison"
 
 # ╔═╡ f7f046be-be56-4f2d-8445-3679ec303119
 # ╠═╡ disabled = true
@@ -195,9 +197,14 @@ Problems:
 
 """
 
+# ╔═╡ 106baadf-a67c-4a59-ab40-ac5b1537da6e
+md"""
+## Naive implementation using optimization algorithms
+"""
+
 # ╔═╡ a313582b-3a22-48ce-965c-b2e72a5abb6c
 md"""
-## Calculating initial speed
+### Calculating initial speed
 """
 
 # ╔═╡ d804f054-44b0-4125-9c27-7837d483d83a
@@ -227,16 +234,191 @@ simulate_run_finish_time(
 
 # ╔═╡ d269f3ef-34c8-4561-b9fe-529d5d24d7c4
 power_use, solar_power, time_s = solar_trip_boundaries_typed(
-	initial_speeds / 3.6,
+	initial_speeds / 3.6, # TODO: think of better ways to switch between km/h and m/s
 	segments_peaks,
 	DateTime(2023,1,1,10,0,0),
 	solar_car,
 	env
 )
 
+# ╔═╡ 13fd16b2-9634-4592-be56-ad034a2dc650
+md"""
+### Finding where the (almost) zero energy point is
+"""
+
+# ╔═╡ 09382c49-cd5e-4aa5-8c39-f9bdda3f6820
+plot(power_use)
+
+# ╔═╡ 294fbf6f-5855-4888-b449-b748f003fca8
+plot(solar_power)
+
+# ╔═╡ ef29e746-60ef-46d4-86fc-dab0a0b9fda2
+plot(solar_power - power_use .+ 5100.)
+
+# ╔═╡ 2b2d2dce-ad85-4763-ab7c-44c722f9b2bc
+# ╠═╡ disabled = true
+#=╠═╡
+md"""
+Происходит какое-то говно. Как будто в solar trip boundaries typed потраченная энергия кумулятивная. А вот солнечная - моментальная. Либо ну очень маленькая
+"""
+  ╠═╡ =#
+
+# ╔═╡ 68b5f4fd-ad08-4d5f-a6dd-fbb4054048dd
+# ╠═╡ disabled = true
+#=╠═╡
+md"""
+Надо было разделить скорости на 3.6, и всё пришло в норму
+"""
+  ╠═╡ =#
+
+# ╔═╡ 21d10c58-c6c2-4a6e-a295-034a53baedb5
+energy_in_system = start_energy .+ solar_power .- power_use
+
+# ╔═╡ b7194ae9-7828-4d4b-a1ef-37943d7d1e98
+first_zero = argmin(energy_in_system)
+
+# ╔═╡ 5822c714-1ceb-4d96-b265-80ebb319e67a
+md"""
+### Splitting the track into two parts
+
+Don't forget to check about +-1 mistakes. Track points or segments?
+
+Should be points
+
+A: Points+1. Segments+0
+"""
+
+# ╔═╡ 2822551d-d29f-4b33-a7fc-a9feee45590c
+first_part_peaks = track_peaks[1:first_zero+1,:]
+
+# ╔═╡ 1f6ad18c-caad-4076-96d3-01ac7a3cffc6
+first_part_peaks[end-5:end,:]
+
+# ╔═╡ e314a69d-5c1e-40b9-af3d-a0179c76fdea
+first_part_segments = segments_peaks[1:first_zero,:]
+
+# ╔═╡ 6bf06f1a-3d1a-4900-b026-3328f9a7579b
+first_speeds = initial_speeds[1:first_zero]
+
+# ╔═╡ 339b009f-96d6-4d93-aa82-5f68fe03dc6a
+simulate_run_finish_time(
+    first_speeds,
+    first_part_peaks,
+    first_part_segments,
+    start_energy,
+    start_datetime,
+    solar_car,
+    env
+)
+
+# ╔═╡ fba1c588-9ced-4808-9773-aa52049289d9
+power_use_1, solar_power_1, time_s_1 = solar_trip_boundaries_typed(
+	first_speeds / 3.6,
+	first_part_segments,
+	DateTime(2023,1,1,10,0,0),
+	solar_car,
+	env
+)
+
+# ╔═╡ d3fec9da-0e13-42e3-8da3-59a65c5c8c82
+last(time_s_1)
+
+# ╔═╡ db6c055c-2745-4381-9351-f032558b5047
+# first_end_time = last(travel_time_to_datetime(time_s_1, DateTime(2023,1,1,10,0,0)))
+
+# ╔═╡ b3220377-52c5-47a5-b8c6-005e8faacfed
+round(last(time_s_1))
+
+# ╔═╡ 725b8eb3-eadc-4fc1-8762-e694284fdb78
+first_end_time = start_datetime + Dates.Second(round(last(time_s_1)))
+
+# ╔═╡ f2661a7b-a1c7-4cf7-bfce-5a4d205827ac
+first_energy = solar_power_1 - power_use_1 .+ 5100.
+
+# ╔═╡ df155ee5-23a7-4ff7-ac8c-2667ed2a741e
+first_end_energy = last(first_energy)
+
+# ╔═╡ cf606e27-9b97-46c3-8dfe-0704a0e1b051
+md"""
+### Rest of the track
+"""
+
+# ╔═╡ 3839857d-039f-4bfc-82f6-a636cd156407
+second_part_peaks = track_peaks[first_zero+1:end,:]
+
+# ╔═╡ 9f86bba8-0def-48b9-876f-4ff2746f0f99
+second_part_segments = segments_peaks[first_zero+1:end,:]
+
+# ╔═╡ 78e68e1d-cfff-4d1f-b54e-37f363d19daa
+md"""
+Пришлось добавить +1 в сегментах. Надо будет потом проверить почему так надо
+"""
+
+# ╔═╡ 06c502c6-ad3d-461d-8c4d-8010893f9b23
+md"""
+Для оптимизации по второму участку надо знать время старта. Поэтому нужен предварительный ран от первого участка/
+
+И энергия в конце. Хоть она по идее и должна быть равна нулю
+"""
+
+# ╔═╡ 968b2074-9143-4e0b-8f90-44a37717ca65
+second_speed = minimize_single_speed(
+	second_part_peaks,
+	second_part_segments,
+	first_end_energy,
+	first_end_time,
+	38.,
+    solar_car,
+    env
+)
+
+# ╔═╡ 5184e88d-40a0-403f-b953-8b1d132423c7
+second_speeds = fill(second_speed[end], size(second_part_segments, 1))
+
+# ╔═╡ 5da454c7-079b-41a4-bb9d-2253e2178377
+simulate_run_finish_time(
+    second_speeds,
+    second_part_peaks,
+    second_part_segments,
+    first_end_energy,
+    first_end_time,
+    solar_car,
+    env
+)
+
+# ╔═╡ c79f8fd1-1b48-4b0e-8c2e-fe5352c4bb7b
+md"""
+Почему мы уходим вниз по энергии? Должно же быть наоборот
+
+Может что-то внутри функции не использует агрументы?
+
+Похоже что время неправильно складывается. Должно быть 04.01, а у меня 12.01. - Нашёл, неправильно время складывал. Надо без ночёвок
+"""
+
+# ╔═╡ bd3e0ee2-9c36-4af8-b1c3-c6fcefdae4df
+md"""
+### Combining the results
+"""
+
+# ╔═╡ 6d7a9ba9-2001-4831-9563-966c6409c016
+simulate_run_finish_time(
+    vcat(first_speeds, second_speeds),
+    track_peaks,
+    segments_peaks,
+    start_energy,
+    start_datetime,
+    solar_car,
+    env
+)
+
 # ╔═╡ 42c5c8a8-ad74-4ff4-a854-ae3713a33bea
 md"""
-### TODO: Easier algo for finding minimum speed
+## Trying out bisection method for finding speed at which we'll have zero energy
+"""
+
+# ╔═╡ aac71af6-ef8a-4514-aa8a-d709fa585321
+md"""
+### Helper functions / wrappers
 """
 
 # ╔═╡ 63f22d83-7177-434d-8414-a22c8aa00f1c
@@ -267,6 +449,13 @@ end
 
 # ╔═╡ 713fc8ff-3dff-44c7-bb6d-2aa2d38ffe96
 calculate_min_energy(sample_speed, segments_peaks, start_datetime, start_energy, solar_car, env)
+
+# ╔═╡ d60f2830-74cb-430a-99f4-8ffcd6fb55a9
+md"""
+### Custom root-finder
+
+Bisection method with positive-only results
+"""
 
 # ╔═╡ bd5b248a-2368-4702-a43c-84baa27596da
 function root_finder(var_from, var_to, segments, start_time, start_energy, solar_car, env, f_tolerance, x_tolerance)
@@ -356,129 +545,18 @@ md"""
 My results look legit. Can continue either way: with my solver or with Roots.jl
 """
 
-# ╔═╡ 9e00f36d-8baf-44c4-919c-069cc49f02dc
-# ╠═╡ disabled = true
-#=╠═╡
-function find_speed_to_zero_energy(speed, segments, start_time, start_energy, solar_car, env, tolerance)
-	energy_min = 1000
-	delta = 1.0
-	delta_speed = 1.0
-	while abs(energy_min) > tolerance # absolutely or just above?
-		speeds = fill(speed, size(segments, 1))
-		power_use, solar_power, time_s = solar_trip_boundaries_typed(
-			speeds / 3.6,
-			segments,
-			start_time,
-			solar_car,
-			env
-		)
-		energy_in_system = start_energy .+ solar_power .- power_use
-		energy_min = minima(energy_in_system)[1] # add support for several zeros
-		if energy_min > tolerance
-			speed += delta
-		elseif energy_min < 0
-			delta = delta * 0.5
-			speed -= delta
-		end
-	end
-
-	return speed
-	# need to store previous speed and min_energy to calculate how much to modificate the speed
-	# if energy_min < tolerance
-	# 	return speed
-	# else
-	# 	if energy_min < 0
-	# 		speed += 5
-	# 	elseif energy_min > 0
-	
-end
-  ╠═╡ =#
-
-# ╔═╡ a36a73cd-ff96-4f6c-bee2-22eb4b0d9499
-# ╠═╡ disabled = true
-#=╠═╡
-# find_speed_to_zero_energy(
-# 	30.,
-# 	segments_peaks,
-# 	DateTime(2023,1,1,10,0,0),
-# 	5100.,
-# 	solar_car,
-# 	env,
-# 	1e-3
-# )
-  ╠═╡ =#
-
-# ╔═╡ 13fd16b2-9634-4592-be56-ad034a2dc650
+# ╔═╡ d7208fdf-ba07-4ede-8ae2-8afac5a06214
 md"""
-## Finding where the (almost) zero energy point is
+### Using custom root-finder to calculate speeds
 """
 
-# ╔═╡ 09382c49-cd5e-4aa5-8c39-f9bdda3f6820
-plot(power_use)
-
-# ╔═╡ 294fbf6f-5855-4888-b449-b748f003fca8
-plot(solar_power)
-
-# ╔═╡ ef29e746-60ef-46d4-86fc-dab0a0b9fda2
-plot(solar_power - power_use .+ 5100.)
-
-# ╔═╡ 2b2d2dce-ad85-4763-ab7c-44c722f9b2bc
+# ╔═╡ 15f75c3d-f4ac-48a8-89c0-c754868bc119
 md"""
-Происходит какое-то говно. Как будто в solar trip boundaries typed потраченная энергия кумулятивная. А вот солнечная - моментальная. Либо ну очень маленькая
-"""
-
-# ╔═╡ 68b5f4fd-ad08-4d5f-a6dd-fbb4054048dd
-md"""
-Надо было разделить скорости на 3.6, и всё пришло в норму
-"""
-
-# ╔═╡ 21d10c58-c6c2-4a6e-a295-034a53baedb5
-energy_in_system = 5100. .+ solar_power .- power_use
-
-# ╔═╡ b7194ae9-7828-4d4b-a1ef-37943d7d1e98
-first_zero = argmin(energy_in_system)
-
-# ╔═╡ 6ed4ab9b-dc87-4ff4-9907-20adf8c2aec2
-md"""
-### И для бисекции
+надо перекалькулировать энергию и время с нужной скоростью
 """
 
 # ╔═╡ 6de23e7b-66e6-418a-8c7d-6c561316b756
 first_root_speeds = fill(first_root_speed, first_root_index)
-
-# ╔═╡ 5822c714-1ceb-4d96-b265-80ebb319e67a
-md"""
-## Splitting the track into two parts
-
-Don't forget to check about +-1 mistakes. Track points or segments?
-
-Should be points
-
-A: Points+1. Segments+0
-"""
-
-# ╔═╡ 2822551d-d29f-4b33-a7fc-a9feee45590c
-first_part_peaks = track_peaks[1:first_zero+1,:]
-
-# ╔═╡ 1f6ad18c-caad-4076-96d3-01ac7a3cffc6
-first_part_peaks[end-5:end,:]
-
-# ╔═╡ e314a69d-5c1e-40b9-af3d-a0179c76fdea
-first_part_segments = segments_peaks[1:first_zero,:]
-
-# ╔═╡ 6bf06f1a-3d1a-4900-b026-3328f9a7579b
-first_speeds = initial_speeds[1:first_zero]
-
-# ╔═╡ 339b009f-96d6-4d93-aa82-5f68fe03dc6a
-simulate_run_finish_time(
-    first_speeds,
-    first_part_peaks,
-    first_part_segments,
-    5100.,
-    DateTime(2023,1,1,10,0,0),
-    solar_car,
-    env
-)
 
 # ╔═╡ 622c8214-6773-43f3-91f5-c8dfcc04a0cf
 # and for custom root-finder
@@ -486,105 +564,11 @@ simulate_run_finish_time(
     first_root_speeds,
     first_part_peaks,
     first_part_segments,
-    5100.,
-    DateTime(2023,1,1,10,0,0),
+    start_energy,
+    start_datetime,
     solar_car,
     env
 )
-
-# ╔═╡ fba1c588-9ced-4808-9773-aa52049289d9
-power_use_1, solar_power_1, time_s_1 = solar_trip_boundaries_typed(
-	first_speeds / 3.6,
-	first_part_segments,
-	DateTime(2023,1,1,10,0,0),
-	solar_car,
-	env
-)
-
-# ╔═╡ d3fec9da-0e13-42e3-8da3-59a65c5c8c82
-last(time_s_1)
-
-# ╔═╡ db6c055c-2745-4381-9351-f032558b5047
-# first_end_time = last(travel_time_to_datetime(time_s_1, DateTime(2023,1,1,10,0,0)))
-
-# ╔═╡ b3220377-52c5-47a5-b8c6-005e8faacfed
-round(last(time_s_1))
-
-# ╔═╡ 725b8eb3-eadc-4fc1-8762-e694284fdb78
-first_end_time = DateTime(2023,1,1,10,0,0) + Dates.Second(round(last(time_s_1)))
-
-# ╔═╡ f2661a7b-a1c7-4cf7-bfce-5a4d205827ac
-first_energy = solar_power_1 - power_use_1 .+ 5100.
-
-# ╔═╡ df155ee5-23a7-4ff7-ac8c-2667ed2a741e
-first_end_energy = last(first_energy)
-
-# ╔═╡ cf606e27-9b97-46c3-8dfe-0704a0e1b051
-md"""
-### Rest of the track
-"""
-
-# ╔═╡ 3839857d-039f-4bfc-82f6-a636cd156407
-second_part_peaks = track_peaks[first_zero+1:end,:]
-
-# ╔═╡ 9f86bba8-0def-48b9-876f-4ff2746f0f99
-second_part_segments = segments_peaks[first_zero+1:end,:]
-
-# ╔═╡ 78e68e1d-cfff-4d1f-b54e-37f363d19daa
-md"""
-Пришлось добавить +1 в сегментах. Надо будет потом проверить почему так надо
-"""
-
-# ╔═╡ 06c502c6-ad3d-461d-8c4d-8010893f9b23
-md"""
-Для оптимизации по второму участку надо знать время старта. Поэтому нужен предварительный ран от первого участка/
-
-И энергия в конце. Хоть она по идее и должна быть равна нулю
-"""
-
-# ╔═╡ 968b2074-9143-4e0b-8f90-44a37717ca65
-second_speed = minimize_single_speed(
-	second_part_peaks,
-	second_part_segments,
-	first_end_energy,
-	first_end_time,
-	38.,
-    solar_car,
-    env
-)
-
-# ╔═╡ 5184e88d-40a0-403f-b953-8b1d132423c7
-second_speeds = fill(second_speed[end], size(second_part_segments, 1))
-
-# ╔═╡ 5da454c7-079b-41a4-bb9d-2253e2178377
-simulate_run_finish_time(
-    second_speeds,
-    second_part_peaks,
-    second_part_segments,
-    first_end_energy,
-    first_end_time,
-    solar_car,
-    env
-)
-
-# ╔═╡ c79f8fd1-1b48-4b0e-8c2e-fe5352c4bb7b
-md"""
-Почему мы уходим вниз по энергии? Должно же быть наоборот
-
-Может что-то внутри функции не использует агрументы?
-
-Похоже что время неправильно складывается. Должно быть 04.01, а у меня 12.01. - Нашёл, неправильно время складывал. Надо без ночёвок
-"""
-
-# ╔═╡ 279e9b21-cc26-4c14-a561-475dd1163f04
-md"""
-### А теперь с бисекционным методом
-"""
-
-# ╔═╡ 15f75c3d-f4ac-48a8-89c0-c754868bc119
-md"""
-надо перекалькулировать энергию и время с нужной скоростью
-"""
 
 # ╔═╡ b48e1bcb-3471-4dc5-9a40-4ac2f63adf78
 power_use_root_1, solar_power_root_1, time_s_root_1 = solar_trip_boundaries_typed(
@@ -661,8 +645,11 @@ Let's stick for the latter for now
 
 # ╔═╡ dae837c1-d898-4465-802c-33156efbba9c
 md"""
-# Creating an algo function
+# Creating a generalized algo function
 """
+
+# ╔═╡ 0676686a-6cb2-4b04-8cb9-12c2d31697bb
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3686,24 +3673,12 @@ version = "1.13.0+0"
 # ╠═fbb6a4eb-a78d-4910-b5f2-9b3084933364
 # ╠═a17d0d43-8013-45a9-8eb4-2416e4363d99
 # ╠═8860946a-91a7-4a25-81c3-6a76c4655f00
+# ╠═106baadf-a67c-4a59-ab40-ac5b1537da6e
 # ╠═a313582b-3a22-48ce-965c-b2e72a5abb6c
 # ╠═d804f054-44b0-4125-9c27-7837d483d83a
 # ╠═4f35e3e1-b02b-42a4-a290-4cd6435f66f9
 # ╠═ca26933d-080e-45e1-a927-33b0b3e0cddf
 # ╠═d269f3ef-34c8-4561-b9fe-529d5d24d7c4
-# ╠═42c5c8a8-ad74-4ff4-a854-ae3713a33bea
-# ╠═63f22d83-7177-434d-8414-a22c8aa00f1c
-# ╠═3b80193d-9b32-4d2f-96c0-a710af7053a4
-# ╠═7b8b63f2-5770-435f-bf5c-b78301702295
-# ╠═713fc8ff-3dff-44c7-bb6d-2aa2d38ffe96
-# ╠═bd5b248a-2368-4702-a43c-84baa27596da
-# ╠═9fc106b9-beed-49cb-93c9-ca98f3711615
-# ╠═48c39bf5-91a9-4222-86a9-778ce9e86e0b
-# ╠═09969d91-c7c3-4421-a961-35e4be02933c
-# ╠═68205c84-2341-498f-bb3d-0acb0f589e99
-# ╠═42e17f5b-6c0a-4a01-b237-3196b630414b
-# ╠═9e00f36d-8baf-44c4-919c-069cc49f02dc
-# ╠═a36a73cd-ff96-4f6c-bee2-22eb4b0d9499
 # ╠═13fd16b2-9634-4592-be56-ad034a2dc650
 # ╠═09382c49-cd5e-4aa5-8c39-f9bdda3f6820
 # ╠═294fbf6f-5855-4888-b449-b748f003fca8
@@ -3712,15 +3687,12 @@ version = "1.13.0+0"
 # ╠═68b5f4fd-ad08-4d5f-a6dd-fbb4054048dd
 # ╠═21d10c58-c6c2-4a6e-a295-034a53baedb5
 # ╠═b7194ae9-7828-4d4b-a1ef-37943d7d1e98
-# ╠═6ed4ab9b-dc87-4ff4-9907-20adf8c2aec2
-# ╠═6de23e7b-66e6-418a-8c7d-6c561316b756
 # ╠═5822c714-1ceb-4d96-b265-80ebb319e67a
 # ╠═2822551d-d29f-4b33-a7fc-a9feee45590c
 # ╠═1f6ad18c-caad-4076-96d3-01ac7a3cffc6
 # ╠═e314a69d-5c1e-40b9-af3d-a0179c76fdea
 # ╠═6bf06f1a-3d1a-4900-b026-3328f9a7579b
 # ╠═339b009f-96d6-4d93-aa82-5f68fe03dc6a
-# ╠═622c8214-6773-43f3-91f5-c8dfcc04a0cf
 # ╠═fba1c588-9ced-4808-9773-aa52049289d9
 # ╠═d3fec9da-0e13-42e3-8da3-59a65c5c8c82
 # ╠═db6c055c-2745-4381-9351-f032558b5047
@@ -3737,8 +3709,25 @@ version = "1.13.0+0"
 # ╠═5184e88d-40a0-403f-b953-8b1d132423c7
 # ╠═5da454c7-079b-41a4-bb9d-2253e2178377
 # ╠═c79f8fd1-1b48-4b0e-8c2e-fe5352c4bb7b
-# ╠═279e9b21-cc26-4c14-a561-475dd1163f04
+# ╠═bd3e0ee2-9c36-4af8-b1c3-c6fcefdae4df
+# ╠═6d7a9ba9-2001-4831-9563-966c6409c016
+# ╠═42c5c8a8-ad74-4ff4-a854-ae3713a33bea
+# ╠═aac71af6-ef8a-4514-aa8a-d709fa585321
+# ╠═63f22d83-7177-434d-8414-a22c8aa00f1c
+# ╠═3b80193d-9b32-4d2f-96c0-a710af7053a4
+# ╠═7b8b63f2-5770-435f-bf5c-b78301702295
+# ╠═713fc8ff-3dff-44c7-bb6d-2aa2d38ffe96
+# ╠═d60f2830-74cb-430a-99f4-8ffcd6fb55a9
+# ╠═bd5b248a-2368-4702-a43c-84baa27596da
+# ╠═9fc106b9-beed-49cb-93c9-ca98f3711615
+# ╠═48c39bf5-91a9-4222-86a9-778ce9e86e0b
+# ╠═09969d91-c7c3-4421-a961-35e4be02933c
+# ╠═68205c84-2341-498f-bb3d-0acb0f589e99
+# ╠═42e17f5b-6c0a-4a01-b237-3196b630414b
+# ╠═d7208fdf-ba07-4ede-8ae2-8afac5a06214
 # ╠═15f75c3d-f4ac-48a8-89c0-c754868bc119
+# ╠═6de23e7b-66e6-418a-8c7d-6c561316b756
+# ╠═622c8214-6773-43f3-91f5-c8dfcc04a0cf
 # ╠═b48e1bcb-3471-4dc5-9a40-4ac2f63adf78
 # ╠═651758e4-6935-49d1-8992-57bc885d201a
 # ╠═21351559-261c-4ebc-a93c-b585574d59a5
@@ -3751,5 +3740,6 @@ version = "1.13.0+0"
 # ╠═e08bdef8-bf37-4709-9092-d45fbcc74c7f
 # ╠═16ed6499-b461-4083-96f8-63676008b4be
 # ╠═dae837c1-d898-4465-802c-33156efbba9c
+# ╠═0676686a-6cb2-4b04-8cb9-12c2d31697bb
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
