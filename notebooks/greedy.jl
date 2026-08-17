@@ -157,6 +157,11 @@ simulate_run_finish_time(
 # ╔═╡ 9c7c932a-32f2-48e9-8ac8-e14dc392e346
 iterative_res = load("iterative_res.png")
 
+# ╔═╡ ef429506-ab9b-439f-8613-91a0d298e132
+md"""
+We're achieving the finishing time of 01-04 22:52:26 with negative energy at the finish line (not good)
+"""
+
 # ╔═╡ f5d1cb76-df3d-46c0-bbb8-94c28ef2fbb8
 plot(iterative_res)
 
@@ -601,6 +606,63 @@ first_end_root_time = start_datetime + Dates.Second(round(last(time_s_root_1)))
 
 # ╔═╡ bf73434c-a5af-4fa9-a6e3-097cf5dd2ec6
 second_root_speed, second_root_index = root_finder(30., 50., second_part_segments, first_end_root_time, first_end_root_energy, solar_car, env, 1e-3, 1e-6)
+
+# ╔═╡ b3da5428-98cc-402f-8398-71e14bd9eda2
+md"""
+Checking the solution
+"""
+
+# ╔═╡ 94eb6db3-9bbc-458a-b4c0-31d286b19a21
+simulate_run_finish_time(
+    fill(second_root_speed, size(second_part_segments,1)),
+    second_part_peaks,
+    second_part_segments,
+    first_end_root_energy,
+    first_end_root_time,
+    solar_car,
+    env
+)
+
+# ╔═╡ 7fbb17e6-7e03-4b61-803a-55fd0b7af840
+md"""
+And combined solution
+"""
+
+# ╔═╡ 70d28b49-44a1-49e2-89ef-b581ee4ea582
+simulate_run_finish_time(
+    vcat(first_root_speeds, fill(second_root_speed, size(second_part_segments,1))),
+    track_peaks,
+    segments_peaks,
+    start_energy,
+    start_datetime,
+    solar_car,
+    env
+)
+
+# ╔═╡ e08bdef8-bf37-4709-9092-d45fbcc74c7f
+md"""
+For the good news: the finishing time of 01-04 22:40:02 is better than the usual algorithm. That's 12 minutes faster and a proper amount of energy
+"""
+
+# ╔═╡ 16ed6499-b461-4083-96f8-63676008b4be
+md"""
+For the bad news: Looks like that the greedy nature of the algo becomes a limitation for the last part of the trip.
+
+We're not wasting all the energy
+
+Maybe we should dynamically find the additional split for the last segment?
+
+Like we're already stripped the beginning until the 0 energy. Now we're left with the last part of the trip without zeros. But right after the zero point if we're rising the speed, we're getting energy zeros in the beginning. So, it may be beneficial to split the last part of the trip into several parts (2 or more) to raise the speed on the last leg. But how to select the splitting point?
+
+Maybe we should watch for the top of the energy curve? Or just continue the algo?
+
+Let's stick for the latter for now
+"""
+
+# ╔═╡ dae837c1-d898-4465-802c-33156efbba9c
+md"""
+# Creating an algo function
+"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3619,6 +3681,7 @@ version = "1.13.0+0"
 # ╠═5ff9d4d4-dc1b-4534-a038-0fd56351f132
 # ╠═7d80e71e-69df-4d41-b554-33462566be5d
 # ╠═9c7c932a-32f2-48e9-8ac8-e14dc392e346
+# ╠═ef429506-ab9b-439f-8613-91a0d298e132
 # ╠═f5d1cb76-df3d-46c0-bbb8-94c28ef2fbb8
 # ╠═fbb6a4eb-a78d-4910-b5f2-9b3084933364
 # ╠═a17d0d43-8013-45a9-8eb4-2416e4363d99
@@ -3681,5 +3744,12 @@ version = "1.13.0+0"
 # ╠═21351559-261c-4ebc-a93c-b585574d59a5
 # ╠═f300f737-998a-4ba0-bfd1-a614f902f477
 # ╠═bf73434c-a5af-4fa9-a6e3-097cf5dd2ec6
+# ╠═b3da5428-98cc-402f-8398-71e14bd9eda2
+# ╠═94eb6db3-9bbc-458a-b4c0-31d286b19a21
+# ╠═7fbb17e6-7e03-4b61-803a-55fd0b7af840
+# ╠═70d28b49-44a1-49e2-89ef-b581ee4ea582
+# ╠═e08bdef8-bf37-4709-9092-d45fbcc74c7f
+# ╠═16ed6499-b461-4083-96f8-63676008b4be
+# ╠═dae837c1-d898-4465-802c-33156efbba9c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
