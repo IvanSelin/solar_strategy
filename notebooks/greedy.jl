@@ -42,6 +42,7 @@ begin
 	using Printf
 	using Roots
 	using NonlinearSolve
+	using Logging
 end
 
 # ╔═╡ 7cd9fd62-235e-4343-8af7-b3553045aab6
@@ -279,51 +280,76 @@ function root_finder(var_from, var_to, segments, start_time, start_energy, solar
 	x_difference = var_to - var_from
 	iteration = 0
 	iteration_max = 100
-	
+
+	# let with_logger(NullLogger()) do
 	while (abs(value_center) > f_tolerance) # && (x_difference > x_tolerance)
+		@debug("another iteration")
 
 		if iteration > iteration_max
 			error("maximum amount of iterations reached. stopping")
 		end
+		@debug("iterations check passed")
 	
 		middle_point = (var_to + var_from) / 2.
-		@info("new middle point is $middle_point")
+		@debug("new middle point is $middle_point")
 		value_center, argmins_center = calculate_min_energy(middle_point, segments, start_time, start_energy, solar_car, env, true)
-		@info("minimum energy is $value_center")
+		@debug("minimum energy is $value_center")
 		if 0 < value_center < f_tolerance
-			@info("solution found: $middle_point with value of $value_center")
+			@debug("solution found: $middle_point with value of $value_center")
 			return middle_point, argmins_center
 		end
 		value_left, argmins_left = calculate_min_energy(var_from, segments, start_time, start_energy, solar_car, env, true)
 		value_right = calculate_min_energy(var_to, segments, start_time, start_energy, solar_car, env)
+		if 0 < abs(value_center) < f_tolerance
+			@debug("solution found with negative energy: $middle_point with value of $value_center. Selecting lesser speed")
+			@debug("returning the left point (guaranteed surplus): $var_from with value of $value_left")
+			return var_from, argmins_left
+		end
 		if x_difference < x_tolerance
-			@info("interval is too small: [$var_from:$var_to]. stopping")
-			@info("returning the left point (guaranteed surplus): $var_from with value of $value_left")
+			@debug("interval is too small: [$var_from:$var_to]. stopping")
+			@debug("returning the left point (guaranteed surplus): $var_from with value of $value_left")
 			return var_from, argmins_left
 		end
 		product = value_left * value_center
 		if product < 0
-			@info("selecting left interval [$var_from:$middle_point]")
+			@debug("selecting left interval [$var_from:$middle_point]")
 			# left or center < 0.
 			# in our case it will mean that left is too slow (positive energy) and center is too fast (negative energy)
 			# so we will search in [left;center]
 			var_to = middle_point
 		else
-			@info("selecting right interval [$middle_point:$var_to]")
+			@debug("selecting right interval [$middle_point:$var_to]")
 			# either
 			# left and center < 0, - we are too fast! - can't be in proper starting conditions
 			# left and center both > 0 - we are too slow
 			var_from = middle_point
 		end
 		x_difference = var_to - var_from
-		@info("x diff is $x_difference")
+		@debug("x diff is $x_difference")
 		iteration +=1
 	end
 	
 end
 
 # ╔═╡ 9fc106b9-beed-49cb-93c9-ca98f3711615
-first_root_speed = root_finder(30.,40., segments_peaks, start_datetime, start_energy, solar_car, env, 1e-3, 1e-6)
+@time first_root_speed, first_root_index = root_finder(30.,40., segments_peaks, start_datetime, start_energy, solar_car, env, 1e-3, 1e-6)
+
+# ╔═╡ 48c39bf5-91a9-4222-86a9-778ce9e86e0b
+md"""
+### And with Roots.jl
+"""
+
+# ╔═╡ 09969d91-c7c3-4421-a961-35e4be02933c
+@time find_zero(x ->  calculate_min_energy(x, segments_peaks, start_datetime, start_energy, solar_car, env), (30., 40.))
+
+# ╔═╡ 68205c84-2341-498f-bb3d-0acb0f589e99
+# @time find_zero(x ->  calculate_min_energy(x, segments_peaks, start_datetime, start_energy, solar_car, env), 30., Roots.Newton())
+# there are some problems, not working
+
+# ╔═╡ 42e17f5b-6c0a-4a01-b237-3196b630414b
+md"""
+My results look legit. Can continue either way: with my solver or with Roots.jl
+"""
 
 # ╔═╡ 9e00f36d-8baf-44c4-919c-069cc49f02dc
 # ╠═╡ disabled = true
@@ -407,6 +433,14 @@ energy_in_system = 5100. .+ solar_power .- power_use
 # ╔═╡ b7194ae9-7828-4d4b-a1ef-37943d7d1e98
 first_zero = argmin(energy_in_system)
 
+# ╔═╡ 6ed4ab9b-dc87-4ff4-9907-20adf8c2aec2
+md"""
+### И для бисекции
+"""
+
+# ╔═╡ 6de23e7b-66e6-418a-8c7d-6c561316b756
+first_root_speeds = fill(first_root_speed, first_root_index)
+
 # ╔═╡ 5822c714-1ceb-4d96-b265-80ebb319e67a
 md"""
 ## Splitting the track into two parts
@@ -433,6 +467,18 @@ first_speeds = initial_speeds[1:first_zero]
 # ╔═╡ 339b009f-96d6-4d93-aa82-5f68fe03dc6a
 simulate_run_finish_time(
     first_speeds,
+    first_part_peaks,
+    first_part_segments,
+    5100.,
+    DateTime(2023,1,1,10,0,0),
+    solar_car,
+    env
+)
+
+# ╔═╡ 622c8214-6773-43f3-91f5-c8dfcc04a0cf
+# and for custom root-finder
+simulate_run_finish_time(
+    first_root_speeds,
     first_part_peaks,
     first_part_segments,
     5100.,
@@ -525,6 +571,37 @@ md"""
 Похоже что время неправильно складывается. Должно быть 04.01, а у меня 12.01. - Нашёл, неправильно время складывал. Надо без ночёвок
 """
 
+# ╔═╡ 279e9b21-cc26-4c14-a561-475dd1163f04
+md"""
+### А теперь с бисекционным методом
+"""
+
+# ╔═╡ 15f75c3d-f4ac-48a8-89c0-c754868bc119
+md"""
+надо перекалькулировать энергию и время с нужной скоростью
+"""
+
+# ╔═╡ b48e1bcb-3471-4dc5-9a40-4ac2f63adf78
+power_use_root_1, solar_power_root_1, time_s_root_1 = solar_trip_boundaries_typed(
+	first_root_speeds / 3.6,
+	first_part_segments,
+	start_datetime,
+	solar_car,
+	env
+)
+
+# ╔═╡ 651758e4-6935-49d1-8992-57bc885d201a
+first_root_energy = solar_power_root_1 - power_use_root_1 .+ start_energy
+
+# ╔═╡ 21351559-261c-4ebc-a93c-b585574d59a5
+first_end_root_energy = last(first_root_energy)
+
+# ╔═╡ f300f737-998a-4ba0-bfd1-a614f902f477
+first_end_root_time = start_datetime + Dates.Second(round(last(time_s_root_1)))
+
+# ╔═╡ bf73434c-a5af-4fa9-a6e3-097cf5dd2ec6
+second_root_speed, second_root_index = root_finder(30., 50., second_part_segments, first_end_root_time, first_end_root_energy, solar_car, env, 1e-3, 1e-6)
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -534,6 +611,7 @@ Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
 LineSearches = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 NLSolversBase = "d41bc354-129a-5804-8e4c-c37616107c6c"
 NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
@@ -573,7 +651,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "afd9f28d76afab596635cfc90715c34181a90cf4"
+project_hash = "3337a47e30b02cb1065171dbe6c6b77305adfa12"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "bbc22a9a08a0ef6460041086d8a7b27940ed4ffd"
@@ -3557,6 +3635,10 @@ version = "1.13.0+0"
 # ╠═713fc8ff-3dff-44c7-bb6d-2aa2d38ffe96
 # ╠═bd5b248a-2368-4702-a43c-84baa27596da
 # ╠═9fc106b9-beed-49cb-93c9-ca98f3711615
+# ╠═48c39bf5-91a9-4222-86a9-778ce9e86e0b
+# ╠═09969d91-c7c3-4421-a961-35e4be02933c
+# ╠═68205c84-2341-498f-bb3d-0acb0f589e99
+# ╠═42e17f5b-6c0a-4a01-b237-3196b630414b
 # ╠═9e00f36d-8baf-44c4-919c-069cc49f02dc
 # ╠═a36a73cd-ff96-4f6c-bee2-22eb4b0d9499
 # ╠═13fd16b2-9634-4592-be56-ad034a2dc650
@@ -3567,12 +3649,15 @@ version = "1.13.0+0"
 # ╠═68b5f4fd-ad08-4d5f-a6dd-fbb4054048dd
 # ╠═21d10c58-c6c2-4a6e-a295-034a53baedb5
 # ╠═b7194ae9-7828-4d4b-a1ef-37943d7d1e98
+# ╠═6ed4ab9b-dc87-4ff4-9907-20adf8c2aec2
+# ╠═6de23e7b-66e6-418a-8c7d-6c561316b756
 # ╠═5822c714-1ceb-4d96-b265-80ebb319e67a
 # ╠═2822551d-d29f-4b33-a7fc-a9feee45590c
 # ╠═1f6ad18c-caad-4076-96d3-01ac7a3cffc6
 # ╠═e314a69d-5c1e-40b9-af3d-a0179c76fdea
 # ╠═6bf06f1a-3d1a-4900-b026-3328f9a7579b
 # ╠═339b009f-96d6-4d93-aa82-5f68fe03dc6a
+# ╠═622c8214-6773-43f3-91f5-c8dfcc04a0cf
 # ╠═fba1c588-9ced-4808-9773-aa52049289d9
 # ╠═d3fec9da-0e13-42e3-8da3-59a65c5c8c82
 # ╠═db6c055c-2745-4381-9351-f032558b5047
@@ -3589,5 +3674,12 @@ version = "1.13.0+0"
 # ╠═5184e88d-40a0-403f-b953-8b1d132423c7
 # ╠═5da454c7-079b-41a4-bb9d-2253e2178377
 # ╠═c79f8fd1-1b48-4b0e-8c2e-fe5352c4bb7b
+# ╠═279e9b21-cc26-4c14-a561-475dd1163f04
+# ╠═15f75c3d-f4ac-48a8-89c0-c754868bc119
+# ╠═b48e1bcb-3471-4dc5-9a40-4ac2f63adf78
+# ╠═651758e4-6935-49d1-8992-57bc885d201a
+# ╠═21351559-261c-4ebc-a93c-b585574d59a5
+# ╠═f300f737-998a-4ba0-bfd1-a614f902f477
+# ╠═bf73434c-a5af-4fa9-a6e3-097cf5dd2ec6
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
